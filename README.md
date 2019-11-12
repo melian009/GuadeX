@@ -23,5 +23,7 @@ Implement probability co-occurrence accounting for abiotic, biotic and migration
 
 
 
+ ## DATA FOLDERS
+ https://www.dropbox.com/sh/fndht5q3bxoyv05/AADjAs5uQrO5V4SnjvJC3pEZa?dl=0
  
 
