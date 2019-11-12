@@ -1,10 +1,3 @@
-#-------------------------------------------------------------
-#Tracking TODO
-#DATA Carlos Fernandez, Lucia galvan, Ramon
-#Started Carlos Melian & ... 2016@Eawag
-#Continued Code Alejandro Rozenfeld 2018
-#-------------------------------------------------------------
-
 TODO
 Writing working draft
 https://de.sharelatex.com/project/5ac1f0c58dd6a14ec01055e3
