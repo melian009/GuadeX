@@ -1,29 +1,26 @@
 ## TODO
 
-Writing working draft
+## Working draft
 
-https://de.sharelatex.com/project/5ac1f0c58dd6a14ec01055e3
-
+* https://de.sharelatex.com/project/5ac1f0c58dd6a14ec01055e3
 
 ## DATA
 
-/home/melian/Documents/Research/projects/LongRepos/GuadeXbg/MOVEMENT/Matrix1037.zip
-
-(Link to shared data)
+* https://drive.switch.ch/index.php/s/rNd3V73S2ca6MkT
 
 ## CODE 
 
-/home/teeemelian/Documents/projects/DendriticNetworks/Guadalquivir/Model/Code/dendritic.m
+* GuadeX/Model/Code/dendritic.m
 
-## OUTPUTS Simulations
+## OUTPUTS
 
-Implement probability co-occurrence accounting for abiotic, biotic and migration/topology
+Modeling Probability co-occurrence accounting for abiotic, biotic, migration and dendritic topology
+![key](Model/KeyImages/IMG-20180404-WA0009.jpg)
 
-/home/teeemelian/Documents/projects/DendriticNetworks/Guadalquivir/Model/KeyImages/IMG-20180404-WA0004.jpg
+## CHECK
 
-
-
- ## DATA FOLDERS
- https://www.dropbox.com/sh/fndht5q3bxoyv05/AADjAs5uQrO5V4SnjvJC3pEZa?dl=0
+## DATA FOLDERS
+ 
+* https://www.dropbox.com/sh/fndht5q3bxoyv05/AADjAs5uQrO5V4SnjvJC3pEZa?dl=0
  
 
