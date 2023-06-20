@@ -56,6 +56,34 @@ end
 
 # PLOT
 
+p0 = outputdf |> @vlplot(
+    :area,
+    transform = [{density = Symbol("ESPECIE_function"), groupby = [:range], extent = [0, 0.65]}],
+    x = {field = :value, type = :quantitative,
+        axis = {title = "Fraction of native species"},
+    },
+    y = {field = :density, type = :quantitative, stack = :zero,
+        axis = {title = "Density"},
+    },
+    color = {field = :range, type = :nominal, title = "Longitude range"},
+)
+
+save("stacked_density_plot_of_fraction_of_native_specity_per_longitude_section.pdf", p0)
+
+p02 = outputdf |> @vlplot(
+    :area,
+    transform = [{density = Symbol("ESPECIE_function"), groupby = [:range], extent = [0, 1.0]}],
+    x = {field = :value, type = :quantitative,
+        axis = {title = "Fraction of native species"},
+    },
+    y = {field = :density, type = :quantitative, stack = :normalize,
+        axis = {title = "Density"},
+    },
+    color = {field = :range, type = :nominal, title = "Longitude range"},
+)
+
+save("normalized_stacked_density_plot_of_fraction_of_native_specity_per_longitude_section.pdf", p02)
+
 p = outputdf |> @vlplot(
     :point,
     x = {field = :UTMX, type = :quantitative, scale = {type = :sqrt}},
