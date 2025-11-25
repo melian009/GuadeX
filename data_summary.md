@@ -5,7 +5,7 @@
 ### data/FishSizeMatrix.csv
 
 ```csv
-CODIGO,ESPECIE,ESPECIE,LONGITUD_mm
+CODIGO,ESPECIE,ESPECIE_1,LONGITUD_mm
 1.1.10,Squalius alburnoides,Nativo,52
 1.1.10,Squalius alburnoides,Nativo,54
 1.1.10,Squalius alburnoides,Nativo,60
@@ -52,10 +52,10 @@ CODIGO,ALTITUD,CODIGO_S,EMBALSES_SC,Demb arr.(m),Demb ab.(m),Dist.Guadalq.(m),UT
 ### data/BIOTIC/FishDensity_and_Juveniles_Matrix.csv
 
 ```csv
-CODIGO;LS_DEN;SA_DEN;SP_DEN;PW_DEN;CP_DEN;IL_DEN;IO_DEN;AA_DEN;AH_DEN;GL_DEN;GH_DEN;LG_DEN;AAL_DEN;CG_DEN;CC_DEN;MS_DEN;ST_DEN;OM_DEN;EL_DEN;AM_DEN;TT_DEN;LR_DEN;MC_DEN;AB_DEN;Ls Juveniles;Sa Juveniles;Sp Juveniles;Pw Juveniles;Cp Juveniles;Il Juveniles;Aa Juveniles;Ah Juveniles;Gl Juveniles;Gh Juveniles;Lg Juveniles;Aal Juveniles;Cg Juveniles;Cc Juveniles;Ms Juveniles;St Juveniles;Om Juveniles;El Juveniles;Am Juveniles;Tt Juveniles;Lr Juveniles;Mc Juveniles;Ab Juveniles;
-1.1.2;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;18,22414;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0
-1.1.3;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;72,631764;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0
-1.1.4;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0,43396;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0
+CODIGO,LS_DEN,SA_DEN,SP_DEN,PW_DEN,CP_DEN,IL_DEN,IO_DEN,AA_DEN,AH_DEN,GL_DEN,GH_DEN,LG_DEN,AAL_DEN,CG_DEN,CC_DEN,MS_DEN,ST_DEN,OM_DEN,EL_DEN,AM_DEN,TT_DEN,LR_DEN,MC_DEN,AB_DEN,Ls Juveniles,Sa Juveniles,Sp Juveniles,Pw Juveniles,Cp Juveniles,Il Juveniles,Aa Juveniles,Ah Juveniles,Gl Juveniles,Gh Juveniles,Lg Juveniles,Aal Juveniles,Cg Juveniles,Cc Juveniles,Ms Juveniles,St Juveniles,Om Juveniles,El Juveniles,Am Juveniles,Tt Juveniles,Lr Juveniles,Mc Juveniles,Ab Juveniles,
+1.1.2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18.22414,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+1.1.3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,72.631764,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+1.1.4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.43396,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 ```
 
 * Description: Standardized density data (abundance/surface area sampled) for each species at each sampling site, plus juvenile presence data.
