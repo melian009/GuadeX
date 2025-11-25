@@ -54,6 +54,7 @@ CODIGO,ALTITUD,CODIGO_S,EMBALSES_SC,Demb arr.(m),Demb ab.(m),Dist.Guadalq.(m),UT
 ## Data Content Summary
 
 ### Species Composition
+
 Based on `ListNativeExotic.md`, the dataset includes:
 - **Native species (Autóctono):** 16 species including *Squalius alburnoides*, *Luciobarbus sclateri*, *Salmo trutta*, etc.
 - **Exotic species (Exótico):** 11 species including *Oncorhynchus mykiss*, *Gobio lozanoi*, *Gambusia holbrooki*, etc.
@@ -103,7 +104,7 @@ The codebase contains files from multiple projects:
 - **Analysis code:** `dendritic.jl` - analyzes native fish species patterns across longitudinal gradients
 
 ### Other Project (Plant Communities)
-- **Referenced in:** `data_analysis.jl` 
+- **Referenced in:** `data_analysis.jl`
 - **Missing data files:** `coccurrence.csv`, `multitrait.csv` - these files are from a different study on plant species co-occurrence and traits
 - **Function library:** `functions.jl` - contains general analysis functions for Shannon diversity calculations
 
