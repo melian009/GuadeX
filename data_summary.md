@@ -81,7 +81,7 @@ CODIGO,LS_DEN,SA_DEN,SP_DEN,PW_DEN,CP_DEN,IL_DEN,IO_DEN,AA_DEN,AH_DEN,GL_DEN,GH_
 head of file:
 
 ```csv
-SP.;MAX. SIZE (mm);FEED;SPAWNING ENVIRONMENT;ELEVATION (m);TEMPERATURE (�C); SALINITY;MOVEMENT RANGE (km);REPRODU. WITHIN THE BASIN;HOME RANGE
+SP;MAX_SIZE_mm;FEED;SPAWNING_ENVIRONMENT;ELEVATION_m;TEMPERATURE_C;SALINITY;MOVEMENT_RANGE_km;REPRODU_WITHIN_THE_BASIN;HOME_RANGE
 Ah;100;invertebrates, occasionally vegetation;shallow stony waters, occasionally plants;0 to 900;8 to 30;freshwater;short spring upstream journey to small streams;yes;Only Bembezar basin
 Sa;140;invertebrates, occasionally vegetation;shallow stony waters, occasionally plants;0 to 900;8 to 30;freshwater;short spring upstream journey to small streams;yes;Most Guadalquivir
 Sp;160;invertebrates, occasionally vegetation;shallow very oxigenated stony waters;0 to 1300;8 to 25;freshwater;short spring upstream journey to small streams;yes;Most Guadalquivir
