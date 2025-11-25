@@ -1,0 +1,20 @@
+Dear Ole,
+
+Yes, the best idea is to keep working to rearch the daylight with the dendritic networks models.
+I am still working with the models. I briefly mentioned you in a previous email 
+we are not finding convergence between the two models implemented independently (one by Charles and the other by me). In principle, as soon as we decided to
+move forward the poster I thought I could work on it following the outputs from Charles code, but after our discussions last Wednesday and a closer look at the codes I realized that we had to do a better job to have at least the codes working properly. That is to say codes that we know can produce a correct and equal output and that we can understand the mechanisms properly. We are closer to this goal but not there yet. Indeed, one of the mismatches is that my code produces most anagenesis events in the most isolated lakes but not the code by Charles where there is not only anagenesis in isolation but also large size lakes have several anagenesis events. We have realized that the main problem is how to deal with the population dynamics of incipient anagenetic species? How should we model this? James introduced the idea of protracted speciation but it does not apply to the idea of anagenesis exactly and much less in the context of networks. I can not finish a poster where I can not model the problem properly and I am sure you agree with this. I appreciate you have a plan B that can produce an alternative poster for ProjetLac. 
+
+I am now in Spain together with my first PhD student that will defend his PhD tomorrow. 
+
+Thank you for your patience with this process.
+
+
+Best
+
+Carlos
+
+
+
+
+ 

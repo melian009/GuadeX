@@ -4,11 +4,11 @@
 
 ## QUESTIONS
 
-* What determines coexistence of native fish species within a "Pristine" Mediterranean (environmentally constrained) dendritic network? 
+* What determines coexistence of native fish species within a "Pristine" Mediterranean (environmentally constrained) dendritic network?
 
-* How is the community dynamics and -ultimately - composition affected by the introduction of dams (large obstacles to connectivity) and exotic species? 
+* How is the community dynamics and -ultimately - composition affected by the introduction of dams (large obstacles to connectivity) and exotic species?
 
-* Does the native community change when dams and/or exotics are introduced? 
+* Does the native community change when dams and/or exotics are introduced?
 
 * What is the probability of extinction  of native species after exotics have been introduced, and what (local) factors can increase that probability?
 
@@ -24,7 +24,7 @@
 
 * https://drive.switch.ch/index.php/s/rNd3V73S2ca6MkT
 
-## CODE 
+## CODE
 
 * GuadeX/Model/Code/dendritic.m
 
@@ -36,10 +36,5 @@ Modeling Probability co-occurrence accounting for abiotic, biotic, migration and
 ## CHECK
 
 ## DATA FOLDERS
- 
+
 * https://www.dropbox.com/sh/fndht5q3bxoyv05/AADjAs5uQrO5V4SnjvJC3pEZa?dl=0
- 
-
-
-
-

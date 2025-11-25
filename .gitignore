@@ -1,0 +1,28 @@
+# Ignore compiled files
+*.ji
+
+# Ignore Julia REPL history
+.julia_history
+
+# Ignore Julia packages and environments
+.julia/
+
+# Ignore temporary files and logs
+*.log
+*.tmp
+
+# Ignore system-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/editor-specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+*.orig
+
+# Ignore archive files
+*.zip
+*.rar
