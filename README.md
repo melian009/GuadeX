@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-This project addresses the pressing challenge of **catastrophic biodiversity loss** in Mediterranean freshwater systems by studying the fish metacommunity dynamics of the **Guadalquivir River basin**. Mediterranean river basins are classified as among the **most vulnerable types of dendritic metacommunities**, home to a significant number of endemic fish species. We aim to develop **robust, data-driven simulation tools** to understand how the **combined effects of multiple threats**—including climate change, exotic species, and fragmentation—drive extinction risk in these fragile ecosystems.
+This project addresses the pressing challenge of **catastrophic biodiversity loss** in Mediterranean freshwater systems by studying the fish metacommunity dynamics of the **Guadalquivir River basin**. Mediterranean river basins are classified as among the **most vulnerable types of dendritic metacommunities**, home to a significant number of endemic fish species. We aim to develop **robust, data-driven simulation tools** to understand how the **combined effects of multiple threats** --including climate change, exotic species, and fragmentation-- drive extinction risk in these fragile ecosystems.
 
 The final product will be a spatially-explicit modeling tool with a user-friendly interface, designed to inform targeted conservation efforts such as exotic species management and the selection of **hydrological reserves**.
 
