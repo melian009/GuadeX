@@ -150,6 +150,20 @@ Aa;Coexist, affects  Ah through predation.;Coexist, affects  Sa through predatio
 * Description: Fish species interaction matrix for the Guadalquivir basin. Each cell describes the ecological relationship between two species (e.g., coexistence, competition, predation, or no coexistence). The matrix is asymmetric and includes both native and exotic species. Useful for analyzing community structure, trophic interactions, and potential impacts of species introductions.
 * See also: `Interacciones_peces_Guadalquivir_03-04-2018_ENG_README.csv` for species code mapping (abbreviations to scientific names).
 
+## data/Matrix_distances_1037puntos_BRUTO_FINAL.csv
+
+```csv
+ID;ID_ORIGIN;ID_DESTINATION;X_ORIGIN;Y_ORIGIN;X_DESTINATION;Y_DESTINATION;EUCLIDIAN_DIST;MANHATTAN_DIST;RETICULAR_DIST
+1;1.1.1;1.1.1;518413.0402;4199877.4267;518413.0402;4199877.4267;0;0;0;
+2;1.1.1;1.1.2;518413.0402;4199877.4267;515045.5258;4205067.5086;6186.84922742742;8557.59630000032;9325.16436185263;
+3;1.1.1;1.1.3;518413.0402;4199877.4267;516227.3783;4211774.9998;12096.66745889;14083.2350000003;25186.1051491399;
+```
+
+* Description: Pairwise distance matrix for 1037 sampling points in the Guadalquivir basin. Contains multiple distance metrics between origin and destination sites:
+  - `EUCLIDIAN_DIST`: Straight-line distance
+  - `MANHATTAN_DIST`: Grid-based distance (sum of absolute differences in coordinates)
+  - `RETICULAR_DIST`: Network-based distance following river pathways
+
 ### Shape files
 
 * `muestreados_FINAL.shp`: Shapefile containing the sampling points with spatial attributes and connectivity information for GIS analysis.
