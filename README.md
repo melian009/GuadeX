@@ -1,28 +1,29 @@
-# GuadalX: Assessing Extinction Dynamics in Changing Metacommunities of the Guadalquivir River Basin
+# GuadeX: Assessing Extinction Dynamics in Changing Metacommunities of the Guadalquivir River Basin
+
 
 ## Project Summary
 
-This project addresses the pressing challenge of **catastrophic biodiversity loss** in Mediterranean freshwater systems by studying the fish metacommunity dynamics of the **Guadalquivir River basin**. Mediterranean river basins are classified as among the **most vulnerable types of dendritic metacommunities**, home to a significant number of endemic fish species. We aim to develop **robust, data-driven simulation tools** to understand how the **combined effects of multiple threats** --including climate change, exotic species, and fragmentation-- drive extinction risk in these fragile ecosystems.
+This project addresses the pressing challenge of **catastrophic biodiversity loss** in Mediterranean freshwater systems by studying the fish metacommunity dynamics of the Guadalquivir River basin. Mediterranean river basins are classified as among the **most vulnerable types of dendritic metacommunities**, home to a significant number of endemic fish species. We aim to develop **robust, data-driven simulation tools** to understand how the **combined effects of multiple threats** -- including climate change, exotic species, and fragmentation -- drive extinction risk in these fragile ecosystems.
 
 The final product will be a spatially-explicit modeling tool with a user-friendly interface, designed to inform targeted conservation efforts such as exotic species management and the selection of **hydrological reserves**.
 
 ## Research Gaps and Objectives (Aims)
 
-Despite mounting threats (e.g., reservoir-induced connectivity reduction, increased pollution, and extreme climate change effects), the **primary drivers of extinction risks in these communities remain uncertain**. It is particularly critical to understand **how the interaction of multiple threats could magnify extinction risks** in certain areas.
+Despite mounting threats, e.g., reservoir-induced connectivity reduction, increased pollution, anthropogenic land use, and extreme climate change effects like desiccation, the primary drivers of extinction risks in these communities remain uncertain. It is particularly critical to understand how the interaction of multiple threats could magnify extinction risks in certain areas.
 
 Our research aims to address these critical gaps:
 
 | Objective | Description |
 | :--- | :--- |
 | **Aim 1: Current Threat Scenario** | What are the native fish extinction risk levels in the Guadalquivir River basin under the **current threat scenario**? This models extinction probability incorporating unique disturbances like **dam presence, exotic species prevalence, and land use patterns** within each sub-basin. |
-| **Aim 2: Increased Threat Levels** | How will extinction risk change with **increased threat levels**? This objective specifically studies the influence of **exotic species and climate change-driven desiccation** on the range dynamics and extinction risk of native and endemic species. |
+| **Aim 2: Increased Threat Levels** | How will extinction risk change with **increased threat levels**? This objective specifically studies the influence of exotic species and climate change-driven desiccation on the range dynamics and extinction risk of native and endemic species. |
 | **Aim 3: Predictive Tool Development** | What tools can we provide to **predict extinction risks and assess resilience** under different scenarios in Mediterranean basins? This involves creating a spatially-explicit modeling tool for practitioners and stakeholders. |
 
 - Questions:
   * What determines coexistence of native fish species within a "Pristine" Mediterranean (environmentally constrained) dendritic network?
-  * How is the community dynamics and -ultimately - composition affected by the introduction of dams (large obstacles to connectivity) and exotic species?
+  * How is the community dynamics and - ultimately - composition affected by the introduction of dams (large obstacles to connectivity) and exotic species?
   * Does the native community change when dams and/or exotics are introduced?
-  * What is the probability of extinction  of native species after exotics have been introduced, and what (local) factors can increase that probability?
+  * What is the probability of extinction of native species after exotics have been introduced, and what (local) factors can increase that probability?
   * Asymmetric basin (current species assemblages are very different in right vs. left hand margin), does it play a role in the dynamics of coexistence?
 
 ## Methodology
@@ -37,21 +38,19 @@ We will model extinction probability curves influenced by different disturbance 
 
 By comparing these two patterns, we aim to understand if differences in extinction patterns relate to **current disturbances** (dam presence, exotic species prevalence, land use) in each sub-basin. This includes calculating the ratio of native to exotic species at each sampling point and identifying **"cold spots"**—regions with a notably high extinction probability.
 
-### 2. Dynamic Simulations under Global Change Scenarios
+### 2. Dynamic Simulations of Threats on extinction probabilities
 
-We will conduct dynamic simulations using **species-specific biological parameters** (e.g., migration, life history traits) to model the extinction probability of multiple species assemblages. The model is based on niche modeling to predict species assemblages in **3D dendritic networks**, accounting for abiotic, biotic, migration, and fragmentation factors.
+The core purpose of the modeling is to address the research gap regarding interaction of threats on extinction probability. We are exploring four simulation techiques that can be implemented as independent ones or as hybrids. These techniques move beyond standard methods like niche modeling by extending them to Joint Species Distribution Models to quantify biotic interactions (option 1) and geometric spatial analysis via Spatial Stream Network Models for flow-based connectivity (option 2). Two additional alternatives are Structural Equation Modeling (SEM) (Option 3), and Agent-based simulations (Option 4). These last two together can provide the highest-value addition because they complement each other in addressing the uncertainty of drivers by quantifying the indirect effects and causal pathways of environmental and biological stressors.
 
-Scenarios will encompass:
-*   **Dendritic fragmentation:** Assessing the impact of connectivity changes and the creation of **reservoirs**.
-*   **Exotic species dynamics:** Simulating native and endemic species' responses to exotic species invasions, considering **competition and predation**.
-*   **Climate change effects:** Accounting for increased **drought and desiccation**, reduction in channel width, and habitat loss.
-*   **Anthropogenic land-use changes:** Considering the gradient of anthropic uses and the specific sensitivity of each species to these disturbances.
+Beyond which specific simulation framework we choose, there are elements that will be required:
 
-**Migration Modeling (3D Network):**
-The model incorporates the physical reality of rivers in high-relief landscapes by extending the 2D network model to **3D**, where dispersal is a function of both hydrological distance and **elevation distance**. A critical parameter is the **upstream migration cost ($c$)**. Downstream migration is assumed to have no cost.
-
-**Model-Data Comparison:**
-We will use **Approximate Bayesian Computation (ABC)** or likelihood methods to infer the factors that best explain the empirical data patterns.
+* Species-specific biological parameters (e.g., migration, life history traits, size) 
+* Dendritic fragmentation: Assessing the impact of connectivity changes and the creation of reservoirs
+* Exotic species dynamics: Simulating native and endemic species' responses to exotic species invasions, considering competition and predation
+* Climate change effects: Accounting for increased drought and desiccation**, reduction in channel width, and habitat loss
+* Anthropogenic land-use changes: Considering the gradient of anthropic uses and the specific sensitivity of each species to these disturbances
+* Migration Modeling (3D dendritic network): The model incorporates the physical reality of rivers in high-relief landscapes by extending the 2D network model to 3D, where dispersal is a function of both hydrological distance and elevation distance. A critical parameter is the **upstream migration cost ($c$)**. Downstream migration is assumed to have no cost.
+* Inference functions to connect model outputs with the empirical patterns
 
 ## Data Sources and Files
 
@@ -75,9 +74,6 @@ The final deliverable is a **spatially-explicit modeling tool** with a user-frie
 *   **Version Control:** The progress of the research will be tracked via a **git repository**.
 *   **Reproducible Research:** A **Jupyter notebook** will be created to make all research steps easily reproducible.
 
-## Project Team and Timeline
-
-The project is planned to run for **1 year**, from Fall 2023 until Fall 2024.
 
 ### Core Team:
 *   Dr. Carlos Fernandez Delgado (Universidad de Córdoba, Spain)
