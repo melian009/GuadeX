@@ -1,6 +1,6 @@
 # Demonstration script for stream graph construction and visualization
 using Pkg
-Pkg.activate("..")
+Pkg.activate(".")
 
 using Guadex
 using DataFrames
@@ -17,7 +17,7 @@ println("Connectivity file: $connectivity_file")
 
 # Build the basic stream graph using nearest neighbors method
 println("\n--- Building Stream Graph (Nearest Neighbors) ---")
-graph, site_to_index, distance_data = build_stream_graph(distance_file, max_distance=10000.0, connection_method=:nearest_neighbors)
+graph, site_to_index, distance_data = build_stream_graph(distance_file, max_distance=Inf, connection_method=:nearest_neighbors, connectivity_file=connectivity_file)
 
 # Get basic statistics
 stats = get_graph_statistics(graph)
@@ -28,9 +28,6 @@ println("  Graph density: $(round(stats.density, digits=4))")
 println("  Number of connected components: $(stats.num_components)")
 println("  Largest component size: $(stats.largest_component_size)")
 
-# Add flow direction based on elevation
-println("\n--- Adding Flow Direction ---")
-add_flow_direction!(graph, site_to_index, connectivity_file)
 
 # Compare different connection methods
 println("\n--- Comparing Connection Methods ---")

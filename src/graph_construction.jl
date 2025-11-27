@@ -23,24 +23,35 @@ The function reads the distance matrix file and creates a directed graph where:
 - Only connections with reticular distance ≤ max_distance are included
 """
 function build_stream_graph(distance_file::String; max_distance::Float64=Inf,
-                           connection_method::Symbol=:nearest_neighbors)
+                           connection_method::Symbol=:nearest_neighbors,
+                           connectivity_file::String="data/ConnectivityUTM.csv")
     # Read the distance matrix
     println("Reading distance matrix from: $distance_file")
     distance_data = CSV.read(distance_file, DataFrame)
 
+    # Load subcatchment info from ConnectivityUTM.csv
+    println("Reading subcatchment info from: $connectivity_file")
+    connectivity_df = CSV.read(connectivity_file, DataFrame)
+    site_to_subcatchment = Dict(row.CODIGO => row.CODIGO_S for row in eachrow(connectivity_df))
+
+    # Filter site "1.30.20" from both datasets because it lacks reticular distance info
+    distance_data = filter(row -> row.ID_ORIGIN != "1.30.20" && row.ID_DESTINATION != "1.30.20", distance_data)
+    connectivity_df = filter(row -> row.CODIGO != "1.30.20", connectivity_df)
+
     # Filter out self-connections and distances greater than max_distance
     filtered_data = filter(row -> row.ID_ORIGIN != row.ID_DESTINATION &&
-                                   row.RETICULAR_DIST <= max_distance &&
-                                   row.RETICULAR_DIST > 0, distance_data)
+                                   0 < row.RETICULAR_DIST <= max_distance &&
+                                   haskey(site_to_subcatchment, row.ID_ORIGIN),
+                           distance_data)
 
-    println("Found $(nrow(filtered_data)) valid connections out of $(nrow(distance_data)) total")
+    println("Found $(nrow(filtered_data)) valid connections out of $(nrow(distance_data)) total (with subcatchment info)")
 
     # Get unique site codes
     unique_sites = unique(vcat(filtered_data.ID_ORIGIN, filtered_data.ID_DESTINATION))
     println("Building graph with $(length(unique_sites)) sites")
 
     # Create mapping from site code to node index
-    site_to_index = Dict(site => i for (i, site) in enumerate(unique_sites))
+    site_to_index = Dict(String(site) => i for (i, site) in enumerate(unique_sites))
 
     # Create directed graph
     num_sites = length(unique_sites)
@@ -53,112 +64,42 @@ function build_stream_graph(distance_file::String; max_distance::Float64=Inf,
 
     # Build connections based on the specified method
     if connection_method == :nearest_neighbors
-        # Connect each site to its nearest neighbors in the stream network
-        edge_count = build_nearest_neighbor_connections!(graph, site_to_index, filtered_data)
+        edge_count = build_nearest_neighbor_connections!(graph, site_to_index, connectivity_df)
     elseif connection_method == :threshold_distance
-        # Connect sites within a threshold reticular distance
-        edge_count = build_threshold_connections!(graph, site_to_index, filtered_data, max_distance)
+        # edge_count = build_threshold_connections!(graph, site_to_index, filtered_data, max_distance, site_to_subcatchment)
+        println("Method not yet tested: threshold_distance")
     elseif connection_method == :minimum_spanning_tree
-        # Build a minimum spanning tree of the stream network
-        edge_count = build_mst_connections!(graph, site_to_index, filtered_data)
+        # edge_count = build_mst_connections!(graph, site_to_index, filtered_data, site_to_subcatchment)
+        println("Method not yet tested: minimum_spanning_tree")
     elseif connection_method == :all_connections
-        # Original method - connect all pairs (for backward compatibility)
-        edge_count = 0
-        for row in eachrow(filtered_data)
-            origin_idx = site_to_index[row.ID_ORIGIN]
-            dest_idx = site_to_index[row.ID_DESTINATION]
-
-            # Add edge in both directions for now (undirected connectivity)
-            # This will be refined to directed flow once we have elevation data
-            if !has_edge(graph, origin_idx, dest_idx)
-                add_edge!(graph, origin_idx, dest_idx)
-                edge_count += 1
-            end
-            if !has_edge(graph, dest_idx, origin_idx)
-                add_edge!(graph, dest_idx, origin_idx)
-                edge_count += 1
-            end
-        end
+        println("Method: all_connections not yet tested")
+        # edge_count = 0
+        # for row in eachrow(filtered_data)
+        #     origin = row.ID_ORIGIN
+        #     dest = row.ID_DESTINATION
+        #     # Only connect if both sites are in the same subcatchment
+        #     if site_to_subcatchment[origin] == site_to_subcatchment[dest]
+        #         origin_idx = site_to_index[origin]
+        #         dest_idx = site_to_index[dest]
+        #         if !has_edge(graph, origin_idx, dest_idx)
+        #             add_edge!(graph, origin_idx, dest_idx)
+        #             edge_count += 1
+        #         end
+        #         if !has_edge(graph, dest_idx, origin_idx)
+        #             add_edge!(graph, dest_idx, origin_idx)
+        #             edge_count += 1
+        #         end
+        #     end
+        # end
     else
         error("Unknown connection method: $connection_method. Use :nearest_neighbors, :threshold_distance, :minimum_spanning_tree, or :all_connections")
     end
 
     println("Added $edge_count edges to the graph using $connection_method method")
 
-    # Convert site_to_index to Dict{String, Int}
-    site_to_index_str = Dict(String(k) => v for (k, v) in site_to_index)
-
-    return graph, site_to_index_str, filtered_data
+    return graph, site_to_index, filtered_data
 end
 
-"""
-    add_flow_direction!(graph::DiGraph, site_to_index::Dict{String, Int},
-                       connectivity_data::AbstractDataFrame)
-
-Add proper flow direction to the graph based on elevation data.
-
-# Arguments
-- `graph::DiGraph`: The graph to modify
-- `site_to_index::Dict{String, Int}`: Mapping from site codes to node indices
-- `connectivity_data::AbstractDataFrame`: Connectivity data with elevation information
-"""
-function add_flow_direction!(graph::DiGraph, site_to_index::Dict{String, Int},
-                           connectivity_data::AbstractDataFrame)
-    println("Adding flow direction based on elevation...")
-
-
-    # Create elevation lookup
-    elevation_dict = Dict(row.CODIGO => row.ALTITUD for row in eachrow(connectivity_data))
-
-    # Remove all existing edges first
-    edges_to_remove = collect(edges(graph))
-    for edge in edges_to_remove
-        rem_edge!(graph, edge)
-    end
-
-    # Add directed edges from higher to lower elevation
-    # Only add edges where there's already a connection (based on existing undirected connections)
-    edge_count = 0
-
-    # We need to reload the distance data to know which sites are actually connected
-    # For now, let's create a more reasonable flow direction based on elevation
-    # and the original distance connections
-
-    # Create a set of connected site pairs from the original distance data
-    connected_pairs = Set{Tuple{String,String}}()
-
-    # Add directed edges based on elevation for connected sites only
-    for (site1, idx1) in site_to_index, (site2, idx2) in site_to_index
-        if site1 != site2 && haskey(elevation_dict, site1) && haskey(elevation_dict, site2)
-            elev1 = elevation_dict[site1]
-            elev2 = elevation_dict[site2]
-
-            # Only add edge if there's a significant elevation difference and sites are reasonably close
-            # This is a heuristic - in reality we'd check the actual distance matrix
-            if abs(elev1 - elev2) > 10  # Minimum elevation difference
-                if elev1 > elev2  # Flow from higher to lower
-                    if !has_edge(graph, idx1, idx2)
-                        add_edge!(graph, idx1, idx2)
-                        edge_count += 1
-                    end
-                else
-                    if !has_edge(graph, idx2, idx1)
-                        add_edge!(graph, idx2, idx1)
-                        edge_count += 1
-                    end
-                end
-            end
-        end
-    end
-
-    println("Added $edge_count directed edges based on elevation")
-end
-
-function add_flow_direction!(graph::DiGraph, site_to_index::Dict{String, Int},
-                           connectivity_file::AbstractString)
-    connectivity_data = CSV.read(connectivity_file, DataFrame)
-    add_flow_direction!(graph, site_to_index, connectivity_data)
-end
 
 """
     get_graph_statistics(graph::DiGraph, site_to_index::Dict{String, Int})
@@ -413,32 +354,65 @@ end
 
 Connect each site to its nearest neighbors in the stream network.
 """
-function build_nearest_neighbor_connections!(graph::DiGraph, site_to_index::Dict{<:AbstractString, <:Int},
-                                           distance_data::DataFrame)
+function build_nearest_neighbor_connections!(graph::DiGraph, site_to_index::Dict{<:AbstractString, <:Int}, connectivity_df)
     edge_count = 0
 
-    # Group by origin site to find nearest neighbors for each site
-    for site in keys(site_to_index)
-        # Find all connections from this site
-        site_connections = filter(row -> row.ID_ORIGIN == site, distance_data)
+    # Get all unique subcatchments
+    subcatchments = unique(connectivity_df.CODIGO_S)
+    # Add subcatchment nodes to graph if not present
+    subcatchment_indices = Dict{Float64, Int}()
+    next_idx = maximum(values(site_to_index)) + 1
+    for sc in subcatchments
+        if !haskey(site_to_index, string(sc))
+            site_to_index[string(sc)] = next_idx
+            subcatchment_indices[sc] = next_idx
+            add_vertex!(graph)
+            next_idx += 1
+        else
+            subcatchment_indices[sc] = site_to_index[string(sc)]
+        end
+    end
 
-        if nrow(site_connections) > 0
-            # Sort by reticular distance (nearest first)
-            sort!(site_connections, :RETICULAR_DIST)
-
-            # Connect to the nearest neighbor(s)
-            # For a dendritic network, we typically connect to 1-3 nearest neighbors
-            max_neighbors = min(3, nrow(site_connections))
-            for i in 1:max_neighbors
-                row = site_connections[i, :]
-                origin_idx = site_to_index[row.ID_ORIGIN]
-                dest_idx = site_to_index[row.ID_DESTINATION]
-
-                if !has_edge(graph, origin_idx, dest_idx)
-                    add_edge!(graph, origin_idx, dest_idx)
-                    edge_count += 1
-                end
+    # Connect sites within each subcatchment based on Dist.Guadalq.(m)
+    sc_proxy_altitude = Dict{Float64, Float64}()  # To store proxy altitude for each subcatchment
+    for sc in subcatchments
+        # Get sites in this subcatchment
+        sites_in_sc = filter(row -> row.CODIGO_S == sc, connectivity_df)
+        # Sort sites by Dist.Guadalq.(m) (ascending: closest to river first)
+        sorted_sites = sort(sites_in_sc, "Dist.Guadalq.(m)")
+        # Connect sequentially (upstream to downstream)
+        for i in 1:(nrow(sorted_sites)-1)
+            site_up = sorted_sites.CODIGO[i+1]
+            site_down = sorted_sites.CODIGO[i]
+            idx_up = site_to_index[site_up]
+            idx_down = site_to_index[site_down]
+            if !has_edge(graph, idx_up, idx_down)
+                add_edge!(graph, idx_up, idx_down)
+                edge_count += 1
             end
+        end
+        # Connect the closest site to the river to the subcatchment node
+        site_closest = sorted_sites.CODIGO[1]
+        idx_closest = site_to_index[site_closest]
+        idx_sc = subcatchment_indices[sc]
+        if !has_edge(graph, idx_closest, idx_sc)
+            add_edge!(graph, idx_closest, idx_sc)
+            edge_count += 1
+        end
+        # Save proxy altitude for subcatchment
+        sc_proxy_altitude[sc] = sorted_sites.ALTITUD[1]
+    end
+
+    # Connect subcatchment nodes sequentially by proxy altitude (highest to lowest)
+    sorted_sc = sort(subcatchments, by=sc -> sc_proxy_altitude[sc], rev=true)
+    for i in 1:(length(sorted_sc)-1)
+        sc_up = sorted_sc[i]
+        sc_down = sorted_sc[i+1]
+        idx_up = subcatchment_indices[sc_up]
+        idx_down = subcatchment_indices[sc_down]
+        if !has_edge(graph, idx_up, idx_down)
+            add_edge!(graph, idx_up, idx_down)
+            edge_count += 1
         end
     end
 
@@ -452,22 +426,24 @@ end
 Connect sites that are within a threshold reticular distance of each other.
 """
 function build_threshold_connections!(graph::DiGraph, site_to_index::Dict{<:AbstractString, <:Int},
-                                    distance_data::DataFrame, threshold::Float64)
+                                    distance_data::DataFrame, threshold::Float64, site_to_subcatchment::Dict)
     edge_count = 0
-
-    # Only include connections within the threshold
-    threshold_data = filter(row -> row.RETICULAR_DIST <= threshold, distance_data)
-
+    threshold_data = filter(row -> 0 < row.RETICULAR_DIST <= threshold &&
+                                   haskey(site_to_subcatchment, row.ID_ORIGIN) &&
+                                   haskey(site_to_subcatchment, row.ID_DESTINATION) &&
+                                   site_to_subcatchment[row.ID_ORIGIN] == site_to_subcatchment[row.ID_DESTINATION],
+                                   distance_data)
     for row in eachrow(threshold_data)
-        origin_idx = site_to_index[row.ID_ORIGIN]
-        dest_idx = site_to_index[row.ID_DESTINATION]
-
+        origin = row.ID_ORIGIN
+        dest = row.ID_DESTINATION
+        # Only connect if both sites are in the same subcatchment
+        origin_idx = site_to_index[origin]
+        dest_idx = site_to_index[dest]
         if !has_edge(graph, origin_idx, dest_idx)
             add_edge!(graph, origin_idx, dest_idx)
             edge_count += 1
         end
     end
-
     return edge_count
 end
 
@@ -479,37 +455,26 @@ Build connections using a minimum spanning tree approach to create the most
 efficient stream network structure.
 """
 function build_mst_connections!(graph::DiGraph, site_to_index::Dict{<:AbstractString, <:Int},
-                               distance_data::DataFrame)
+                               distance_data::DataFrame, site_to_subcatchment::Dict)
     edge_count = 0
-
-    # Sort all connections by distance (shortest first)
     sorted_data = sort(distance_data, :RETICULAR_DIST)
-
-    # Use Union-Find to build MST (simplified approach)
-    # For now, we'll just add the shortest connections that don't create cycles
-    # This is a simplified MST algorithm
-
-    # Keep track of connected components
     components = [Int[i] for i in 1:length(site_to_index)]
-
     for row in eachrow(sorted_data)
-        origin_idx = site_to_index[row.ID_ORIGIN]
-        dest_idx = site_to_index[row.ID_DESTINATION]
-
-        # Find which components these nodes belong to
-        comp1 = find_component(components, origin_idx)
-        comp2 = find_component(components, dest_idx)
-
-        # If they're in different components, connect them
-        if comp1 != comp2
-            add_edge!(graph, origin_idx, dest_idx)
-            edge_count += 1
-
-            # Merge components
-            merge_components!(components, comp1, comp2)
+        origin = row.ID_ORIGIN
+        dest = row.ID_DESTINATION
+        # Only connect if both sites are in the same subcatchment
+        if site_to_subcatchment[origin] == site_to_subcatchment[dest]
+            origin_idx = site_to_index[origin]
+            dest_idx = site_to_index[dest]
+            comp1 = find_component(components, origin_idx)
+            comp2 = find_component(components, dest_idx)
+            if comp1 != comp2
+                add_edge!(graph, origin_idx, dest_idx)
+                edge_count += 1
+                merge_components!(components, comp1, comp2)
+            end
         end
     end
-
     return edge_count
 end
 

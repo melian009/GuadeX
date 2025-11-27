@@ -40,7 +40,7 @@ CODIGO,ALTITUD,CODIGO_S,EMBALSES_SC,Demb arr.(m),Demb ab.(m),Dist.Guadalq.(m),UT
 
 * Description: Site characteristics and spatial information for each sampling location.
   - `CODIGO`: Site identifier (matches FishSizeMatrix) - each site belongs to exactly one subcatchment
-  - `ALTITUD`: Elevation in meters
+  - `ALTITUD`: Elevation of the sampling site above sea level (meters), derived from a digital elevation model (MDT)
   - `CODIGO_S`: Subcatchment code - identifies which tributary drainage area the site belongs to within the larger Guadalquivir basin. A subcatchment is a smaller watershed unit that drains into a larger river system, representing distinct hydrological units with their own connectivity patterns. **Note:** Multiple sites can belong to the same subcatchment (e.g., sites 1.1.2, 1.1.4, and 1.1.10 all belong to subcatchment 1.1), but each site belongs to only one subcatchment.
   - `EMBALSES_SC`: Number of dams/reservoirs within the subcatchment
   - `Demb arr.(m)`: Distance from the site to nearest upstream dam in meters ("No existe" = no upstream dam present)
@@ -159,10 +159,15 @@ ID;ID_ORIGIN;ID_DESTINATION;X_ORIGIN;Y_ORIGIN;X_DESTINATION;Y_DESTINATION;EUCLID
 3;1.1.1;1.1.3;518413.0402;4199877.4267;516227.3783;4211774.9998;12096.66745889;14083.2350000003;25186.1051491399;
 ```
 
-* Description: Pairwise distance matrix for 1037 sampling points in the Guadalquivir basin. Contains multiple distance metrics between origin and destination sites:
-  - `EUCLIDIAN_DIST`: Straight-line distance
-  - `MANHATTAN_DIST`: Grid-based distance (sum of absolute differences in coordinates)
-  - `RETICULAR_DIST`: Network-based distance following river pathways
+**Column meanings:**
+- `ID`: Row identifier (unique for each distance record)
+- `ID_ORIGIN`: Site code for the origin point
+- `ID_DESTINATION`: Site code for the destination point
+- `X_ORIGIN`, `Y_ORIGIN`: UTM coordinates (X, Y) of the origin site
+- `X_DESTINATION`, `Y_DESTINATION`: UTM coordinates (X, Y) of the destination site
+- `EUCLIDIAN_DIST`: Straight-line (Euclidean) distance between origin and destination (meters)
+- `MANHATTAN_DIST`: Manhattan (city-block) distance between origin and destination (meters)
+- `RETICULAR_DIST`: Network (stream/river path) distance between origin and destination (meters)
 
 ### Shape files
 
