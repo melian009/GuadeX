@@ -29,35 +29,35 @@ println("  Number of connected components: $(stats.num_components)")
 println("  Largest component size: $(stats.largest_component_size)")
 
 
-# Compare different connection methods
-println("\n--- Comparing Connection Methods ---")
+# # Compare different connection methods
+# println("\n--- Comparing Connection Methods ---")
 
-# Method 1: Threshold distance
-println("\n1. Threshold Distance Method:")
-graph_threshold, _, _ = build_stream_graph(distance_file, max_distance=5000.0, connection_method=:threshold_distance)
-stats_threshold = get_graph_statistics(graph_threshold)
-println("   Nodes: $(stats_threshold.num_nodes), Edges: $(stats_threshold.num_edges)")
+# # Method 1: Threshold distance
+# println("\n1. Threshold Distance Method:")
+# graph_threshold, _, _ = build_stream_graph(distance_file, max_distance=5000.0, connection_method=:threshold_distance)
+# stats_threshold = get_graph_statistics(graph_threshold)
+# println("   Nodes: $(stats_threshold.num_nodes), Edges: $(stats_threshold.num_edges)")
 
-# Method 2: Minimum spanning tree
-println("\n2. Minimum Spanning Tree Method:")
-graph_mst, _, _ = build_stream_graph(distance_file, connection_method=:minimum_spanning_tree)
-stats_mst = get_graph_statistics(graph_mst)
-println("   Nodes: $(stats_mst.num_nodes), Edges: $(stats_mst.num_edges)")
+# # Method 2: Minimum spanning tree
+# println("\n2. Minimum Spanning Tree Method:")
+# graph_mst, _, _ = build_stream_graph(distance_file, connection_method=:minimum_spanning_tree)
+# stats_mst = get_graph_statistics(graph_mst)
+# println("   Nodes: $(stats_mst.num_nodes), Edges: $(stats_mst.num_edges)")
 
-# Method 3: All connections (original method)
-println("\n3. All Connections Method (Original):")
-graph_all, _, _ = build_stream_graph(distance_file, max_distance=10000.0, connection_method=:all_connections)
-stats_all = get_graph_statistics(graph_all)
-println("   Nodes: $(stats_all.num_nodes), Edges: $(stats_all.num_edges)")
+# # Method 3: All connections (original method)
+# println("\n3. All Connections Method (Original):")
+# graph_all, _, _ = build_stream_graph(distance_file, max_distance=10000.0, connection_method=:all_connections)
+# stats_all = get_graph_statistics(graph_all)
+# println("   Nodes: $(stats_all.num_nodes), Edges: $(stats_all.num_edges)")
 
-# Get updated statistics
-stats = get_graph_statistics(graph)
-println("\nUpdated Graph Statistics (with flow direction):")
-println("  Number of nodes (sites): $(stats.num_nodes)")
-println("  Number of edges: $(stats.num_edges)")
-println("  Graph density: $(round(stats.density, digits=4))")
-println("  Number of connected components: $(stats.num_components)")
-println("  Largest component size: $(stats.largest_component_size)")
+# # Get updated statistics
+# stats = get_graph_statistics(graph)
+# println("\nUpdated Graph Statistics (with flow direction):")
+# println("  Number of nodes (sites): $(stats.num_nodes)")
+# println("  Number of edges: $(stats.num_edges)")
+# println("  Graph density: $(round(stats.density, digits=4))")
+# println("  Number of connected components: $(stats.num_components)")
+# println("  Largest component size: $(stats.largest_component_size)")
 
 # Analyze connectivity patterns
 println("\n--- Analyzing Stream Connectivity ---")
@@ -93,11 +93,12 @@ end
 # Visualize the graph (optional - requires display backend)
 println("\n--- Graph Visualization ---")
 try
-    # Create a simple visualization
-    p = visualize_stream_graph(graph, site_to_index, connectivity_file,
-                              layout=:spring, node_size=0.05, show_labels=false)
+    # Use plot_catchment_network for visualization
+    labels = collect(keys(site_to_index))
+    f = plot_catchment_network(graph; labels=labels)
+    display(f)
     println("  Graph visualization created successfully!")
-    println("  Note: To save the visualization, use the save_path parameter")
+    println("  Note: To save the visualization, use CairoMakie.save or similar")
 catch e
     println("  Visualization failed: $e")
     println("  This may be due to missing display backend or graphics libraries")
