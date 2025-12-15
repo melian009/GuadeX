@@ -40,7 +40,7 @@ CODIGO,ALTITUD,CODIGO_S,EMBALSES_SC,Demb arr.(m),Demb ab.(m),Dist.Guadalq.(m),UT
 
 * Description: Site characteristics and spatial information for each sampling location.
   - `CODIGO`: Site identifier (matches FishSizeMatrix) - each site belongs to exactly one subcatchment
-  - `ALTITUD`: Elevation in meters
+  - `ALTITUD`: Elevation of the sampling site above sea level (meters), derived from a digital elevation model (MDT)
   - `CODIGO_S`: Subcatchment code - identifies which tributary drainage area the site belongs to within the larger Guadalquivir basin. A subcatchment is a smaller watershed unit that drains into a larger river system, representing distinct hydrological units with their own connectivity patterns. **Note:** Multiple sites can belong to the same subcatchment (e.g., sites 1.1.2, 1.1.4, and 1.1.10 all belong to subcatchment 1.1), but each site belongs to only one subcatchment.
   - `EMBALSES_SC`: Number of dams/reservoirs within the subcatchment
   - `Demb arr.(m)`: Distance from the site to nearest upstream dam in meters ("No existe" = no upstream dam present)
@@ -149,6 +149,25 @@ Aa;Coexist, affects  Ah through predation.;Coexist, affects  Sa through predatio
 
 * Description: Fish species interaction matrix for the Guadalquivir basin. Each cell describes the ecological relationship between two species (e.g., coexistence, competition, predation, or no coexistence). The matrix is asymmetric and includes both native and exotic species. Useful for analyzing community structure, trophic interactions, and potential impacts of species introductions.
 * See also: `Interacciones_peces_Guadalquivir_03-04-2018_ENG_README.csv` for species code mapping (abbreviations to scientific names).
+
+## data/Matrix_distances_1037puntos_BRUTO_FINAL.csv
+
+```csv
+ID;ID_ORIGIN;ID_DESTINATION;X_ORIGIN;Y_ORIGIN;X_DESTINATION;Y_DESTINATION;EUCLIDIAN_DIST;MANHATTAN_DIST;RETICULAR_DIST
+1;1.1.1;1.1.1;518413.0402;4199877.4267;518413.0402;4199877.4267;0;0;0;
+2;1.1.1;1.1.2;518413.0402;4199877.4267;515045.5258;4205067.5086;6186.84922742742;8557.59630000032;9325.16436185263;
+3;1.1.1;1.1.3;518413.0402;4199877.4267;516227.3783;4211774.9998;12096.66745889;14083.2350000003;25186.1051491399;
+```
+
+**Column meanings:**
+- `ID`: Row identifier (unique for each distance record)
+- `ID_ORIGIN`: Site code for the origin point
+- `ID_DESTINATION`: Site code for the destination point
+- `X_ORIGIN`, `Y_ORIGIN`: UTM coordinates (X, Y) of the origin site
+- `X_DESTINATION`, `Y_DESTINATION`: UTM coordinates (X, Y) of the destination site
+- `EUCLIDIAN_DIST`: Straight-line (Euclidean) distance between origin and destination (meters)
+- `MANHATTAN_DIST`: Manhattan (city-block) distance between origin and destination (meters)
+- `RETICULAR_DIST`: Network (stream/river path) distance between origin and destination (meters)
 
 ### Shape files
 

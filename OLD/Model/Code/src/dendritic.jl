@@ -8,12 +8,14 @@ using DataFrames
 using CSV
 using VegaLite
 
+data_dir = joinpath(@__DIR__, "..", "data")
+
 # PRESENCE MATRIX PER SITE (NOT STANDARIZED BY SAMPLING EFFORT)
-cooccur = CSV.read("FishSizeMatrix.csv", DataFrame)
+cooccur = CSV.read(joinpath(data_dir, "FishSizeMatrix.csv"), DataFrame)
 colnames = names(cooccur)
 
 # LON LAT PER SITE
-utm = CSV.read("ConnectivityUTM.csv", DataFrame)
+utm = CSV.read(joinpath(data_dir, "ConnectivityUTM.csv"), DataFrame)
 colnames = names(utm)
 
 # BUILD REGIONALIZATION (MANY SECTORS)
