@@ -25,7 +25,7 @@ function plot_catchment_network(g::AbstractGraph;
     layout_func = coordinates
   else
     # BuchananWalker is excellent for river trees (roots at top/side)
-    layout_func = NetworkLayout.spring(g)
+    layout_func = NetworkLayout.stress(g) # buchheim() is good for river trees but the DAG is not a tree.
   end
 
   # 3. Define Aesthetics
@@ -38,7 +38,7 @@ function plot_catchment_network(g::AbstractGraph;
     layout=layout_func,
 
     # Node styling
-    node_size=20,
+    node_size=5,
     node_color=node_color_map,
     node_strokewidth=2,
     node_strokecolor=:blue,

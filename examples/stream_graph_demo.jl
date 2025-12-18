@@ -93,12 +93,23 @@ end
 # Visualize the graph (optional - requires display backend)
 println("\n--- Graph Visualization ---")
 try
-    # Use plot_catchment_network for visualization
+    # # Use plot_catchment_network for visualization
     labels = collect(keys(site_to_index))
-    f = plot_catchment_network(graph; labels=labels)
+    # # Extract coordinates for visualization
+    # site_coords = Dict{String,Tuple{Float64,Float64}}()
+    # for row in eachrow(CSV.read(connectivity_file, DataFrame))
+    #     site_coords[row.CODIGO] = (row.UTMX, row.UTMY)
+    # end
+    # coordinates = [site_coords[label] for label in labels if haskey(site_coords, label)]
+    coordinates = nothing  # For now, we skip fixed coordinates because subcatchments do not have coordinates, only sites have.
+    labels = nothing # Skip labels for clarity in large graphs
+
+    f = plot_catchment_network(graph; labels=labels, coordinates=coordinates)
     display(f)
     println("  Graph visualization created successfully!")
     println("  Note: To save the visualization, use CairoMakie.save or similar")
+    # Save
+    CairoMakie.save("stream_graph_visualization.png", f)
 catch e
     println("  Visualization failed: $e")
     println("  This may be due to missing display backend or graphics libraries")
