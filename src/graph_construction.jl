@@ -35,17 +35,39 @@ function build_stream_graph(distance_file::String; max_distance::Float64=Inf,
     distance_data = filter(row -> row.ID_ORIGIN != "1.30.20" && row.ID_DESTINATION != "1.30.20", distance_data)
     connectivity_df = filter(row -> row.CODIGO != "1.30.20", connectivity_df)
 
-    # Filter out self-connections and distances greater than max_distance
+    # Filter out self-connections and distances greater than max_distance and ensure sites are in subcatchments
     filtered_data = filter(row -> row.ID_ORIGIN != row.ID_DESTINATION &&
                                    0 < row.RETICULAR_DIST <= max_distance &&
-                                   haskey(site_to_subcatchment, row.ID_ORIGIN),
+                                   haskey(site_to_subcatchment, row.ID_ORIGIN) &&
+                                   haskey(site_to_subcatchment, row.ID_DESTINATION),
                            distance_data)
 
     println("Found $(nrow(filtered_data)) valid connections out of $(nrow(distance_data)) total (with subcatchment info)")
 
-    # Get unique site codes
-    unique_sites = unique(vcat(filtered_data.ID_ORIGIN, filtered_data.ID_DESTINATION))
+    # Get unique sites from both connectivity and distance data
+    sites_in_connectivity = unique(connectivity_df.CODIGO)
+    sites_in_distance = unique(vcat(distance_data.ID_ORIGIN, distance_data.ID_DESTINATION))
+    unique_sites = unique(vcat(sites_in_connectivity, sites_in_distance))
     println("Building graph with $(length(unique_sites)) sites")
+
+    #############################
+    # After creating site_to_index, add diagnostics
+    println("Sites in distance matrix: $(length(sites_in_distance))")
+    println("Sites in connectivity matrix: $(length(sites_in_connectivity))")
+
+    missing_from_connectivity = setdiff(Set(sites_in_distance), sites_in_connectivity)
+    if !isempty(missing_from_connectivity)
+        println("Sites in distance matrix but missing from connectivity ($(length(missing_from_connectivity))): $missing_from_connectivity")
+    end # Sites in distance matrix but missing from connectivity (261)
+
+    # Check subcatchment sizes
+    subcatchment_sizes = combine(groupby(connectivity_df, :CODIGO_S), nrow => :count)
+    single_site_subcatchments = filter(row -> row.count == 1, subcatchment_sizes)
+    println("Subcatchments with only 1 site: $(nrow(single_site_subcatchments))")
+    #############################
+
+    @info "Using only sites present in both distance and connectivity data to build the graph because there are missing sites in connectivity data."
+    unique_sites = intersect(sites_in_connectivity, sites_in_distance)
 
     # Create mapping from site code to node index
     site_to_index = Dict(String(site) => i for (i, site) in enumerate(unique_sites))
@@ -61,7 +83,7 @@ function build_stream_graph(distance_file::String; max_distance::Float64=Inf,
 
     # Build connections based on the specified method
     if connection_method == :nearest_neighbors
-        edge_count = build_nearest_neighbor_connections!(graph, site_to_index, connectivity_df)
+        edge_count = build_nearest_neighbor_connections!(graph, site_to_index, connectivity_df, filtered_data)
     elseif connection_method == :threshold_distance
         # edge_count = build_threshold_connections!(graph, site_to_index, filtered_data, max_distance, site_to_subcatchment)
         println("Method not yet tested: threshold_distance")
@@ -234,7 +256,7 @@ end
 
 Connect each site to its nearest neighbors in the stream network.
 """
-function build_nearest_neighbor_connections!(graph::DiGraph, site_to_index::Dict{<:AbstractString, <:Int}, connectivity_df)
+function build_nearest_neighbor_connections!(graph::DiGraph, site_to_index::Dict{<:AbstractString, <:Int}, connectivity_df::DataFrame, filtered_data::DataFrame)
     edge_count = 0
 
     # Get all unique subcatchments
@@ -295,6 +317,24 @@ function build_nearest_neighbor_connections!(graph::DiGraph, site_to_index::Dict
             edge_count += 1
         end
     end
+
+    # Connect orphan sites (in distance destinations but missing from connectivity)
+    sites_in_connectivity = Set(connectivity_df.CODIGO)
+    orphan_count = 0
+    for row in eachrow(filtered_data)
+        origin = row.ID_ORIGIN
+        dest = row.ID_DESTINATION
+        if dest ∉ sites_in_connectivity
+            origin_idx = site_to_index[origin]
+            dest_idx = site_to_index[dest]
+            if !has_edge(graph, origin_idx, dest_idx)
+                add_edge!(graph, origin_idx, dest_idx)
+                edge_count += 1
+                orphan_count += 1
+            end
+        end
+    end
+    println("Connected $orphan_count orphan sites to their upstream origins.")
 
     return edge_count
 end
