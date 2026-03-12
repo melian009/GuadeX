@@ -17,8 +17,17 @@ export build_stream_graph, get_graph_statistics, find_upstream_sites, find_downs
 export plot_catchment_network
 export metacommunity_ode!, MetacommunityParams, precompute_dispersal_matrix
 
+# Export data preparation functions
+export prepare_ode_data, save_ode_data
+export load_species_characteristics, load_site_data, load_species_density_data
+export load_interaction_matrix, build_distance_matrix
+export build_elevation_vector, build_dam_passability_matrix
+export extract_site_temperatures, extract_habitat_suitability
+export build_intrinsic_growth_rates
+
 include("graph_construction.jl")
 include("visualize_graph.jl")
 include("ode_model.jl")
+include("data_preparation.jl")
 
 end # module Guadex
