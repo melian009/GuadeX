@@ -1,7 +1,3 @@
-using DifferentialEquations
-using LinearAlgebra
-using SparseArrays
-
 """
     MetacommunityParams
 

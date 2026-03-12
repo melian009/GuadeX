@@ -1,8 +1,4 @@
-include("../src/ode_model.jl")
-using Test
-using SparseArrays
-
-function test_ode_structure()
+@testset "ODE model test" begin
     # Small test case: 2 sites, 2 species
     n_sites = 2
     n_species = 2
@@ -76,8 +72,4 @@ function test_ode_structure()
     # 0.1 * (1/100) * 1 = 0.001
     m_21 = p.dispersal_matrix[1, 2] # Rate FROM 2 TO 1
     @test m_21 ≈ 0.001
-
-    println("Manual dispersal checks passed.")
 end
-
-test_ode_structure()

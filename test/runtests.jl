@@ -1,5 +1,6 @@
 using Test
 using Guadex
+using SparseArrays
 
 # Set up data paths
 const data_dir = joinpath(@__DIR__, "../data")
@@ -8,3 +9,4 @@ const connectivity_file = joinpath(data_dir, "ConnectivityUTM.csv")
 
 # Run test files
 include("test_graph_construction.jl")
+include("test_ode.jl")
