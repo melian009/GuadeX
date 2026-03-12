@@ -13,8 +13,9 @@ using LinearAlgebra
 using SparseArrays
 
 # Export main functions
-export build_stream_graph, add_flow_direction!, get_graph_statistics, find_upstream_sites, find_downstream_sites, visualize_stream_graph, analyze_stream_connectivity, build_nearest_neighbor_connections!, build_threshold_connections!, build_mst_connections!, analyze_stream_connectivity
+export build_stream_graph, get_graph_statistics, find_upstream_sites, find_downstream_sites, visualize_stream_graph, analyze_stream_connectivity, build_nearest_neighbor_connections!, build_threshold_connections!, build_mst_connections!, analyze_stream_connectivity
 export plot_catchment_network
+export metacommunity_ode!, MetacommunityParams, precompute_dispersal_matrix
 
 include("graph_construction.jl")
 include("visualize_graph.jl")
