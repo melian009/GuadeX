@@ -309,9 +309,9 @@ end
 Parse an interaction string and return a numeric value.
 - "No coexist" => strong negative (-1.0)
 - "displaces" => strong negative (-0.8)
-- "predation" => negative (-0.5)
-- "affects" => moderate negative (-0.4)
-- "competition", "interfere", "interfiere" => negative (-0.3)
+- "predation" or "affects ... predation" => negative (-0.5)
+- "competition", "interfere", "interfiere", "affects ... competition" => negative (-0.3)
+- "affects" (without specific mechanism) => moderate negative (-0.2)
 - "coexist, neutral" => zero (0.0)
 - "coexist" without negative qualifier => zero (0.0)
 
@@ -343,21 +343,22 @@ function parse_interaction_string(interaction_str::Union{String, Missing})
         return -0.8
     end
 
-    # 3. Predation (direct predation effect)
+    # 3. Predation (direct predation effect) - including "affects ... predation"
     if occursin("predation", interaction_lower)
         return -0.5
     end
 
-    # 4. Moderate negative: affects (some effect but not complete displacement)
-    if occursin("affects", interaction_lower)
-        return -0.4
-    end
-
-    # 5. Competition or interference (weaker negative effects)
+    # 4. Competition or interference - including "affects ... competition"
     if occursin("competition", interaction_lower) ||
        occursin("interfere", interaction_lower) ||
        occursin("interfiere", interaction_lower)
         return -0.3
+    end
+
+    # 5. Moderate negative: affects (some effect but not complete displacement)
+    # This catches "affects" when not followed by predation or competition
+    if occursin("affects", interaction_lower)
+        return -0.2
     end
 
     # 6. Neutral coexistence - "coexist" with neutral qualifier or alone
