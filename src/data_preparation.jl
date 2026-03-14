@@ -509,7 +509,7 @@ function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
     n_sites = length(sites)
 
     # Create site index mapping
-    site_to_idx = Dict(s => i for (i, s) in enumerate(sites))
+    # site_to_idx = Dict(s => i for (i, s) in enumerate(sites))
 
     # Get dam information per site
     site_dam_info = Dict{String, NamedTuple{(:dist_upstream, :dist_downstream), Tuple{Float64, Float64}}}()
@@ -522,10 +522,10 @@ function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
         # If "No existe" was replaced with 0, it means no dam
         # We use a large value to indicate no dam effect
         if dist_up == 0
-            dist_up = 100000.0  # No upstream dam
+            dist_up = 1000_000.0  # No upstream dam
         end
         if dist_down == 0
-            dist_down = 100000.0  # No downstream dam
+            dist_down = 1000_000.0  # No downstream dam
         end
 
         site_dam_info[codigo] = (dist_upstream=dist_up, dist_downstream=dist_down)
@@ -546,9 +546,9 @@ function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
 
             if haskey(site_dam_info, origin) && haskey(site_dam_info, dest)
                 # Check if there's a dam between origin and destination
-                # For now, use simple heuristic: if origin has downstream dam within 5km
+                # For now, use simple heuristic: if origin has downstream dam at all, reduce passability
                 dam_info = site_dam_info[origin]
-                if dam_info.dist_downstream < 5000
+                if dam_info.dist_downstream < 1000_000
                     # Dam downstream of origin - reduce passability
                     dams[i, j] = 0.1
                 end
