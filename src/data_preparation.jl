@@ -605,11 +605,12 @@ end
     extract_habitat_suitability(site_df::DataFrame, sites::Vector{String})
 
 Extract habitat suitability index for each site.
-Uses IET (Índice de Estado Trófico) or other habitat quality indicators.
+Uses IET (Índice de Estado Trófico) as habitat quality indicator.
+Return a suitability score where higher IET = lower suitability (normalized).
 """
 function extract_habitat_suitability(site_df::DataFrame, sites::Vector{String})
     # Try to find habitat quality column
-    # IET is a good indicator (lower is better - oligotrophic)
+    # IET is a good indicator (lower is better - oligotrophic). Think of it as a "health check" that tells you how much organic matter (mostly algae) is growing in the water.
     # We'll use a simple transformation: higher IET = lower suitability
 
     site_to_iet = Dict(row.CODIGO => row.IET for row in eachrow(site_df))
@@ -808,7 +809,7 @@ function prepare_ode_data(;
         dispersal_intensity,
         dams
     )
-    println("Dispersal matrix: $(nnz(dispersal_matrix)) non-zero entries")
+    println("Dispersal matrix: $(Guadex.nnz(dispersal_matrix)) non-zero entries")
 
     # Create MetacommunityParams
     println("\n" * "="^60)
