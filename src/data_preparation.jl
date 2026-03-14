@@ -272,14 +272,15 @@ function load_interaction_matrix(interaction_file::String, species_codes::Vector
     # Parse interaction values
     for row in eachrow(interaction_df)
         sp1 = row.Species
+        sp1_lower = lowercase(sp1)
         if !haskey(species_to_idx, sp1)
             continue
         end
-        idx1 = species_to_idx[sp1]
 
         # Find this species in our target species list
-        if sp1 ∈ species_codes
-            target_idx1 = findfirst(==(sp1), species_codes)
+        lower_species_codes = lowercase.(species_codes)
+        if sp1_lower ∈ lower_species_codes
+            target_idx1 = findfirst(==(sp1_lower), lower_species_codes)
 
             for sp2 in matrix_species
                 if hasproperty(row, Symbol(sp2))
@@ -288,8 +289,9 @@ function load_interaction_matrix(interaction_file::String, species_codes::Vector
                     # Parse interaction string
                     value = parse_interaction_string(interaction_str)
 
-                    if sp2 ∈ species_codes
-                        target_idx2 = findfirst(==(sp2), species_codes)
+                    sp2lower = lowercase(sp2)
+                    if sp2lower ∈ lower_species_codes
+                        target_idx2 = findfirst(==(sp2lower), lower_species_codes)
                         interaction_matrix[target_idx1, target_idx2] = value
                     end
                 end
@@ -306,46 +308,64 @@ end
 
 Parse an interaction string and return a numeric value.
 - "No coexist" => strong negative (-1.0)
-- "predation" => negative (-0.5)
-- "competition" or "interfere" => negative (-0.3)
-- "coexist, neutral" => zero (0.0)
 - "displaces" => strong negative (-0.8)
+- "predation" => negative (-0.5)
+- "affects" => moderate negative (-0.4)
+- "competition", "interfere", "interfiere" => negative (-0.3)
+- "coexist, neutral" => zero (0.0)
+- "coexist" without negative qualifier => zero (0.0)
+
+The function checks patterns in order of priority (most negative first).
 """
-function parse_interaction_string(interaction_str::String)
+function parse_interaction_string(interaction_str::Union{String, Missing})
+    # Handle missing or empty values
     if ismissing(interaction_str) || isempty(interaction_str)
         return 0.0
     end
 
     interaction_str = strip(string(interaction_str))
 
+    # Empty after stripping or just semicolon
     if interaction_str == "" || interaction_str == ";"
         return 0.0
     end
 
-    # Strong negative interactions
-    if occursin("No coexist", interaction_str)
+    # Convert to lowercase for case-insensitive matching
+    interaction_lower = lowercase(interaction_str)
+
+    # 1. Strongest negative: No coexistence
+    if occursin("no coexist", interaction_lower)
         return -1.0
     end
 
-    if occursin("displaces", interaction_str)
+    # 2. Strong negative: displaces (complete displacement)
+    if occursin("displaces", interaction_lower)
         return -0.8
     end
 
-    # Predation
-    if occursin("predation", interaction_str)
+    # 3. Predation (direct predation effect)
+    if occursin("predation", interaction_lower)
         return -0.5
     end
 
-    # Competition
-    if occursin("competition", interaction_str) || occursin("interfere", interaction_str)
+    # 4. Moderate negative: affects (some effect but not complete displacement)
+    if occursin("affects", interaction_lower)
+        return -0.4
+    end
+
+    # 5. Competition or interference (weaker negative effects)
+    if occursin("competition", interaction_lower) ||
+       occursin("interfere", interaction_lower) ||
+       occursin("interfiere", interaction_lower)
         return -0.3
     end
 
-    # Neutral coexistence
-    if occursin("coexist", interaction_str) || occursin("neutral", interaction_str)
+    # 6. Neutral coexistence - "coexist" with neutral qualifier or alone
+    if occursin("coexist", interaction_lower) || occursin("neutral", interaction_lower)
         return 0.0
     end
 
+    # Default: no interaction (neutral)
     return 0.0
 end
 
