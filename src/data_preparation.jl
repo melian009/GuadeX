@@ -10,35 +10,35 @@ them in chunks or using streaming approaches.
 
 # Species codes mapping (from density matrix columns)
 const SPECIES_CODES = [
-    "LS", "SA", "SP", "PW", "CP", "IL", "IO", "AA", "AH",  # Native
-    "GL", "GH", "LG", "AAL", "CG", "CC", "MS", "ST", "OM", "EL", "AM", "TT", "LR", "MC", "AB"  # Exotic + others
+  "SA", "LS", "ST", "SP", "IL", "PW", "CP", "AA", "AH", "LR", "MC", "AB", "IO",  # Native
+  "OM", "LG", "GH", "AA", "CG", "CC", "MS", "AM", "TT", "EL", "GL"  # Exotic + others
 ]
 
 # Full species names mapping
 const SPECIES_NAMES = Dict(
-    "Ah" => "Anaecypris hispanica",
-    "Sa" => "Squalius alburnoides",
-    "Sp" => "Squalius pyrenaicus",
-    "Il" => "Iberochondrostoma lemmingii",
-    "Io" => "Iberochondrostoma oretanum",
-    "Cp" => "Cobitis paludica",
-    "St" => "Salmo trutta",
-    "Ab" => "Aphanius baeticus",
-    "Aa" => "Anguilla anguilla",
-    "Lr" => "Liza ramada",
-    "Mc" => "Mugil cephalus",
-    "Ls" => "Luciobarbus sclateri",
-    "Pw" => "Pseudochondrostoma willkommii",
-    "Gl" => "Gobio lozanoi",
-    "Ms" => "Micropterus salmoides",
-    "Gh" => "Gambusia holbrooki",
-    "El" => "Esox lucius",
-    "Aal" => "Alburnus alburnus",
-    "Cc" => "Cyprinus carpio",
-    "Cg" => "Carassius gibelio",
-    "Tt" => "Tinca tinca",
-    "Am" => "Ameiurus melas",
-    "Om" => "Oncorhynchus mykiss"
+  "AB" => "Aphanius baeticus",
+  "SP" => "Squalius pyrenaicus",
+  "CP" => "Cobitis paludica",
+  "IO" => "Iberochondrostoma oretanum",
+  "MC" => "Mugil cephalus",
+  "CC" => "Cyprinus carpio",
+  "GH" => "Gambusia holbrooki",
+  "AM" => "Ameiurus melas",
+  "SA" => "Squalius alburnoides",
+  "PW" => "Pseudochondrostoma willkommii",
+  "LG" => "Lepomis gibbosus",
+  "LS" => "Luciobarbus sclateri",
+  "OM" => "Oncorhynchus mykiss",
+  "CG" => "Carassius gibelio",
+  "AH" => "Anaecypris hispanica",
+  "LR" => "Liza ramada",
+  "ST" => "Salmo trutta",
+  "TT" => "Tinca tinca",
+  "AA" => "Anguilla anguilla",
+  "GL" => "Gobio lozanoi",
+  "MS" => "Micropterus salmoides",
+  "IL" => "Iberochondrostoma lemmingii",
+  "EL" => "Esox lucius",
 )
 
 """
