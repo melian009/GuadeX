@@ -45,6 +45,8 @@ const SPECIES_NAMES = Dict(
     parse_temperature_range(temp_str::AbstractString)
 
 Parse temperature range string like "8 to 30" and return the midpoint as thermal optimum.
+
+Input file is "data/ABIOTIC/caracteristicas_peces_Guadalquivir_03-04-2018.csv"
 """
 function parse_temperature_range(temp_str::AbstractString)
     if isempty(temp_str) || temp_str == ""
@@ -74,45 +76,102 @@ function parse_temperature_range(temp_str::AbstractString)
 end
 
 """
+    parse_temperature_range_and_sigma(temp_str::AbstractString)
+
+Parse temperature range string like "8 to 30" and return both the thermal optimum
+(midpoint) and thermal breadth (sigma). Sigma is derived from the temperature range
+using the approximation sigma ≈ range / 6.
+
+Input file is "data/ABIOTIC/caracteristicas_peces_Guadalquivir_03-04-2018.csv"
+"""
+function parse_temperature_range_and_sigma(temp_str::AbstractString)
+    # Default values
+    default_optimum = 15.0
+    default_sigma = 3.0
+
+    if isempty(temp_str) || temp_str == ""
+        return (optimum=default_optimum, sigma=default_sigma)
+    end
+
+    # Handle "X to Y" format
+    if occursin(" to ", temp_str)
+        parts = split(temp_str, " to ")
+        if length(parts) == 2
+            try
+                t_min = parse(Float64, strip(parts[1]))
+                t_max = parse(Float64, strip(parts[2]))
+                thermal_range = t_max - t_min
+                # Sigma is roughly 1/6 of the temperature range
+                # This ensures ~95% of the thermal niche falls within ±2σ
+                sigma = thermal_range / 6.0
+                optimum = (t_min + t_max) / 2.0
+                return (optimum=optimum, sigma=sigma)
+            catch
+                return (optimum=default_optimum, sigma=default_sigma)
+            end
+        end
+    end
+
+    # Try to parse as single number - no range info, use default sigma
+    try
+        optimum = parse(Float64, temp_str)
+        return (optimum=optimum, sigma=default_sigma)
+    catch
+        return (optimum=default_optimum, sigma=default_sigma)
+    end
+end
+
+"""
+    parse_elevation(elev_str::AbstractString)
+
+Parse elevation string, handling ranges and missing values.
+Returns a single elevation value (midpoint if range, default if missing).
+
+Input file is "data/ABIOTIC/caracteristicas_peces_Guadalquivir_03-04-2018.csv"
+"""
+function parse_elevation(elev_str::AbstractString)
+  if isempty(elev_str) || elev_str == ""
+    return 500.0
+  end
+  if occursin(" to ", elev_str)
+    parts = split(elev_str, " to ")
+    if length(parts) == 2
+      try
+        e_min = parse(Float64, strip(parts[1]))
+        e_max = parse(Float64, strip(parts[2]))
+        return (e_min + e_max) / 2.0
+      catch
+        return 500.0
+      end
+    end
+  end
+  try
+    return parse(Float64, elev_str)
+  catch
+    return 500.0
+  end
+end
+
+"""
     load_species_characteristics(file::String)
 
 Load species ecological characteristics from the species traits file.
 Returns a DataFrame with species codes and their thermal parameters.
+
+NB: This function takes midpoint values for temperature and elevation ranges, and parses max size for growth rate scaling. The thermal breadth (sigma) is derived from the temperature range (sigma ≈ range/6).
 """
-function load_species_characteristics(file::AbstractString)
+function load_species_characteristics(file::String)
     println("Loading species characteristics from: $file")
 
     # Read the semicolon-delimited file
     df = CSV.read(file, DataFrame; delim=';')
 
-    # Parse temperature ranges to get thermal optima
-    df.thermal_optimum = parse_temperature_range.(string.(df.TEMPERATURE_C))
+    # Parse temperature ranges to get thermal optima and sigma (thermal breadth)
+    thermal_params = parse_temperature_range_and_sigma.(string.(df.TEMPERATURE_C))
+    df.thermal_optimum = [p.optimum for p in thermal_params]
+    df.thermal_sigma = [p.sigma for p in thermal_params]
 
-    # Parse elevation ranges
-    function parse_elevation(elev_str::AbstractString)
-        if isempty(elev_str) || elev_str == ""
-            return 500.0
-        end
-        if occursin(" to ", elev_str)
-            parts = split(elev_str, " to ")
-            if length(parts) == 2
-                try
-                    e_min = parse(Float64, strip(parts[1]))
-                    e_max = parse(Float64, strip(parts[2]))
-                    return (e_min + e_max) / 2.0
-                catch
-                    return 500.0
-                end
-            end
-        end
-        try
-            return parse(Float64, elev_str)
-        catch
-            return 500.0
-        end
-    end
-
-    df.elevation_optimum = parse_elevation.(df.ELEVATION_m)
+    df.elevation_optimum = parse_elevation.(string.(df.ELEVATION_m))
 
     # Parse max size for scaling growth rates
     df.max_size_mm = Float64.(df.MAX_SIZE_mm)
@@ -622,18 +681,20 @@ function prepare_ode_data(;
     thermal_optima = Float64[]
     thermal_sigmas = Float64[]
 
+    # Use thermal optimum and sigma (thermal breadth) from species characteristics
+    # Sigma is derived from the temperature range in the data (sigma ≈ range/6)
     for sp in species_codes
         sp_row = findfirst(row -> row.SP == sp, eachrow(species_chars_df))
         if sp_row !== nothing
             push!(thermal_optima, species_chars_df.thermal_optimum[sp_row])
-            # Sigma is roughly 1/6 of the temperature range
-            push!(thermal_sigmas, 3.0)  # Default sigma
+            push!(thermal_sigmas, species_chars_df.thermal_sigma[sp_row])
         else
             push!(thermal_optima, 15.0)
             push!(thermal_sigmas, 3.0)
         end
     end
     println("Thermal optima: $thermal_optima")
+    println("Thermal sigmas: $thermal_sigmas")
 
     # 4. Load interaction matrix
     println("\n[4/8] Loading interaction matrix...")
