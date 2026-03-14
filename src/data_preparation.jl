@@ -371,13 +371,20 @@ function parse_interaction_string(interaction_str::Union{String, Missing})
 end
 
 """
-    build_distance_matrix(distance_file::String, sites::Vector{String}; max_distance::Float64=50000.0)
+    build_distance_matrix(distance_file::String, sites::Vector{String},
+                         site_to_subcatchment::Dict{String, String})
 
+Distances between sites.
 Build a sparse distance matrix from the distance file.
-Only includes connections within max_distance.
+Only includes connections within max_distance BETWEEN SITES IN THE SAME SUBCATCHMENT.
+
+This is critical because the river network is dendritic - sites in different subcatchments
+(tributaries) are not connected to each other.
 """
-function build_distance_matrix(distance_file::String, sites::Vector{String}; max_distance::Float64=50000.0)
+function build_distance_matrix(distance_file::String, sites::Vector{String},
+                               site_to_subcatchment::Dict{T, T2}) where T <: AbstractString where T2 <: AbstractString
     println("Building distance matrix from: $distance_file")
+    println("Only including connections between sites in the same subcatchment")
 
     # Create site to index mapping
     site_to_idx = Dict(s => i for (i, s) in enumerate(sites))
@@ -391,6 +398,7 @@ function build_distance_matrix(distance_file::String, sites::Vector{String}; max
     # Stream the distance file in chunks
     chunk_size = 100000
     total_rows = 0
+    valid_connections = 0
 
     # First, count total rows to estimate memory
     # For large files, we'll process in chunks
@@ -410,10 +418,21 @@ function build_distance_matrix(distance_file::String, sites::Vector{String}; max
             continue
         end
 
-        # Skip self-connections and distances > max_distance
+        # Skip self-connections
         dist = row.RETICULAR_DIST
-        if origin == dest || dist > max_distance || dist <= 0
+        if origin == dest || dist <= 0
             continue
+        end
+
+        # CRITICAL: Only include connections between sites in the same subcatchment
+        # This is because the river network is dendritic - sites in different tributaries
+        # (subcatchments) are not connected to each other
+        if !haskey(site_to_subcatchment, origin) || !haskey(site_to_subcatchment, dest)
+            continue
+        end
+
+        if site_to_subcatchment[origin] != site_to_subcatchment[dest]
+            continue  # Skip cross-subcatchment connections
         end
 
         i = site_to_idx[dest]  # destination
@@ -422,6 +441,7 @@ function build_distance_matrix(distance_file::String, sites::Vector{String}; max
         push!(I, i)
         push!(J, j)
         push!(V, dist)
+        valid_connections += 1
 
         if total_rows % 1000000 == 0
             println("Processed $total_rows rows...")
@@ -429,6 +449,7 @@ function build_distance_matrix(distance_file::String, sites::Vector{String}; max
     end
 
     println("Processed $total_rows total distance records")
+    println("Found $valid_connections valid within-subcatchment connections")
 
     # Create sparse matrix
     distance_matrix = sparse(I, J, V, n_sites, n_sites)
@@ -651,14 +672,23 @@ end
         environmental_file::String = "data/ABIOTIC/Matriz_Ambiental_Data.csv",
         distance_file::String = "data/Matrix_distances_1037puntos_BRUTO_FINAL.csv",
         interaction_file::String = "data/BIOTIC/Interacciones_peces_Guadalquivir_03-04-2018_ENG.csv",
-        max_distance::Float64 = 50000.0,
         upstream_cost::Float64 = 0.01,
         dispersal_intensity::Float64 = 0.1
     )
 
 Prepare all data needed for the ODE metacommunity model.
+## Arguments
+- `connectivity_file`: Path to site connectivity data
+- `density_file`: Path to species density data
+- `species_chars_file`: Path to species characteristics data
+- `environmental_file`: Path to environmental data
+- `distance_file`: Path to distance matrix data
+- `interaction_file`: Path to species interaction data
+- `max_distance`: Maximum distance for connections in the distance matrix
+- `upstream_cost`: Additional cost factor for upstream dispersal
+- `dispersal_intensity`: Scaling factor for dispersal rates in the model
 
-Returns a NamedTuple with:
+## Returns a NamedTuple with:
 - params: MetacommunityParams struct
 - sites: Vector of site codes
 - species: Vector of species codes
@@ -673,7 +703,6 @@ function prepare_ode_data(;
     environmental_file::String = "data/ABIOTIC/Matriz_Ambiental_Data.csv",
     distance_file::String = "data/Matrix_distances_1037puntos_BRUTO_FINAL.csv",
     interaction_file::String = "data/BIOTIC/Interacciones_peces_Guadalquivir_03-04-2018_ENG.csv",
-    max_distance::Float64 = 50000.0,
     upstream_cost::Float64 = 0.01,
     dispersal_intensity::Float64 = 0.1
 )
@@ -722,8 +751,11 @@ function prepare_ode_data(;
     interaction_matrix = load_interaction_matrix(interaction_file, species_codes)
 
     # 5. Build distance matrix
+    # Create subcatchment mapping from site data
+    site_to_subcatchment = Dict(row.CODIGO => string(row.CODIGO_S) for row in eachrow(site_df))
+
     println("\n[5/8] Building distance matrix...")
-    distance_matrix = build_distance_matrix(distance_file, sites; max_distance=max_distance)
+    distance_matrix = build_distance_matrix(distance_file, sites, site_to_subcatchment)
 
     # 6. Build elevation vector
     println("\n[6/8] Extracting elevations...")
