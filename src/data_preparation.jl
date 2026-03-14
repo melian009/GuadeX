@@ -372,48 +372,75 @@ end
 
 """
     build_distance_matrix(distance_file::String, sites::Vector{String},
-                         site_to_subcatchment::Dict{String, String})
+                         site_to_subcatchment::Dict{String, String},
+                         site_to_river_distance::Dict{String, Float64})
 
 Distances between sites.
 Build a sparse distance matrix from the distance file.
-Only includes connections within max_distance BETWEEN SITES IN THE SAME SUBCATCHMENT.
+Only includes connections between ADJACENT sites within the same subcatchment.
 
-This is critical because the river network is dendritic - sites in different subcatchments
-(tributaries) are not connected to each other.
+This is critical because:
+1. The river network is dendritic - sites in different subcatchments are not connected
+2. Within each subcatchment, sites form a linear chain where each site only connects
+   to its immediate upstream and downstream neighbors (like a river reach)
 """
 function build_distance_matrix(distance_file::String, sites::Vector{String},
-                               site_to_subcatchment::Dict{T, T2}) where T <: AbstractString where T2 <: AbstractString
+                               site_to_subcatchment::Dict{T, T2},
+                               site_to_river_distance::Dict{T3, Float64}) where T <: AbstractString where T2 <: AbstractString where T3 <: AbstractString
     println("Building distance matrix from: $distance_file")
-    println("Only including connections between sites in the same subcatchment")
+    println("Only including connections between adjacent sites in the same subcatchment")
 
     # Create site to index mapping
     site_to_idx = Dict(s => i for (i, s) in enumerate(sites))
     n_sites = length(sites)
+
+    # Group sites by subcatchment
+    subcatchment_to_sites = Dict{String, Vector{String}}()
+    for site in sites
+        if haskey(site_to_subcatchment, site)
+            sc = site_to_subcatchment[site]
+            if !haskey(subcatchment_to_sites, sc)
+                subcatchment_to_sites[sc] = String[]
+            end
+            push!(subcatchment_to_sites[sc], site)
+        end
+    end
+
+    # For each subcatchment, sort sites by distance to river and find adjacent pairs
+    adjacent_pairs = Set{Tuple{String, String}}()  # (upstream, downstream) pairs
+
+    for (sc, sites_in_sc) in subcatchment_to_sites
+        # Sort sites by distance to river (ascending = downstream first)
+        sorted_sites = sort(sites_in_sc, by=s -> get(site_to_river_distance, s, Inf))
+
+        # Connect each site to its adjacent neighbor (upstream <-> downstream)
+        for i in 1:(length(sorted_sites)-1)
+            downstream = sorted_sites[i]      # Closer to river
+            upstream = sorted_sites[i+1]       # Farther from river
+            push!(adjacent_pairs, (upstream, downstream))
+        end
+    end
+
+    println("Found $(length(adjacent_pairs)) adjacent site pairs in the network")
 
     # Initialize sparse matrix components
     I = Int[]
     J = Int[]
     V = Float64[]
 
-    # Stream the distance file in chunks
-    chunk_size = 100000
+    # Stream the distance file
     total_rows = 0
     valid_connections = 0
 
-    # First, count total rows to estimate memory
-    # For large files, we'll process in chunks
-
-    # Read in chunks using CSV.jl
-    # Note: We use CSV.File for streaming
     reader = CSV.File(distance_file; delim=';')
 
     for row in reader
         total_rows += 1
 
-        # Skip if origin or destination not in our site list
         origin = row.ID_ORIGIN
         dest = row.ID_DESTINATION
 
+        # Skip if origin or destination not in our site list
         if !haskey(site_to_idx, origin) || !haskey(site_to_idx, dest)
             continue
         end
@@ -424,24 +451,17 @@ function build_distance_matrix(distance_file::String, sites::Vector{String},
             continue
         end
 
-        # CRITICAL: Only include connections between sites in the same subcatchment
-        # This is because the river network is dendritic - sites in different tributaries
-        # (subcatchments) are not connected to each other
-        if !haskey(site_to_subcatchment, origin) || !haskey(site_to_subcatchment, dest)
-            continue
+        # CRITICAL: Only include connections between adjacent sites in the same subcatchment
+        # Check if this is an adjacent pair (either direction)
+        if (origin, dest) ∈ adjacent_pairs || (dest, origin) ∈ adjacent_pairs
+            i = site_to_idx[dest]
+            j = site_to_idx[origin]
+
+            push!(I, i)
+            push!(J, j)
+            push!(V, dist)
+            valid_connections += 1
         end
-
-        if site_to_subcatchment[origin] != site_to_subcatchment[dest]
-            continue  # Skip cross-subcatchment connections
-        end
-
-        i = site_to_idx[dest]  # destination
-        j = site_to_idx[origin]  # origin
-
-        push!(I, i)
-        push!(J, j)
-        push!(V, dist)
-        valid_connections += 1
 
         if total_rows % 1000000 == 0
             println("Processed $total_rows rows...")
@@ -449,7 +469,7 @@ function build_distance_matrix(distance_file::String, sites::Vector{String},
     end
 
     println("Processed $total_rows total distance records")
-    println("Found $valid_connections valid within-subcatchment connections")
+    println("Found $valid_connections valid adjacent connections")
 
     # Create sparse matrix
     distance_matrix = sparse(I, J, V, n_sites, n_sites)
@@ -753,9 +773,11 @@ function prepare_ode_data(;
     # 5. Build distance matrix
     # Create subcatchment mapping from site data
     site_to_subcatchment = Dict(row.CODIGO => string(row.CODIGO_S) for row in eachrow(site_df))
+    # Create distance to river mapping (Dist.Guadalq.(m))
+    site_to_river_distance = Dict(row.CODIGO => row."Dist.Guadalq.(m)" for row in eachrow(site_df))
 
     println("\n[5/8] Building distance matrix...")
-    distance_matrix = build_distance_matrix(distance_file, sites, site_to_subcatchment)
+    distance_matrix = build_distance_matrix(distance_file, sites, site_to_subcatchment, site_to_river_distance)
 
     # 6. Build elevation vector
     println("\n[6/8] Extracting elevations...")
