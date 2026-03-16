@@ -80,13 +80,31 @@ where:
 - $e_i$ and $e_j$ are the elevations of the source and destination sites, respectively.
 - $c$ is the upstream migration cost constant.
 
-## 4. Implementation Details
+## 4. Data Preparation
+
+The model relies on a comprehensive data preparation pipeline, implemented in `src/data_preparation.jl`, to integrate heterogeneous datasets into the ODE framework. The process involves:
+
+- **Species Characteristics (`load_species_characteristics`):** Loads data from `data/ABIOTIC/caracteristicas_peces_Guadalquivir_03-04-2018.csv`. Thermal optima are calculated as the midpoint of temperature ranges (`TEMPERATURE_C`), and thermal breadth ($\sigma_s$) is approximated as $\sigma_s \approx \text{range}/6$. Max size (`MAX_SIZE_mm`) is used to scale intrinsic growth rates.
+- **Site Data (`load_site_data`):** Merges connectivity data (`data/ConnectivityUTM.csv`) and environmental data (`data/ABIOTIC/Matriz_Ambiental_Data.csv`) on site codes (`CODIGO`). Missing values in dam distance columns (`Demb arr.(m)`, `Demb ab.(m)`) are handled, and data is converted to numeric formats.
+- **Interaction Matrix (`load_interaction_matrix`):** Parses qualitative interaction descriptions from `data/BIOTIC/Interacciones_peces_Guadalquivir_03-04-2018_ENG.csv` into a quantitative matrix using `parse_interaction_string`. The values are assigned based on the interaction type:
+    - "No coexist": -1.0
+    - "Displaces": -0.8
+    - "Predation": -0.5
+    - "Competition" or "Interfere": -0.3
+    - "Affects" (general): -0.2
+    - "Coexist" or "Neutral": 0.0
+- **Spatial Connectivity (`build_distance_matrix`):** Constructs a sparse distance matrix from `data/Matrix_distances_1037puntos_BRUTO_FINAL.csv` by grouping sites by subcatchment (`CODIGO_S`) and sorting them by distance to the river (`Dist.Guadalq.(m)`). Connections are restricted to adjacent sites within the same subcatchment to reflect the dendritic river network.
+- **Environmental Filtering:** Site-specific temperatures (`extract_site_temperatures`) and habitat suitability indices (`extract_habitat_suitability`) are extracted. Habitat suitability is normalized based on the Trophic State Index (`IET`), where higher IET values indicate lower suitability.
+- **Intrinsic Growth Rates (`build_intrinsic_growth_rates`):** Base growth rates are calculated as proportional to $1/\text{max\_size}$, then scaled by species presence/absence at each site (using columns ending in `_DEN` from `data/BIOTIC/FishDensity_and_Juveniles_Matrix.csv`).
+- **Dispersal Matrix (`precompute_dispersal_matrix`):** A sparse dispersal matrix $M$ is pre-computed, incorporating hydrological distance, elevation-dependent migration costs (using an upstream cost constant $c$), and dam passability factors (ranging from 0.0 to 1.0).
+
+## 5. Implementation Details
 
 - **State Vector:** The system state $u$ is a matrix of size $N_{sites} \times N_{species}$.
 - **Sparse Matrix Optimization:** To handle large-scale river networks efficiently, the dispersal rates are pre-calculated into a sparse matrix $M$, where $M_{ji}$ represents the rate from $i$ to $j$.
 - **Numerical Integration:** Given the potential stiffness arising from the coupling of fast dispersal and slower local dynamics, the system is solved using stiff-aware solvers (e.g., `Rodas5` or `TRBDF2`).
 
-## 5. Model Assumptions
+## 6. Model Assumptions
 
 1. **Constant Interaction Matrix:** Biotic interaction coefficients ($\alpha_{sj}$) are assumed to be constant across the entire basin, though the realized interaction depends on local densities.
 2. **Passive/Active Dispersal Balance:** Dispersal is modeled as a density-dependent flux proportional to the population at the source site.
