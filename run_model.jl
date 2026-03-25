@@ -8,7 +8,6 @@ using Guadex
 
 
 # --- Configuration ---
-# Easily adjustable variables
 const UPSTREAM_COST = 0.01
 const DISPERSAL_INTENSITY = 0.1
 const T_SPAN = (0.0, 100.0) # Time span for simulation
@@ -50,7 +49,7 @@ println("Simulation finished.")
 println("\nGenerating visualizations...")
 
 # Create output directory for figures
-output_dir = "figures"
+output_dir = "results/figures"
 mkpath(output_dir)
 
 # Plot ODE solution: population dynamics over time

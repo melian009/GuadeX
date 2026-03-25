@@ -62,14 +62,14 @@ function plot_ode_solution(sol, sites, species;
             lines!(ax, time, pop_values, label = sites[site_idx], linewidth = 1.5)
         end
 
-        if site_idx <= n_st
+        if n_st > 0
             axislegend(ax, position = :rt)
         end
     end
 
     # Add summary title
-    Label(fig[0, :], "ODE Simulation Results: Population Dynamics Over Time",
-        fontsize = 16, fontstyle = :bold)
+    Label(fig[0, :], "ODE Simulation Results: Population Dynamics Over Time", 
+        fontsize = 16)
 
     return fig
 end
