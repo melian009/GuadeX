@@ -45,3 +45,49 @@ println("Simulation finished.")
 
 # The solution `sol` contains the time series of the population densities.
 # You can access the results using `sol.u`.
+
+# --- Visualization ---
+println("\nGenerating visualizations...")
+
+# Create output directory for figures
+output_dir = "figures"
+mkpath(output_dir)
+
+# Plot ODE solution: population dynamics over time
+println("  - Plotting ODE solution...")
+fig_ode = plot_ode_solution(sol, data.sites, data.species,
+    max_species_to_plot = 6,
+    max_sites_to_plot = 4)
+save_figure(fig_ode, joinpath(output_dir, "ode_solution.png"))
+
+# Plot total biomass over time
+println("  - Plotting total biomass...")
+fig_biomass = plot_total_biomass(sol, data.sites, data.species)
+save_figure(fig_biomass, joinpath(output_dir, "total_biomass.png"))
+
+# Plot species richness over time
+println("  - Plotting species richness...")
+fig_richness = plot_species_richness(sol, data.sites, data.species)
+save_figure(fig_richness, joinpath(output_dir, "species_richness.png"))
+
+# Plot sites map with elevation coloring
+println("  - Plotting sites map...")
+fig_sites = plot_sites_map(data.site_df, color_by = :ALTITUD)
+save_figure(fig_sites, joinpath(output_dir, "sites_map.png"))
+
+# Plot site connectivity network
+println("  - Plotting site connectivity network...")
+fig_connectivity = plot_site_connectivity_map(data.site_df, data.distance_matrix, data.sites)
+save_figure(fig_connectivity, joinpath(output_dir, "site_connectivity.png"))
+
+# Plot subcatchment network structure
+println("  - Plotting subcatchment network...")
+fig_subcatchment = plot_subcatchment_network(data.site_df, data.sites)
+save_figure(fig_subcatchment, joinpath(output_dir, "subcatchment_network.png"))
+
+# Create combined analysis figure
+println("  - Creating combined analysis...")
+fig_combined = plot_combined_analysis(sol, data.site_df, data.sites, data.species, data.distance_matrix)
+save_figure(fig_combined, joinpath(output_dir, "combined_analysis.png"))
+
+println("\nAll figures saved to '$output_dir' directory")
