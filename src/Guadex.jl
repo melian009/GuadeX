@@ -12,6 +12,7 @@ using DifferentialEquations
 using LinearAlgebra
 using SparseArrays
 using Makie
+using GeoMakie
 
 # Export main functions
 export build_stream_graph, get_graph_statistics, find_upstream_sites, find_downstream_sites, visualize_stream_graph, analyze_stream_connectivity, build_nearest_neighbor_connections!, build_threshold_connections!, build_mst_connections!, analyze_stream_connectivity

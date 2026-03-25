@@ -7,7 +7,99 @@ This module provides functions to visualize:
 3. Connectivity network between sites
 
 All plots use Makie.jl for high-quality rendering.
+
+GeoMakie.jl is supported for geographic mapping with basemaps.
+Install with: using Pkg; Pkg.add("GeoMakie")
 """
+
+# Check if GeoMakie is available
+const GEOmakie_AVAILABLE = isdefined(@__MODULE__, :GeoMakie)
+
+"""
+    is_geomakie_available()
+
+Check if GeoMakie is available in the current session.
+"""
+function is_geomakie_available()
+    return isdefined(Main, :GeoMakie)
+end
+
+"""
+    utm_to_latlon(easting, northing, zone::Int=30)
+
+Convert UTM coordinates to WGS84 latitude/longitude.
+Approximate conversion for UTM Zone 30N (covers western Europe, Spain).
+
+# Arguments
+- `easting`: UTM easting (meters)
+- `northing`: UTM northing (meters)
+- `zone`: UTM zone number (default: 30)
+
+# Returns
+- Tuple of (latitude, longitude) in decimal degrees
+"""
+function utm_to_latlon(easting, northing, zone::Int=30)
+    # WGS84 parameters
+    a = 6378137.0  # semi-major axis
+    f = 1/298.257223563  # flattening
+    k0 = 0.9996  # scale factor
+
+    # Derived parameters
+    e = sqrt(2*f - f^2)
+    e2 = e^2 / (1 - e^2)
+
+    # False easting and northing
+    FE = 500000.0
+    FN = (zone >= 33) ? 0.0 : 0.0  # Southern hemisphere offset
+
+    # Remove false easting/northing
+    x = easting - FE
+    y = northing - FN
+
+    # Footprint latitude
+    M = y / k0
+    mu = M / (a * (1 - e^2/4 - 3*e^4/64 - 5*e^6/256))
+
+    e1 = (1 - sqrt(1 - e^2)) / (1 + sqrt(1 - e^2))
+
+    phi1 = mu +
+           (3*e1/2 - 27*e1^3/32) * sin(2*mu) +
+           (21*e1^2/16 - 55*e1^4/32) * sin(4*mu) +
+           (151*e1^3/96) * sin(6*mu) +
+           (1097*e1^4/512) * sin(8*mu)
+
+    # Latitude
+    sin_phi1 = sin(phi1)
+    cos_phi1 = cos(phi1)
+    tan_phi1 = tan(phi1)
+
+    N1 = a / sqrt(1 - e^2 * sin_phi1^2)
+    T1 = tan_phi1^2
+    C1 = e2 * cos_phi1^2
+    R1 = a * (1 - e^2) / ((1 - e^2 * sin_phi1^2)^1.5)
+    D = x / (N1 * k0)
+
+    lat = phi1 - (N1 * tan_phi1 / R1) * (
+        D^2/2 -
+        (5 + 3*T1 + 10*C1 - 4*C1^2 - 9*e2) * D^4/24 +
+        (61 + 90*T1 + 298*C1 + 45*T1^2 - 252*e2 - 3*C1^2) * D^6/720
+    )
+
+    # Longitude
+    lon = (D -
+        (1 + 2*T1 + C1) * D^3/6 +
+        (5 - 2*C1 + 28*T1 - 3*C1^2 + 8*e2 + 24*T1^2) * D^5/120
+    ) / cos_phi1
+
+    # Adjust for zone
+    lon = lon + (zone - 1) * 6 - 180 + 3  # Central meridian
+
+    # Convert to degrees
+    lat_deg = lat * 180 / π
+    lon_deg = lon * 180 / π
+
+    return (lat_deg, lon_deg)
+end
 
 """
     plot_ode_solution(sol, sites, species; kwargs)
@@ -63,12 +155,12 @@ function plot_ode_solution(sol, sites, species;
         end
 
         if n_st > 0
-            axislegend(ax, position = :rt)
+            axislegend(ax, position = (1, 0.5), fontsize = 8)
         end
     end
 
     # Add summary title
-    Label(fig[0, :], "ODE Simulation Results: Population Dynamics Over Time", 
+    Label(fig[0, :], "ODE Simulation Results: Population Dynamics Over Time",
         fontsize = 16)
 
     return fig
@@ -120,7 +212,7 @@ function plot_total_biomass(sol, sites, species;
             linewidth = 2)
     end
 
-    axislegend(ax, position = :rt)
+    axislegend(ax, position = (1, 0.5), fontsize = 8)
 
     return fig
 end
@@ -174,7 +266,7 @@ function plot_species_richness(sol, sites, species;
             linewidth = 2)
     end
 
-    axislegend(ax, position = :rt)
+    axislegend(ax, position = (1, 0.5), fontsize = 8)
 
     return fig
 end
@@ -196,31 +288,84 @@ Plot sites on a map using their UTM coordinates.
 function plot_sites_map(site_df;
     color_by::Symbol = :ALTITUD,
     figure_size::Tuple = (1000, 800),
-    markersize::Int = 15)
+    markersize::Int = 15,
+    use_geographic_coords::Bool = true,
+    use_geomakie::Bool = false)
 
-    # Extract coordinates
-    x = Float64.(site_df.UTMX)
-    y = Float64.(site_df.UTMY)
+    # Check GeoMakie availability if requested
+    if use_geomakie && !is_geomakie_available()
+        @warn "GeoMakie not available. Install with: using Pkg; Pkg.add(\"GeoMakie\")"
+        use_geomakie = false
+    end
+
+    # Extract UTM coordinates
+    utm_x = Float64.(site_df.UTMX)
+    utm_y = Float64.(site_df.UTMY)
+
+    # Convert to lat/lon for geographic context
+    if use_geographic_coords
+        lats = Float64[]
+        lons = Float64[]
+        for (ex, ey) in zip(utm_x, utm_y)
+            lat, lon = utm_to_latlon(ex, ey, 30)
+            push!(lats, lat)
+            push!(lons, lon)
+        end
+        x = lons
+        y = lats
+    else
+        x = utm_x
+        y = utm_y
+    end
 
     # Get coloring values
     color_values = Float64.(site_df[!, color_by])
 
     fig = Figure(figure_size = figure_size)
-    ax = Axis(fig[1, 1],
-        title = "Site Locations ($(color_by))",
-        xlabel = "UTM X (meters)",
-        ylabel = "UTM Y (meters)")
 
-    # Create scatter plot with colorbar
-    sc = scatter!(ax, x, y,
-        color = color_values,
-        markersize = markersize,
-        colormap = :viridis,
-        strokecolor = :black,
-        strokewidth = 1)
+    if use_geomakie && use_geographic_coords
+        # Use GeoMakie for proper geographic plotting with basemap
+        ax = GeoMakie.GeoAxis(fig[1, 1];
+            title = "Site Locations in Guadalquivir Basin ($(color_by))",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+            dest = "+proj=latlong",
+            rasterfiles = [],
+            attributedatashow = true,
+            coastlines = true,
+            lonlims = extrema(x) .+ (-0.5, 0.5),
+            latlims = extrema(y) .+ (-0.5, 0.5))
 
-    # Add colorbar
-    Colorbar(fig[1, 2], sc, label = string(color_by))
+        # Create scatter plot with colorbar
+        sc = scatter!(ax, x, y,
+            color = color_values,
+            markersize = markersize,
+            colormap = :viridis,
+            strokecolor = :black,
+            strokewidth = 1)
+
+        Colorbar(fig[1, 2], sc, label = string(color_by))
+    else
+        # Standard Makie axis
+        xlabel = use_geographic_coords ? "Longitude (°)" : "UTM X (meters)"
+        ylabel = use_geographic_coords ? "Latitude (°)" : "UTM Y (meters)"
+
+        ax = Axis(fig[1, 1],
+            title = "Site Locations in Guadalquivir Basin ($(color_by))",
+            xlabel = xlabel,
+            ylabel = ylabel)
+
+        # Create scatter plot with colorbar
+        sc = scatter!(ax, x, y,
+            color = color_values,
+            markersize = markersize,
+            colormap = :viridis,
+            strokecolor = :black,
+            strokewidth = 1)
+
+        # Add colorbar
+        Colorbar(fig[1, 2], sc, label = string(color_by))
+    end
 
     # Add site labels (only for subset if many sites)
     n_sites = length(x)
@@ -230,6 +375,13 @@ function plot_sites_map(site_df;
             text!(ax, x[i], y[i], text = string(site_df.CODIGO[i]),
                 fontsize = 7, align = (:center, :bottom), offset = (0, 5))
         end
+    end
+
+    # Add scale annotation (not needed for GeoMakie as it has its own)
+    if use_geographic_coords && !use_geomakie
+        text!(ax, 0.02, 0.02, text = "Coordinates: WGS84 (lat/lon)\nGuadalquivir Basin, Spain",
+            position = (0.02, 0.02), space = :relative,
+            fontsize = 9, align = (:left, :bottom), color = :gray)
     end
 
     return fig
@@ -254,32 +406,79 @@ Plot sites on a map showing connectivity network.
 function plot_site_connectivity_map(site_df, distance_matrix, sites;
     max_connections_to_show::Int = 100,
     figure_size::Tuple = (1200, 900),
-    connection_alpha::Float64 = 0.3)
+    connection_alpha::Float64 = 0.6,
+    use_geographic_coords::Bool = true,
+    use_geomakie::Bool = false)
 
-    # Create site to index mapping
-    site_to_idx = Dict(s => i for (i, s) in enumerate(sites))
+    # Check GeoMakie availability if requested
+    if use_geomakie && !is_geomakie_available()
+        @warn "GeoMakie not available. Install with: using Pkg; Pkg.add(\"GeoMakie\")"
+        use_geomakie = false
+    end
 
-    # Filter site_df to only include sites in our list
+    # Filter site_df to only include sites in our list (preserve original order)
     filtered_df = filter(row -> row.CODIGO in sites, site_df)
 
-    # Extract coordinates for filtered sites
-    x = Float64.(filtered_df.UTMX)
-    y = Float64.(filtered_df.UTMY)
+    # Create mapping from site code to position in filtered_df (1-indexed)
+    site_to_pos = Dict{String, Int}()
+    for (pos, row) in enumerate(eachrow(filtered_df))
+        site_to_pos[row.CODIGO] = pos
+    end
+
+    # Extract UTM coordinates
+    utm_x = Float64.(filtered_df.UTMX)
+    utm_y = Float64.(filtered_df.UTMY)
+
+    # Convert to lat/lon for geographic context
+    if use_geographic_coords
+        lats = Float64[]
+        lons = Float64[]
+        for (ex, ey) in zip(utm_x, utm_y)
+            lat, lon = utm_to_latlon(ex, ey, 30)
+            push!(lats, lat)
+            push!(lons, lon)
+        end
+        x = lons
+        y = lats
+    else
+        x = utm_x
+        y = utm_y
+    end
+
     site_codes = String.(filtered_df.CODIGO)
     elevations = Float64.(filtered_df.ALTITUD)
 
     n_sites = length(site_codes)
 
     fig = Figure(figure_size = figure_size)
-    ax = Axis(fig[1, 1],
-        title = "Site Network Connectivity",
-        xlabel = "UTM X (meters)",
-        ylabel = "UTM Y (meters)")
+
+    if use_geomakie && use_geographic_coords
+        # Use GeoMakie for proper geographic plotting with basemap
+        ax = GeoMakie.GeoAxis(fig[1, 1];
+            title = "Site Network Connectivity - Guadalquivir Basin",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+            dest = "+proj=latlong",
+            rasterfiles = [],
+            attributedatashow = true,
+            coastlines = true,
+            lonlims = extrema(x) .+ (-0.5, 0.5),
+            latlims = extrema(y) .+ (-0.5, 0.5))
+    else
+        # Standard Makie axis
+        xlabel = use_geographic_coords ? "Longitude (°)" : "UTM X (meters)"
+        ylabel = use_geographic_coords ? "Latitude (°)" : "UTM Y (meters)"
+
+        ax = Axis(fig[1, 1],
+            title = "Site Network Connectivity - Guadalquivir Basin",
+            xlabel = xlabel,
+            ylabel = ylabel)
+    end
 
     # Plot elevation-colored scatter
     sc = scatter!(ax, x, y,
         color = elevations,
-        markersize = 20,
+        markersize = 25,
         colormap = :terrain,
         strokecolor = :black,
         strokewidth = 2)
@@ -289,28 +488,48 @@ function plot_site_connectivity_map(site_df, distance_matrix, sites;
     # Get non-zero connections from distance matrix
     I, J, V = findnz(distance_matrix)
 
-    # Filter and limit connections
-    connection_count = 0
+    # Filter connections to only those between sites in our filtered list
+    valid_connections = []
     for idx in 1:length(I)
+        i, j = I[idx], J[idx]
+
+        # Get site codes for these indices (in the original sites order)
+        if i > length(sites) || j > length(sites)
+            continue
+        end
+        site_i = sites[i]
+        site_j = sites[j]
+
+        # Check if both sites are in our filtered set
+        if haskey(site_to_pos, site_i) && haskey(site_to_pos, site_j)
+            pos_i = site_to_pos[site_i]
+            pos_j = site_to_pos[site_j]
+            push!(valid_connections, (pos_i, pos_j, V[idx]))
+        end
+    end
+
+    println("Found $(length(valid_connections)) valid connections to plot")
+
+    # Sort by distance (shorter connections first, more important)
+    sort!(valid_connections, by = x -> x[3])
+
+    # Limit and plot connections
+    connection_count = 0
+    for (pos_i, pos_j, dist) in valid_connections
         if connection_count >= max_connections_to_show
             break
         end
 
-        i, j = I[idx], J[idx]
-        if i > n_sites || j > n_sites
-            continue
-        end
-
         # Get coordinates
-        x1, y1 = x[j], y[j]  # origin
-        x2, y2 = x[i], y[i]  # destination
+        x1, y1 = x[pos_j], y[pos_j]  # origin
+        x2, y2 = x[pos_i], y[pos_i]  # destination
 
-        # Connection strength based on distance (inverse)
-        strength = min(1.0, 1000.0 / (V[idx] + 1))
+        # Connection strength based on distance (inverse) - make more visible
+        strength = min(1.0, 5000.0 / (dist + 1))
 
         lines!(ax, [x1, x2], [y1, y2],
             color = (:blue, connection_alpha * strength),
-            linewidth = 0.5 + strength * 2)
+            linewidth = 1.0 + strength * 3)
 
         connection_count += 1
     end
@@ -324,10 +543,13 @@ function plot_site_connectivity_map(site_df, distance_matrix, sites;
         end
     end
 
-    # Add legend text
-    text!(ax, 0.02, 0.98, text = "Lines show dispersal connections\n(Thickness = connection strength)",
-        position = (minimum(x) + (maximum(x) - minimum(x)) * 0.02, maximum(y) * 0.98),
-        fontsize = 10, align = (:left, :top), space = :relative)
+    # Add legend text (not needed for GeoMakie)
+    if !use_geomakie
+        coord_text = use_geographic_coords ? "Coordinates: WGS84 (lat/lon)\nGuadalquivir Basin, Spain" : "UTM Zone 30N"
+        text!(ax, 0.02, 0.98, text = "Lines show dispersal connections\n(Thickness = connection strength)\n" * coord_text,
+            position = (0.02, 0.98), space = :relative,
+            fontsize = 9, align = (:left, :top), color = :gray)
+    end
 
     return fig
 end
@@ -346,7 +568,15 @@ Plot sites colored by subcatchment showing network structure.
 - A Figure object showing subcatchment network structure
 """
 function plot_subcatchment_network(site_df, sites;
-    figure_size::Tuple = (1200, 900))
+    figure_size::Tuple = (1200, 900),
+    use_geographic_coords::Bool = true,
+    use_geomakie::Bool = false)
+
+    # Check GeoMakie availability if requested
+    if use_geomakie && !is_geomakie_available()
+        @warn "GeoMakie not available. Install with: using Pkg; Pkg.add(\"GeoMakie\")"
+        use_geomakie = false
+    end
 
     # Filter to sites in our list
     filtered_df = filter(row -> row.CODIGO in sites, site_df)
@@ -363,17 +593,63 @@ function plot_subcatchment_network(site_df, sites;
     sc_to_color = Dict(sc => colors[(i-1) % length(colors) + 1]
                        for (i, sc) in enumerate(subcatchments))
 
+    # Pre-compute all coordinates for axis limits
+    all_lats = Float64[]
+    all_lons = Float64[]
+    all_utm_x = Float64.(filtered_df.UTMX)
+    all_utm_y = Float64.(filtered_df.UTMY)
+
+    if use_geographic_coords
+        for (ex, ey) in zip(all_utm_x, all_utm_y)
+            lat, lon = utm_to_latlon(ex, ey, 30)
+            push!(all_lats, lat)
+            push!(all_lons, lon)
+        end
+    end
+
     fig = Figure(figure_size = figure_size)
-    ax = Axis(fig[1, 1],
-        title = "Site Network by Subcatchment",
-        xlabel = "UTM X (meters)",
-        ylabel = "UTM Y (meters)")
+
+    if use_geomakie && use_geographic_coords
+        # Use GeoMakie for proper geographic plotting with basemap
+        ax = GeoMakie.GeoAxis(fig[1, 1];
+            title = "Site Network by Subcatchment - Guadalquivir Basin",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+            dest = "+proj=latlong",
+            rasterfiles = [],
+            attributedatashow = true,
+            coastlines = true,
+            lonlims = extrema(all_lons) .+ (-0.5, 0.5),
+            latlims = extrema(all_lats) .+ (-0.5, 0.5))
+    else
+        # Standard Makie axis
+        xlabel = use_geographic_coords ? "Longitude (°)" : "UTM X (meters)"
+        ylabel = use_geographic_coords ? "Latitude (°)" : "UTM Y (meters)"
+
+        ax = Axis(fig[1, 1],
+            title = "Site Network by Subcatchment - Guadalquivir Basin",
+            xlabel = xlabel,
+            ylabel = ylabel)
+    end
 
     # Plot each subcatchment
     for sc in subcatchments
         sc_df = filter(row -> row.CODIGO_S == sc, filtered_df)
-        x = Float64.(sc_df.UTMX)
-        y = Float64.(sc_df.UTMY)
+
+        if use_geographic_coords
+            lats = Float64[]
+            lons = Float64[]
+            for (ex, ey) in zip(Float64.(sc_df.UTMX), Float64.(sc_df.UTMY))
+                lat, lon = utm_to_latlon(ex, ey, 30)
+                push!(lats, lat)
+                push!(lons, lon)
+            end
+            x = lons
+            y = lats
+        else
+            x = Float64.(sc_df.UTMX)
+            y = Float64.(sc_df.UTMY)
+        end
 
         scatter!(ax, x, y,
             color = sc_to_color[sc],
@@ -386,13 +662,26 @@ function plot_subcatchment_network(site_df, sites;
         if nrow(sc_df) > 1
             # Sort by distance to Guadalquivir
             sorted_df = sort(sc_df, :("Dist.Guadalq.(m)"))
-            sx = Float64.(sorted_df.UTMX)
-            sy = Float64.(sorted_df.UTMY)
+
+            if use_geographic_coords
+                slats = Float64[]
+                slons = Float64[]
+                for (ex, ey) in zip(Float64.(sorted_df.UTMX), Float64.(sorted_df.UTMY))
+                    lat, lon = utm_to_latlon(ex, ey, 30)
+                    push!(slats, lat)
+                    push!(slons, lon)
+                end
+                sx = slons
+                sy = slats
+            else
+                sx = Float64.(sorted_df.UTMX)
+                sy = Float64.(sorted_df.UTMY)
+            end
             lines!(ax, sx, sy, color = sc_to_color[sc], linewidth = 1.5, alpha = 0.5)
         end
     end
 
-    axislegend(ax, position = :rt, fontsize = 8)
+    axislegend(ax, position = (1, 0.5), fontsize = 8)
 
     return fig
 end
@@ -414,7 +703,15 @@ Create a comprehensive combined visualization.
 - A Figure object with multiple subplots
 """
 function plot_combined_analysis(sol, site_df, sites, species, distance_matrix;
-    figure_size::Tuple = (1400, 1000))
+    figure_size::Tuple = (1400, 1000),
+    use_geographic_coords::Bool = true,
+    use_geomakie::Bool = false)
+
+    # Check GeoMakie availability if requested
+    if use_geomakie && !is_geomakie_available()
+        @warn "GeoMakie not available. Install with: using Pkg; Pkg.add(\"GeoMakie\")"
+        use_geomakie = false
+    end
 
     n_sites = length(sites)
     n_species = length(species)
@@ -445,17 +742,49 @@ function plot_combined_analysis(sol, site_df, sites, species, distance_matrix;
     richness = [sum(reshape(sol.u[t], n_sites, n_species) .> 0.1) for t in 1:length(sol.t)]
     lines!(ax2, time, richness, linewidth = 2, color = :green)
 
-    # Bottom: Site Map with Connectivity
-    ax3 = Axis(fig[2, 1:2],
-        title = "Site Network",
-        xlabel = "UTM X (meters)",
-        ylabel = "UTM Y (meters)")
-
     # Filter site_df
     filtered_df = filter(row -> row.CODIGO in sites, site_df)
-    x = Float64.(filtered_df.UTMX)
-    y = Float64.(filtered_df.UTMY)
+
+    if use_geographic_coords
+        lats = Float64[]
+        lons = Float64[]
+        for (ex, ey) in zip(Float64.(filtered_df.UTMX), Float64.(filtered_df.UTMY))
+            lat, lon = utm_to_latlon(ex, ey, 30)
+            push!(lats, lat)
+            push!(lons, lon)
+        end
+        x = lons
+        y = lats
+    else
+        x = Float64.(filtered_df.UTMX)
+        y = Float64.(filtered_df.UTMY)
+    end
+
     elevations = Float64.(filtered_df.ALTITUD)
+
+    # Bottom: Site Map with Connectivity
+    if use_geomakie && use_geographic_coords
+        # Use GeoMakie for proper geographic plotting with basemap
+        ax3 = GeoMakie.GeoAxis(fig[2, 1:2];
+            title = "Site Network - Guadalquivir Basin",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+            dest = "+proj=latlong",
+            rasterfiles = [],
+            attributedatashow = true,
+            coastlines = true,
+            lonlims = extrema(x) .+ (-0.5, 0.5),
+            latlims = extrema(y) .+ (-0.5, 0.5))
+    else
+        # Standard Makie axis
+        xlabel = use_geographic_coords ? "Longitude (°)" : "UTM X (meters)"
+        ylabel = use_geographic_coords ? "Latitude (°)" : "UTM Y (meters)"
+
+        ax3 = Axis(fig[2, 1:2],
+            title = "Site Network - Guadalquivir Basin",
+            xlabel = xlabel,
+            ylabel = ylabel)
+    end
 
     # Plot sites
     sc = scatter!(ax3, x, y,
@@ -467,16 +796,46 @@ function plot_combined_analysis(sol, site_df, sites, species, distance_matrix;
 
     Colorbar(fig[2, 3], sc, label = "Elevation (m)")
 
+    # Create site position mapping for connectivity
+    site_to_pos = Dict{String, Int}()
+    for (pos, row) in enumerate(eachrow(filtered_df))
+        site_to_pos[row.CODIGO] = pos
+    end
+
     # Plot connections (subset)
     I, J, V = findnz(distance_matrix)
-    max_shown = min(100, length(I))
-    for idx in 1:max_shown
+    valid_connections = []
+    for idx in 1:length(I)
         i, j = I[idx], J[idx]
-        if i <= length(x) && j <= length(x)
-            lines!(ax3, [x[j], x[i]], [y[j], y[i]],
-                color = (:blue, 0.2),
-                linewidth = 0.5)
+        if i > length(sites) || j > length(sites)
+            continue
         end
+        site_i = sites[i]
+        site_j = sites[j]
+        if haskey(site_to_pos, site_i) && haskey(site_to_pos, site_j)
+            pos_i = site_to_pos[site_i]
+            pos_j = site_to_pos[site_j]
+            push!(valid_connections, (pos_i, pos_j, V[idx]))
+        end
+    end
+
+    # Sort and limit connections
+    sort!(valid_connections, by = c -> c[3])
+    max_shown = min(100, length(valid_connections))
+
+    for idx in 1:max_shown
+        pos_i, pos_j, dist = valid_connections[idx]
+        strength = min(1.0, 5000.0 / (dist + 1))
+        lines!(ax3, [x[pos_j], x[pos_i]], [y[pos_j], y[pos_i]],
+            color = (:blue, 0.6 * strength),
+            linewidth = 1.0 + strength * 2)
+    end
+
+    # Add geographic annotation (not needed for GeoMakie)
+    if use_geographic_coords && !use_geomakie
+        text!(ax3, 0.02, 0.02, text = "Coordinates: WGS84 (lat/lon)\nGuadalquivir Basin, Spain",
+            position = (0.02, 0.02), space = :relative,
+            fontsize = 9, align = (:left, :bottom), color = :gray)
     end
 
     return fig

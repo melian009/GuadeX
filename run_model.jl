@@ -10,7 +10,13 @@ using Guadex
 # --- Configuration ---
 const UPSTREAM_COST = 0.01
 const DISPERSAL_INTENSITY = 0.1
-const T_SPAN = (0.0, 100.0) # Time span for simulation
+
+# Time configuration: 1 time unit = 1 day
+# To simulate 1 year: 365 days, 10 years: 3650 days
+const DAYS_PER_YEAR = 365
+const SIMULATION_YEARS = 5
+const T_SPAN = (0.0, Float64(SIMULATION_YEARS * DAYS_PER_YEAR)) # Time span in days
+const DT = 1.0 # Fixed time step of 1 day
 
 # --- Data Preparation ---
 # This function loads all necessary data and returns a NamedTuple
@@ -37,10 +43,13 @@ u0_flat = vec(u0)
 # Define the ODE problem
 prob = ODEProblem(metacommunity_ode!, u0_flat, T_SPAN, data.params)
 
-# Solve the ODE
-println("Starting simulation...")
-sol = solve(prob, Tsit5())
-println("Simulation finished.")
+# Solve the ODE with adaptive time stepping (Tsit5)
+# but save at regular daily intervals for consistent time series
+# Using reltol=1e-6 and abstol=1e-6 for accurate solution
+println("Starting simulation for $SIMULATION_YEARS years ($(SIMULATION_YEARS * DAYS_PER_YEAR) days)...")
+# sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:DT:T_SPAN[2])
+sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6)
+println("Simulation finished. Solution has $(length(sol.t)) time points.")
 
 # The solution `sol` contains the time series of the population densities.
 # You can access the results using `sol.u`.
