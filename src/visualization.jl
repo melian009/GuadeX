@@ -290,7 +290,7 @@ function plot_sites_map(site_df;
     figure_size::Tuple = (1000, 800),
     markersize::Int = 15,
     use_geographic_coords::Bool = true,
-    use_geomakie::Bool = false)
+    use_geomakie::Bool = true)
 
     # Check GeoMakie availability if requested
     if use_geomakie && !is_geomakie_available()
@@ -330,11 +330,13 @@ function plot_sites_map(site_df;
             xlabel = "Longitude",
             ylabel = "Latitude",
             dest = "+proj=latlong",
-            rasterfiles = [],
-            attributedatashow = true,
-            coastlines = true,
             lonlims = extrema(x) .+ (-0.5, 0.5),
             latlims = extrema(y) .+ (-0.5, 0.5))
+
+        # Add land masses and coastlines from Natural Earth
+        land = GeoMakie.land()
+        poly!(ax, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
+        lines!(ax, GeoMakie.coastlines(); color = :darkgray, linewidth = 1)
 
         # Create scatter plot with colorbar
         sc = scatter!(ax, x, y,
@@ -408,7 +410,7 @@ function plot_site_connectivity_map(site_df, distance_matrix, sites;
     figure_size::Tuple = (1200, 900),
     connection_alpha::Float64 = 0.6,
     use_geographic_coords::Bool = true,
-    use_geomakie::Bool = false)
+    use_geomakie::Bool = true)
 
     # Check GeoMakie availability if requested
     if use_geomakie && !is_geomakie_available()
@@ -459,11 +461,13 @@ function plot_site_connectivity_map(site_df, distance_matrix, sites;
             xlabel = "Longitude",
             ylabel = "Latitude",
             dest = "+proj=latlong",
-            rasterfiles = [],
-            attributedatashow = true,
-            coastlines = true,
             lonlims = extrema(x) .+ (-0.5, 0.5),
             latlims = extrema(y) .+ (-0.5, 0.5))
+
+        # Add land masses and coastlines from Natural Earth
+        land = GeoMakie.land()
+        poly!(ax, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
+        lines!(ax, GeoMakie.coastlines(); color = :darkgray, linewidth = 1)
     else
         # Standard Makie axis
         xlabel = use_geographic_coords ? "Longitude (°)" : "UTM X (meters)"
@@ -570,7 +574,7 @@ Plot sites colored by subcatchment showing network structure.
 function plot_subcatchment_network(site_df, sites;
     figure_size::Tuple = (1200, 900),
     use_geographic_coords::Bool = true,
-    use_geomakie::Bool = false)
+    use_geomakie::Bool = true)
 
     # Check GeoMakie availability if requested
     if use_geomakie && !is_geomakie_available()
@@ -616,11 +620,13 @@ function plot_subcatchment_network(site_df, sites;
             xlabel = "Longitude",
             ylabel = "Latitude",
             dest = "+proj=latlong",
-            rasterfiles = [],
-            attributedatashow = true,
-            coastlines = true,
             lonlims = extrema(all_lons) .+ (-0.5, 0.5),
             latlims = extrema(all_lats) .+ (-0.5, 0.5))
+
+        # Add land masses and coastlines from Natural Earth
+        land = GeoMakie.land()
+        poly!(ax, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
+        lines!(ax, GeoMakie.coastlines(); color = :darkgray, linewidth = 1)
     else
         # Standard Makie axis
         xlabel = use_geographic_coords ? "Longitude (°)" : "UTM X (meters)"
@@ -705,7 +711,7 @@ Create a comprehensive combined visualization.
 function plot_combined_analysis(sol, site_df, sites, species, distance_matrix;
     figure_size::Tuple = (1400, 1000),
     use_geographic_coords::Bool = true,
-    use_geomakie::Bool = false)
+    use_geomakie::Bool = true)
 
     # Check GeoMakie availability if requested
     if use_geomakie && !is_geomakie_available()
@@ -770,11 +776,13 @@ function plot_combined_analysis(sol, site_df, sites, species, distance_matrix;
             xlabel = "Longitude",
             ylabel = "Latitude",
             dest = "+proj=latlong",
-            rasterfiles = [],
-            attributedatashow = true,
-            coastlines = true,
             lonlims = extrema(x) .+ (-0.5, 0.5),
             latlims = extrema(y) .+ (-0.5, 0.5))
+
+        # Add land masses and coastlines from Natural Earth
+        land = GeoMakie.land()
+        poly!(ax3, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
+        lines!(ax3, GeoMakie.coastlines(); color = :darkgray, linewidth = 1)
     else
         # Standard Makie axis
         xlabel = use_geographic_coords ? "Longitude (°)" : "UTM X (meters)"
