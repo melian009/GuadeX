@@ -60,13 +60,15 @@ function metacommunity_ode!(du, u, p::MetacommunityParams, t)
             r_eff = p.intrinsic_growth_rates[i, s] * env_filter
 
             # Biotic interactions: sum_j alpha_sj * N_ij
+            # Calculates the total competitive/predatory pressure on species s at site i
             interaction_term = 0.0
             for j in 1:p.n_species
                 interaction_term += p.interaction_matrix[s, j] * U[i, j]
             end
 
-            # Local component: N_is * [r_eff - interaction_term]
-            dU[i, s] = U[i, s] * (r_eff - interaction_term)
+            # Local component: N_is * [r_eff + interaction_term]
+            # This is logistic growth modified by interactions and environmental filtering
+            dU[i, s] = U[i, s] * (r_eff + interaction_term)
         end
     end
 
