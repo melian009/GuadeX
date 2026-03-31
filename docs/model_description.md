@@ -22,7 +22,7 @@ The local component follows a Generalized Lotka-Volterra (GLV) structure, modifi
 
 The local dynamics are expressed as:
 
-$$f_{local} = N_{i,s} \left( r_{i,s}^{eff} - \sum_{j=1}^{S} \alpha_{sj} N_{i,j} \right)$$
+$$f_{local} = N_{i,s} \left( r_{i,s}^{eff} + \sum_{j=1}^{S} \alpha_{sj} N_{i,j} \right)$$
 
 where:
 - $r_{i,s}^{eff}$ is the effective intrinsic growth rate.
