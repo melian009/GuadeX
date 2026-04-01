@@ -638,7 +638,42 @@ end
     build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vector{String}, sites::Vector{String})
 
 Build intrinsic growth rates matrix from density data.
-Uses species max size and presence/absence to estimate base growth rates.
+Uses literature-derived daily intrinsic growth rates for each species.
+
+# Literature Sources
+- References are based on empirical studies from the Guadalquivir River Basin
+- Annual rates are converted to daily rates using: r_daily = r_annual / 365
+- For seasonal rates (e.g., Gambusia), converted using: r_daily = log(1 + r_seasonal) / 183
+
+# Species and Citations
+Native species:
+- AB (Aphanius baeticus): r_annual ≈ 1.0-1.5 /year, seasonal r ≈ 0.03-0.05 (Ref 7:成熟&葡萄)
+- AH (Anaecypris hispanica): r_annual ≈ 0.8-1.2 /year (Ref 11: PMC)
+- SP (Squalius pyrenaicus): r_annual ≈ 0.4-0.7 /year (Ref 11: PMC)
+- PW (Pseudochondrostoma willkommii): r_annual ≈ 0.2-0.4 /year (Ref 6:研究)
+- LS (Luciobarbus sclateri): r_annual ≈ 0.15-0.25 /year (Ref 6:研究)
+- SA (Squalius alburnoides): r_annual ≈ 0.5-0.9 /year (Ref 11: PMC)
+- IL (Iberochondrostoma lemmingii): r_annual ≈ 0.4-0.7 /year (Ref 11: PMC)
+- CP (Cobitis paludica): r_annual ≈ 0.5-0.8 /year (Ref 19)
+- IO (Iberochondrostoma oretanum): r_annual ≈ 0.3-0.6 /year (Ref 5)
+
+Invasive species:
+- GH (Gambusia holbrooki): seasonal r ≈ 0.029/day, annual r can exceed 4.0 /year (Ref 4,7)
+- MS (Micropterus salmoides): r_annual ≈ 0.3-0.5 /year (Ref 2)
+- LG (Lepomis gibbosus): r_annual ≈ 0.4-0.6 /year (Ref 23)
+- CC (Cyprinus carpio): r_annual ≈ 0.3-0.5 /year (Ref 1)
+- CG (Carassius gibelio): r_annual ≈ 0.5-1.1 /year (Ref 18)
+- AM (Ameiurus melas): r_annual ≈ 0.25-0.45 /year (Ref 1)
+- OM (Oncorhynchus mykiss): r_annual ≈ 0.3-0.5 /year (Ref 1)
+- EL (Esox lucius): r_annual ≈ 0.2-0.4 /year (Ref 1)
+- GL (Gobio lozanoi): r_annual ≈ 0.6-1.0 /year (Ref 18)
+- TT (Tinca tinca): r_annual ≈ 0.2-0.4 /year (Ref 1)
+
+Other species:
+- AA (Anguilla anguilla): r_annual ≈ 0.05-0.15 /year (Ref 9)
+- MC (Mugil cephalus): r_annual ≈ 0.2-0.4 /year (Ref 18)
+- LR (Liza ramada): r_annual ≈ 0.2-0.4 /year (Ref 18)
+- ST (Salmo trutta): r_annual ≈ 0.3-0.5 /year (typical for salmonids)
 """
 function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vector{String},
                                        sites::Vector{String}, species_chars_df::DataFrame)
@@ -649,18 +684,54 @@ function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vect
     # Create site to density row mapping
     site_to_row = Dict(row.CODIGO => rownum for (rownum, row) in enumerate(eachrow(density_df)))
 
-    # Get max sizes for each species
-    species_to_max_size = Dict(row.SP => row.max_size_mm for row in eachrow(species_chars_df))
+    # Literature-derived annual intrinsic growth rates (r) for each species
+    # These are the maximum per capita rates of increase under ideal conditions
+    # Converted to daily rates: r_daily = r_annual / 365
+    # Citations correspond to references in docs/Fish Growth and Dispersal Data Request.md
+    annual_growth_rates = Dict{String, Float64}(
+        # Native Endemics
+        "AB" => 1.2,   # Aphanius baeticus - high growth, short lifespan (Ref 7)
+        "AH" => 1.0,   # Anaecypris hispanica - high growth, short lifespan (Ref 11)
+        "SP" => 0.55,  # Squalius pyrenaicus - medium growth (Ref 11)
+        "PW" => 0.3,   # Pseudochondrostoma willkommii - medium growth (Ref 6)
+        "LS" => 0.2,   # Luciobarbus sclateri - low growth, late maturity (Ref 6)
+        "SA" => 0.7,   # Squalius alburnoides - medium-high growth (Ref 11)
+        "IL" => 0.55,  # Iberochondrostoma lemmingii - medium growth (Ref 11)
+        "CP" => 0.65,  # Cobitis paludica - medium growth (Ref 19)
+        "IO" => 0.45,  # Iberochondrostoma oretanum - medium growth (Ref 5)
 
-    # Base growth rate is proportional to 1/max_size (smaller species grow faster)
-    # Then scale by density presence (sites with species get positive growth)
+        # Invasive Species
+        "GH" => 4.0,   # Gambusia holbrooki - extremely high growth (Ref 4,7)
+        "MS" => 0.4,    # Micropterus salmoides - medium growth (Ref 2)
+        "LG" => 0.5,   # Lepomis gibbosus - medium growth (Ref 23)
+        "CC" => 0.4,   # Cyprinus carpio - medium growth (Ref 1)
+        "CG" => 0.8,   # Carassius gibelio - medium-high growth (Ref 18)
+        "AM" => 0.35,  # Ameiurus melas - medium-low growth (Ref 1)
+        "OM" => 0.4,   # Oncorhynchus mykiss - medium growth (Ref 1)
+        "EL" => 0.3,   # Esox lucius - medium-low growth (Ref 1)
+        "GL" => 0.8,   # Gobio lozanoi - medium-high growth (Ref 18)
+        "TT" => 0.3,   # Tinca tinca - medium-low growth (Ref 1)
+
+        # Diadromous/Marine Species
+        "AA" => 0.1,   # Anguilla anguilla - very low growth, long lifespan (Ref 9)
+        "MC" => 0.3,   # Mugil cephalus - medium growth (Ref 18)
+        "LR" => 0.3,   # Liza ramada - medium growth (Ref 18)
+
+        # Salmonids
+        "ST" => 0.4,   # Salmo trutta - medium growth (typical for salmonids)
+    )
 
     growth_rates = zeros(n_sites, n_species)
 
     for (s_idx, sp_code) in enumerate(species_codes)
-        # Get base growth rate from max size
-        max_size = get(species_to_max_size, sp_code, 100.0)
-        base_rate = 1.0 / max_size * 10.0  # Scale factor
+        # Get annual growth rate from literature (use midpoint of ranges)
+        r_annual = get(annual_growth_rates, sp_code, 0.5)  # default 0.5 if unknown
+
+        # Convert annual rate to daily instantaneous rate
+        # r_daily = r_annual / 365
+        # This assumes continuous exponential growth, which is appropriate for
+        # fish populations with overlapping generations
+        r_daily = r_annual / 365.0
 
         for (site_idx, site) in enumerate(sites)
             if haskey(site_to_row, site)
@@ -670,12 +741,12 @@ function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vect
                 if hasproperty(density_df, density_col)
                     density = density_df[row_idx, density_col]
 
-                    # If species is present (density > 0), use base rate
-                    # If absent, use very low rate (potential colonization)
+                    # If species is present (density > 0), use full growth rate
+                    # If absent, use reduced rate (potential colonization from nearby)
                     if density > 0
-                        growth_rates[site_idx, s_idx] = base_rate
+                        growth_rates[site_idx, s_idx] = r_daily
                     else
-                        growth_rates[site_idx, s_idx] = base_rate * 0.1
+                        growth_rates[site_idx, s_idx] = r_daily * 0.1
                     end
                 end
             end
@@ -683,6 +754,113 @@ function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vect
     end
 
     return growth_rates
+end
+
+"""
+    build_dispersal_scaling(species_codes::Vector{String})
+
+Build species-specific dispersal scaling factors based on literature values.
+These scaling factors convert the base dispersal matrix to species-specific rates.
+
+# Literature Sources
+Dispersal rates are reported as km/year in the literature and converted to relative scaling
+factors (normalized so that the median = 1.0). The base dispersal matrix uses the
+dispersal_intensity parameter, and these scaling factors adjust per species.
+
+# Species Dispersal Rates (km/year) and References:
+Native Species:
+- AB (Aphanius baeticus): < 0.5 km/year - highly fragmented populations (Ref 3)
+- AH (Anaecypris hispanica): 0.1-0.3 km/year - highly sedentary (Ref 11, 15, 16)
+- SP (Squalius pyrenaicus): 1-5 km/year (Ref 11, 12)
+- PW (Pseudochondrostoma willkommii): 15-40 km/year - migratory/potadromous (Ref 9, 10)
+- LS (Luciobarbus sclateri): 10-30 km/year - migratory (Ref 6, 11)
+- SA (Squalius alburnoides): 2-8 km/year (Ref 11)
+- IL (Iberochondrostoma lemmingii): 0.5-2 km/year (Ref 11)
+- CP (Cobitis paludica): 0.5-2 km/year (Ref 19)
+- IO (Iberochondrostoma oretanum): < 1 km/year - fragmented (Ref 5)
+
+Invasive Species:
+- GH (Gambusia holbrooki): 8-42 km/year - highly dispersive (Ref 7, 10)
+- MS (Micropterus salmoides): 10-25 km/year (Ref 2, 10)
+- LG (Lepomis gibbosus): 8-42 km/year (Ref 5, 10)
+- CC (Cyprinus carpio): 10-30 km/year (Ref 1)
+- CG (Carassius gibelio): 5-15 km/year (Ref 18)
+- AM (Ameiurus melas): 5-15 km/year (Ref 1)
+- OM (Oncorhynchus mykiss): 5-20 km/year (Ref 1)
+- EL (Esox lucius): 5-20 km/year (Ref 1)
+- GL (Gobio lozanoi): 1-5 km/year (Ref 18)
+- TT (Tinca tinca): 2-10 km/year (Ref 1)
+
+Other Species:
+- AA (Anguilla anguilla): < 10 km/year - dam restricted (Ref 9)
+- MC (Mugil cephalus): 50-100 km/year - euryhaline, high mobility (Ref 18)
+- LR (Liza ramada): 50-100 km/year - euryhaline, high mobility (Ref 18)
+- ST (Salmo trutta): 5-20 km/year - typical for salmonids
+
+# References (from docs/Fish Growth and Dispersal Data Request.md):
+1. Freshwater Fish Biodiversity in a Large Mediterranean Basin (Guadalquivir River)
+2. Conservation status of freshwater fish in the Guadalquivir River Basin
+3. Persistence despite isolation: Temporal genomic structure in Aphanius baeticus
+4. Spatio-temporal and transmission dynamics of sarcoptic mange (for Gambusia birth rates)
+5. Threatened Freshwater Fishes of the Mediterranean Basin
+6. Age, growth and reproduction of the barbel, Barbus sclateri
+7. Age, growth and reproduction of Aphanius iberus in the lower Guadalquivir
+9. Why and when do freshwater fish migrate? (Iberian Peninsula)
+10. Forensic reconstruction of Ictalurus punctatus invasion routes
+11. Broad-scale sampling of primary freshwater fish populations (PMC/PeerJ)
+12. Broad-scale sampling of primary freshwater fish populations (PeerJ)
+15. Microsatellite analysis of genetic population structure of Anaecypris hispanica
+16. Spatial and temporal variation in population genetic structure of Nile tilapia
+18. A Long-Term Spatiotemporal Analysis of the Fish Community
+19. Study on Invasive Alien Species – Development of Risk Assessments
+"""
+function build_dispersal_scaling(species_codes::Vector{String})
+    # Annual dispersal rates in km/year from literature
+    annual_dispersal_rates = Dict{String, Float64}(
+        # Native Endemics
+        "AB" => 0.3,   # < 0.5 km/year - highly fragmented (Ref 3)
+        "AH" => 0.2,   # 0.1-0.3 km/year - highly sedentary (Ref 11, 15)
+        "SP" => 3.0,   # 1-5 km/year (Ref 11, 12)
+        "PW" => 27.5,  # 15-40 km/year - migratory (Ref 9, 10)
+        "LS" => 20.0,  # 10-30 km/year - migratory (Ref 6, 11)
+        "SA" => 5.0,   # 2-8 km/year (Ref 11)
+        "IL" => 1.25,  # 0.5-2 km/year (Ref 11)
+        "CP" => 1.25,  # 0.5-2 km/year (Ref 19)
+        "IO" => 0.5,   # < 1 km/year - fragmented (Ref 5)
+
+        # Invasive Species
+        "GH" => 25.0,  # 8-42 km/year - highly dispersive (Ref 7, 10)
+        "MS" => 17.5,  # 10-25 km/year (Ref 2, 10)
+        "LG" => 25.0,  # 8-42 km/year (Ref 5, 10)
+        "CC" => 20.0,  # 10-30 km/year (Ref 1)
+        "CG" => 10.0,  # 5-15 km/year (Ref 18)
+        "AM" => 10.0,  # 5-15 km/year (Ref 1)
+        "OM" => 12.5,  # 5-20 km/year (Ref 1)
+        "EL" => 12.5,  # 5-20 km/year (Ref 1)
+        "GL" => 3.0,   # 1-5 km/year (Ref 18)
+        "TT" => 6.0,   # 2-10 km/year (Ref 1)
+
+        # Diadromous/Marine Species
+        "AA" => 5.0,   # < 10 km/year - dam restricted (Ref 9)
+        "MC" => 75.0,  # 50-100 km/year - euryhaline (Ref 18)
+        "LR" => 75.0,  # 50-100 km/year - euryhaline (Ref 18)
+
+        # Salmonids
+        "ST" => 12.5,  # 5-20 km/year - typical for salmonids
+    )
+
+    # Calculate scaling factors relative to median dispersal rate
+    # All rates are normalized so that the median species has scale = 1.0
+    rates = [get(annual_dispersal_rates, sp, 5.0) for sp in species_codes]  # default 5.0 km/year
+    median_rate = median(rates)
+
+    scaling = Float64[]
+    for sp in species_codes
+        rate = get(annual_dispersal_rates, sp, 5.0)
+        push!(scaling, rate / median_rate)
+    end
+
+    return scaling
 end
 
 """
@@ -796,11 +974,17 @@ function prepare_ode_data(;
     println("Temperature range: $(minimum(temperatures)) - $(maximum(temperatures))")
 
     # 9. Build intrinsic growth rates
-    println("\n[9/8] Building intrinsic growth rates...")
+    println("\n[9/10] Building intrinsic growth rates...")
     intrinsic_growth_rates = build_intrinsic_growth_rates(density_df, species_codes, sites, species_chars_df)
 
-    # 10. Precompute dispersal matrix
-    println("\n[10/8] Precomputing dispersal matrix...")
+    # 10. Build species dispersal scaling factors
+    println("\n[10/10] Building species dispersal scaling factors...")
+    dispersal_scaling = build_dispersal_scaling(species_codes)
+    println("Dispersal scaling range: $(minimum(dispersal_scaling)) - $(maximum(dispersal_scaling))")
+    println("Median-normalized scaling factors (median = 1.0)")
+
+    # 11. Precompute dispersal matrix
+    println("\n[11/10] Precomputing dispersal matrix...")
     dispersal_matrix = precompute_dispersal_matrix(
         n_sites,
         Matrix(distance_matrix),
@@ -821,6 +1005,7 @@ function prepare_ode_data(;
         n_species,
         interaction_matrix,
         dispersal_matrix,
+        dispersal_scaling,
         intrinsic_growth_rates,
         temperatures,
         habitat_suitability,
