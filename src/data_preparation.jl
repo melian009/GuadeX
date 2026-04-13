@@ -976,11 +976,11 @@ function prepare_ode_data(;
 
     # 5. Build distance matrix
     # Create subcatchment mapping from site data
-    site_to_subcatchment = Dict(row.CODIGO => string(row.CODIGO_S) for row in eachrow(site_df))
+    site_to_subcatchment = Dict{String, String}(string(row.CODIGO) => string(row.CODIGO_S) for row in eachrow(site_df))
     # Create distance to river mapping (Dist.Guadalq.(m))
-    site_to_river_distance = Dict(row.CODIGO => row."Dist.Guadalq.(m)" for row in eachrow(site_df))
+    site_to_river_distance = Dict{String, Float64}(string(row.CODIGO) => Float64(coalesce(row."Dist.Guadalq.(m)", 0.0)) for row in eachrow(site_df))
     # Create elevation mapping
-    site_to_elevation = Dict(row.CODIGO => row.ALTITUD for row in eachrow(site_df))
+    site_to_elevation = Dict{String, Float64}(string(row.CODIGO) => Float64(coalesce(row.ALTITUD, 500.0)) for row in eachrow(site_df))
 
     println("\n[5/8] Building distance matrix...")
     distance_matrix = build_distance_matrix(distance_file, sites, site_to_subcatchment, site_to_river_distance, site_to_elevation)
