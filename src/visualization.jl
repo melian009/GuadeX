@@ -608,6 +608,103 @@ function plot_combined_analysis(sol, site_df, sites, species, distance_matrix; f
 end
 
 """
+    plot_avg_total_biomass(sol, sites, species; kwargs)
+
+Plot average total biomass across all sites over time with ±1 std band.
+
+# Arguments
+- `sol`: DifferentialEquations solution object
+- `sites`: Vector of site codes
+- `species`: Vector of species codes
+
+# Returns
+- A Figure object showing average total biomass trajectory with uncertainty band
+"""
+function plot_avg_total_biomass(sol, sites, species;
+    figure_size::Tuple = (900, 600))
+
+    n_sites = length(sites)
+    n_species = length(species)
+    n_timepoints = length(sol.t)
+
+    total_biomass = zeros(n_timepoints, n_sites)
+
+    for t in 1:n_timepoints
+        u_matrix = reshape(sol.u[t], n_sites, n_species)
+        total_biomass[t, :] .= sum(u_matrix, dims = 2)[:]
+    end
+
+    avg_biomass = vec(mean(total_biomass, dims = 2))
+    std_biomass = vec(std(total_biomass, dims = 2))
+    upper = avg_biomass .+ std_biomass
+    lower = avg_biomass .- std_biomass
+    lower = max.(lower, 0.0)
+
+    time = sol.t
+
+    fig = Figure(figure_size = figure_size)
+    ax = Axis(fig[1, 1],
+        title = "Average Total Biomass Over Time (± 1 SD)",
+        xlabel = "Time",
+        ylabel = "Average Total Biomass")
+
+    band!(ax, time, lower, upper, color = (:blue, 0.2))
+    lines!(ax, time, avg_biomass, color = :blue, linewidth = 2)
+
+    return fig
+end
+
+"""
+    plot_avg_species_richness(sol, sites, species; kwargs)
+
+Plot average species richness across all sites over time with ±1 std band.
+
+# Arguments
+- `sol`: DifferentialEquations solution object
+- `sites`: Vector of site codes
+- `species`: Vector of species codes
+- `threshold`: Population threshold for species presence (default: 0.1)
+
+# Returns
+- A Figure object showing average species richness trajectory with uncertainty band
+"""
+function plot_avg_species_richness(sol, sites, species;
+    threshold::Float64 = 0.1,
+    figure_size::Tuple = (900, 600))
+
+    n_sites = length(sites)
+    n_species = length(species)
+    n_timepoints = length(sol.t)
+
+    richness = zeros(n_timepoints, n_sites)
+
+    for t in 1:n_timepoints
+        u_matrix = reshape(sol.u[t], n_sites, n_species)
+        for site_idx in 1:n_sites
+            richness[t, site_idx] = sum(u_matrix[site_idx, :] .> threshold)
+        end
+    end
+
+    avg_richness = vec(mean(richness, dims = 2))
+    std_richness = vec(std(richness, dims = 2))
+    upper = avg_richness .+ std_richness
+    lower = max.(avg_richness .- std_richness, 0.0)
+
+    time = sol.t
+
+    fig = Figure(figure_size = figure_size)
+    ax = Axis(fig[1, 1],
+        title = "Average Species Richness Over Time (± 1 SD, threshold = $threshold)",
+        xlabel = "Time",
+        ylabel = "Average Number of Species")
+
+    band!(ax, time, lower, upper, color = (:green, 0.2))
+    lines!(ax, time, avg_richness, color = :green, linewidth = 2)
+
+    return fig
+end
+
+"""
     save_figure(fig, filename::String; kwargs)
 
 Save a Makie figure to file.

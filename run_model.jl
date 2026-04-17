@@ -4,6 +4,7 @@ using DataFrames
 using CSV
 using SparseArrays
 using LinearAlgebra
+using JLD2
 using Guadex
 
 
@@ -12,7 +13,6 @@ const UPSTREAM_COST = 0.05
 const DISPERSAL_INTENSITY = 1.0
 
 # Time configuration: 1 time unit = 1 day
-# To simulate 1 year: 365 days, 10 years: 3650 days
 const DAYS_PER_YEAR = 365
 const SIMULATION_YEARS = 1
 const T_SPAN = (0.0, Float64(SIMULATION_YEARS * DAYS_PER_YEAR)) # Time span in days
@@ -265,15 +265,15 @@ fig_ode = plot_ode_solution(sol, data_with_management.sites, data_with_managemen
     max_sites_to_plot = 4)
 save_figure(fig_ode, joinpath(output_dir, "ode_solution.png"))
 
-# Plot total biomass over time
-println("  - Plotting total biomass...")
-fig_biomass = plot_total_biomass(sol, data_with_management.sites, data_with_management.species)
-save_figure(fig_biomass, joinpath(output_dir, "total_biomass.png"))
+# Plot average total biomass over time
+println("  - Plotting average total biomass...")
+fig_biomass = plot_avg_total_biomass(sol, data_with_management.sites, data_with_management.species)
+save_figure(fig_biomass, joinpath(output_dir, "avg_total_biomass.png"))
 
-# Plot species richness over time
-println("  - Plotting species richness...")
-fig_richness = plot_species_richness(sol, data_with_management.sites, data_with_management.species)
-save_figure(fig_richness, joinpath(output_dir, "species_richness.png"))
+# Plot average species richness over time
+println("  - Plotting average species richness...")
+fig_richness = plot_avg_species_richness(sol, data_with_management.sites, data_with_management.species)
+save_figure(fig_richness, joinpath(output_dir, "avg_species_richness.png"))
 
 # Plot sites map with elevation coloring
 println("  - Plotting sites map...")
@@ -296,3 +296,19 @@ fig_combined = plot_combined_analysis(sol, data_with_management.site_df, data_wi
 save_figure(fig_combined, joinpath(output_dir, "combined_analysis.png"))
 
 println("\nAll figures saved to '$output_dir' directory")
+
+# --- Save simulation output ---
+output_jld2 = joinpath(output_dir, "simulation_output.jld2")
+println("\nSaving simulation output to: $output_jld2")
+jldsave(output_jld2;
+    sol_t = sol.t,
+    sol_u = sol.u,
+    sites = data_with_management.sites,
+    species = data_with_management.species,
+    upstream_cost = UPSTREAM_COST,
+    dispersal_intensity = DISPERSAL_INTENSITY,
+    simulation_years = SIMULATION_YEARS,
+    exploitation_vector = exploitation_vector,
+    passability_vector = passability_vector
+)
+println("Simulation output saved.")

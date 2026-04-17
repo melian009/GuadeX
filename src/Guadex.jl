@@ -29,6 +29,7 @@ export build_intrinsic_growth_rates
 
 # Export visualization functions
 export plot_ode_solution, plot_total_biomass, plot_species_richness
+export plot_avg_total_biomass, plot_avg_species_richness
 export plot_sites_map, plot_site_connectivity_map, plot_subcatchment_network
 export plot_combined_analysis, save_figure
 
