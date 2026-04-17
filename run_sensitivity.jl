@@ -169,7 +169,7 @@ current_run = 0
 for uc in upstream_costs
     for (exp_name, exp_dict) in exploitation_scenarios
         for (pass_name, pass_dict) in passability_scenarios
-            current_run += 1
+            global current_run += 1
             run_label = "uc=$(uc)_exp=$(exp_name)_pass=$(pass_name)"
             println("\n[$current_run/$total_runs] Running: $run_label")
 
