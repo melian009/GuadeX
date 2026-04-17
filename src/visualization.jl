@@ -293,8 +293,7 @@ function plot_sites_map(site_df; color_by::Symbol = :ALTITUD, figure_size::Tuple
         xlabel = "Longitude",
         ylabel = "Latitude",
         dest = "+proj=latlong",
-        lonlims = extrema(lons) .+ (-0.5, 0.5),
-        latlims = extrema(lats) .+ (-0.5, 0.5))
+        limits = (extrema(lons) .+ (-0.5, 0.5), extrema(lats) .+ (-0.5, 0.5)))
 
     land = GeoMakie.land()
     poly!(ax, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
@@ -372,8 +371,7 @@ function plot_site_connectivity_map(site_df, distance_matrix, sites;
         xlabel = "Longitude",
         ylabel = "Latitude",
         dest = "+proj=latlong",
-        lonlims = extrema(lons) .+ (-0.5, 0.5),
-        latlims = extrema(lats) .+ (-0.5, 0.5))
+        limits = (extrema(lons) .+ (-0.5, 0.5), extrema(lats) .+ (-0.5, 0.5)))
 
     land = GeoMakie.land()
     poly!(ax, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
@@ -476,8 +474,7 @@ function plot_subcatchment_network(site_df, sites; figure_size::Tuple = (1200, 9
         xlabel = "Longitude",
         ylabel = "Latitude",
         dest = "+proj=latlong",
-        lonlims = extrema(all_lons) .+ (-0.5, 0.5),
-        latlims = extrema(all_lats) .+ (-0.5, 0.5))
+        limits = (extrema(all_lons) .+ (-0.5, 0.5), extrema(all_lats) .+ (-0.5, 0.5)))
 
     land = GeoMakie.land()
     poly!(ax, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
@@ -553,8 +550,7 @@ function plot_combined_analysis(sol, site_df, sites, species, distance_matrix; f
         xlabel = "Longitude",
         ylabel = "Latitude",
         dest = "+proj=latlong",
-        lonlims = extrema(lons) .+ (-0.5, 0.5),
-        latlims = extrema(lats) .+ (-0.5, 0.5))
+        limits = (extrema(lons) .+ (-0.5, 0.5), extrema(lats) .+ (-0.5, 0.5)))
 
     land = GeoMakie.land()
     poly!(ax3, land; color = (:lightgray, 0.3), strokecolor = :gray, strokewidth = 0.5)
