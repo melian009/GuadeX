@@ -201,6 +201,9 @@ for uc in upstream_costs
             fig_richness = plot_avg_species_richness(sol, data_base.sites, data_base.species)
             save_figure(fig_richness, joinpath(run_dir, "avg_species_richness.png"))
 
+            fig_combined = plot_combined_analysis(sol, data_base.site_df, data_base.sites, data_base.species, data_base.distance_matrix)
+            save_figure(fig_combined, joinpath(run_dir, "combined_analysis.png"))
+
             println("  Saved to: $run_dir")
         end
     end
