@@ -62,12 +62,13 @@ function metacommunity_ode!(du, u, p::MetacommunityParams, t)
     for s in 1:p.n_species
         opt = p.thermal_optima[s]
         sigma = p.thermal_sigmas[s]
-        dispersal_scale = p.dispersal_scaling[s]
 
         for i in 1:p.n_sites
+            N_is = max(U[i, s], 0.0)
+
             total_biomass_i = 0.0
             for j in 1:p.n_species
-                total_biomass_i += U[i, j]
+                total_biomass_i += max(U[i, j], 0.0)
             end
 
             env_filter = gaussian_thermal_filter(p.temperatures[i], opt, sigma) * p.habitat_suitability[i]
@@ -75,11 +76,12 @@ function metacommunity_ode!(du, u, p::MetacommunityParams, t)
 
             interaction_term = 0.0
             for j in 1:p.n_species
-                interaction_term += p.interaction_matrix[s, j] * U[i, j]
+                interaction_term += p.interaction_matrix[s, j] * max(U[i, j], 0.0)
             end
 
             logistic_term = 1.0 - total_biomass_i / p.carrying_capacity[i]
-            dU[i, s] = U[i, s] * (r_eff * logistic_term + interaction_term)
+
+            dU[i, s] = N_is * (r_eff * logistic_term + interaction_term)
         end
     end
 
@@ -97,7 +99,7 @@ function metacommunity_ode!(du, u, p::MetacommunityParams, t)
                 emigration_rate += p.dispersal_matrix.nzval[idx]
             end
 
-            dU[i, s] += dispersal_scale * (immigration[i] - emigration_rate * U[i, s])
+            dU[i, s] += dispersal_scale * (immigration[i] - emigration_rate * max(U[i, s], 0.0))
         end
     end
 

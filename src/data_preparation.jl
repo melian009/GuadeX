@@ -814,7 +814,7 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
 
     K_scaling = 1.5
 
-    carrying_capacity = Float64[]
+    raw_capacities = Float64[]
     for site in sites
         if haskey(site_to_idx, site)
             row_idx = site_to_idx[site]
@@ -828,14 +828,23 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
                     end
                 end
             end
-            push!(carrying_capacity, total_density * K_scaling)
+            push!(raw_capacities, total_density * K_scaling)
         else
-            push!(carrying_capacity, 10.0)
+            push!(raw_capacities, 0.0)
         end
+    end
+
+    nonzero_caps = filter(c -> c > 0, raw_capacities)
+    K_floor = isempty(nonzero_caps) ? 10.0 : max(1.0, quantile(nonzero_caps, 0.1))
+
+    carrying_capacity = Float64[]
+    for cap in raw_capacities
+        push!(carrying_capacity, max(cap, K_floor))
     end
 
     println("Carrying capacity range: $(minimum(carrying_capacity)) - $(maximum(carrying_capacity))")
     println("Mean carrying capacity: $(mean(carrying_capacity))")
+    println("K floor (10th percentile of non-zero K): $K_floor")
 
     return carrying_capacity
 end
@@ -955,8 +964,7 @@ end
         environmental_file::String = "data/ABIOTIC/Matriz_Ambiental_Data.csv",
         distance_file::String = "data/Matrix_distances_1037puntos_BRUTO_FINAL.csv",
         interaction_file::String = "data/BIOTIC/Interacciones_peces_Guadalquivir_03-04-2018_ENG.csv",
-        upstream_cost::Float64 = 0.01,
-        dispersal_intensity::Float64 = 0.1
+        upstream_cost::Float64 = 0.01
     )
 
 Prepare all data needed for the ODE metacommunity model.
@@ -967,9 +975,7 @@ Prepare all data needed for the ODE metacommunity model.
 - `environmental_file`: Path to environmental data
 - `distance_file`: Path to distance matrix data
 - `interaction_file`: Path to species interaction data
-- `max_distance`: Maximum distance for connections in the distance matrix
 - `upstream_cost`: Additional cost factor for upstream dispersal
-- `dispersal_intensity`: Scaling factor for dispersal rates in the model
 
 ## Returns a NamedTuple with:
 - params: MetacommunityParams struct
@@ -986,8 +992,7 @@ function prepare_ode_data(;
     environmental_file::String = "data/ABIOTIC/Matriz_Ambiental_Data.csv",
     distance_file::String = "data/Matrix_distances_1037puntos_BRUTO_FINAL.csv",
     interaction_file::String = "data/BIOTIC/Interacciones_peces_Guadalquivir_03-04-2018_ENG.csv",
-    upstream_cost::Float64 = 0.01,
-    dispersal_intensity::Float64 = 0.1
+    upstream_cost::Float64 = 0.01
 )
     println("="^60)
     println("Preparing data for ODE metacommunity model")

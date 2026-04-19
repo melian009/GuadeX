@@ -10,7 +10,6 @@ using Guadex
 
 # --- Configuration ---
 const UPSTREAM_COST = 0.05
-const DISPERSAL_INTENSITY = 1.0
 
 # Time configuration: 1 time unit = 1 day
 const DAYS_PER_YEAR = 365
@@ -154,8 +153,7 @@ example_passability_scenario = Dict{Float64, Float64}(
 # This function loads all necessary data and returns a NamedTuple
 # containing the MetacommunityParams struct and other data.
 data = prepare_ode_data(
-    upstream_cost = UPSTREAM_COST,
-    dispersal_intensity = DISPERSAL_INTENSITY
+    upstream_cost = UPSTREAM_COST
 )
 
 # --- Apply Management Scenarios ---
@@ -175,13 +173,13 @@ apply_exploitation_to_growth_rates!(data.params.intrinsic_growth_rates, exploita
 println("Exploitation factors applied to growth rates")
 
 # For dam passability, we need to recompute the dispersal matrix since it was pre-computed
-# First, apply the passability multiplier to the dams matrix
+# First, apply the passability multiplier to the dams matrix (only to dammed connections)
 modified_dams = copy(data.dams)
-for j in 1:data.params.n_sites  # origin sites (columns)
-    for i in 1:data.params.n_sites  # destination sites (rows)
-        if i != j
-            # Scale the existing passability by the origin site's passability factor
+for j in 1:data.params.n_sites
+    for i in 1:data.params.n_sites
+        if i != j && modified_dams[i, j] < 1.0
             modified_dams[i, j] *= passability_vector[j]
+            modified_dams[i, j] = min(1.0, modified_dams[i, j])
         end
     end
 end
@@ -234,6 +232,10 @@ density_cols = [Symbol("$(sp)_DEN") for sp in data_with_management.species]
 # Filter density_df to match sites
 density_df_filtered = filter(row -> row.CODIGO in data_with_management.sites, data_with_management.density_df)
 u0 = Matrix(density_df_filtered[:, density_cols])
+
+# Sanitize initial conditions: replace NaN/missing with 0, ensure non-negative
+replace!(u0, NaN => 0.0)
+u0 = max.(u0, 0.0)
 
 # Flatten for the ODE solver
 u0_flat = vec(u0)
@@ -307,7 +309,6 @@ jldsave(output_jld2;
     sites = data_with_management.sites,
     species = data_with_management.species,
     upstream_cost = UPSTREAM_COST,
-    dispersal_intensity = DISPERSAL_INTENSITY,
     simulation_years = SIMULATION_YEARS,
     exploitation_vector = exploitation_vector,
     passability_vector = passability_vector

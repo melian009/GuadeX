@@ -83,7 +83,7 @@ end
 # =============================================================================
 
 function run_single_simulation(data_base, upstream_cost, exploitation_dict, passability_dict;
-    dispersal_intensity=1.0, simulation_years=SIMULATION_YEARS)
+    simulation_years=SIMULATION_YEARS)
 
     t_span = (0.0, Float64(simulation_years * DAYS_PER_YEAR))
 
@@ -144,6 +144,8 @@ function run_single_simulation(data_base, upstream_cost, exploitation_dict, pass
     density_cols = [Symbol("$(sp)_DEN") for sp in data_base.species]
     density_df_filtered = filter(row -> row.CODIGO in data_base.sites, data_base.density_df)
     u0 = Matrix(density_df_filtered[:, density_cols])
+    replace!(u0, NaN => 0.0)
+    u0 = max.(u0, 0.0)
     u0_flat = vec(u0)
 
     prob = ODEProblem(metacommunity_ode!, u0_flat, t_span, params_final)
@@ -164,7 +166,7 @@ base_output_dir = "results/sensitivity"
 mkpath(base_output_dir)
 
 println("\nLoading base data (once)...")
-data_base = prepare_ode_data(upstream_cost = 0.05, dispersal_intensity = 1.0)
+data_base = prepare_ode_data(upstream_cost = 0.05)
 
 total_runs = length(upstream_costs) * length(exploitation_scenarios) * length(passability_scenarios)
 current_run = 0
@@ -190,7 +192,6 @@ for uc in upstream_costs
                 sites = data_base.sites,
                 species = data_base.species,
                 upstream_cost = uc,
-                dispersal_intensity = 1.0,
                 simulation_years = SIMULATION_YEARS,
                 exploitation_scenario = exp_name,
                 passability_scenario = pass_name,
