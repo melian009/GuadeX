@@ -78,8 +78,9 @@ function metacommunity_ode!(du, u, p::MetacommunityParams, t)
             for j in 1:p.n_species
                 interaction_term += p.interaction_matrix[s, j] * max(U[i, j], 0.0)
             end
+            interaction_term /= max(p.carrying_capacity[i], 1e-6)
 
-            logistic_term = 1.0 - total_biomass_i / p.carrying_capacity[i]
+            logistic_term = clamp(1.0 - total_biomass_i / max(p.carrying_capacity[i], 1e-6), -1.0, 2.0)
 
             dU[i, s] = N_is * (r_eff * logistic_term + interaction_term)
         end

@@ -812,7 +812,7 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
 
     density_cols = [Symbol("$(sp)_DEN") for sp in species_codes]
 
-    K_scaling = 1.5
+    K_scaling = 10.0
 
     raw_capacities = Float64[]
     for site in sites
@@ -835,7 +835,8 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
     end
 
     nonzero_caps = filter(c -> c > 0, raw_capacities)
-    K_floor = isempty(nonzero_caps) ? 10.0 : max(1.0, quantile(nonzero_caps, 0.1))
+    K_min = 50.0
+    K_floor = isempty(nonzero_caps) ? K_min : max(K_min, quantile(nonzero_caps, 0.1))
 
     carrying_capacity = Float64[]
     for cap in raw_capacities
@@ -844,7 +845,7 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
 
     println("Carrying capacity range: $(minimum(carrying_capacity)) - $(maximum(carrying_capacity))")
     println("Mean carrying capacity: $(mean(carrying_capacity))")
-    println("K floor (10th percentile of non-zero K): $K_floor")
+    println("K floor (10th percentile of non-zero K, min $K_min): $K_floor")
 
     return carrying_capacity
 end

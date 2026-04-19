@@ -149,7 +149,16 @@ function run_single_simulation(data_base, upstream_cost, exploitation_dict, pass
     u0_flat = vec(u0)
 
     prob = ODEProblem(metacommunity_ode!, u0_flat, t_span, params_final)
-    sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:1.0:t_span[2])
+
+    function positivity_condition(u, t, integrator)
+        any(x -> x < 0, u)
+    end
+    function positivity_affect!(integrator)
+        integrator.u .= max.(integrator.u, 0.0)
+    end
+    positivity_cb = DiscreteCallback(positivity_condition, positivity_affect!; save_positions=(false, true))
+
+    sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:1.0:t_span[2], callback=positivity_cb)
 
     return sol, exploitation_vector, passability_vector
 end

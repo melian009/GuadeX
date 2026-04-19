@@ -233,6 +233,10 @@ density_cols = [Symbol("$(sp)_DEN") for sp in data_with_management.species]
 density_df_filtered = filter(row -> row.CODIGO in data_with_management.sites, data_with_management.density_df)
 u0 = Matrix(density_df_filtered[:, density_cols])
 
+println("Initial total biomass per site range: ", extrema([sum(density_df_filtered[i, density_cols]) for i in 1:nrow(density_df_filtered)]))
+println("Interaction matrix range: ", extrema(data_with_management.params.interaction_matrix))
+println("Growth rate range: ", extrema(data_with_management.params.intrinsic_growth_rates))
+
 # Sanitize initial conditions: replace NaN/missing with 0, ensure non-negative
 replace!(u0, NaN => 0.0)
 u0 = max.(u0, 0.0)
@@ -244,11 +248,21 @@ u0_flat = vec(u0)
 # Define the ODE problem (using data_with_management which has modified params)
 prob = ODEProblem(metacommunity_ode!, u0_flat, T_SPAN, data_with_management.params)
 
+# Positivity callback: project negative populations to zero after each step
+# This prevents numerical overshoot when populations approach extinction
+function positivity_condition(u, t, integrator)
+    any(x -> x < 0, u)
+end
+function positivity_affect!(integrator)
+    integrator.u .= max.(integrator.u, 0.0)
+end
+positivity_cb = DiscreteCallback(positivity_condition, positivity_affect!; save_positions=(false, true))
+
 # Solve the ODE with adaptive time stepping (Tsit5)
 # but save at regular daily intervals for consistent time series
 # Using reltol=1e-6 and abstol=1e-6 for accurate solution
 println("Starting simulation for $SIMULATION_YEARS years ($(SIMULATION_YEARS * DAYS_PER_YEAR) days)...")
-sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:1.0:T_SPAN[2]) # Save at daily intervals
+sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:1.0:T_SPAN[2], callback=positivity_cb)
 println("Simulation finished. Solution has $(length(sol.t)) time points.")
 
 # The solution `sol` contains the time series of the population densities.
