@@ -782,6 +782,65 @@ function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vect
 end
 
 """
+    build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String})
+
+Build site-specific carrying capacities from observed fish density data.
+
+The carrying capacity K_i for each site is derived from the observed total fish density,
+scaled by a factor to represent the maximum sustainable biomass the site can support.
+The scaling factor accounts for:
+- Natural fluctuations around observed densities
+- Additional habitat not sampled during surveys
+- Density-dependent regulation allowing populations to exceed observed levels
+
+# Arguments
+- `density_df`: DataFrame with species density data (from load_species_density_data)
+- `site_df`: DataFrame with site data
+- `sites`: Vector of site codes in order
+- `species_codes`: Vector of species codes
+
+# Returns
+- Vector of carrying capacities for each site
+"""
+function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String})
+    println("Building site-specific carrying capacities from density data...")
+
+    site_to_idx = Dict{String, Int}()
+    for (rownum, row) in enumerate(eachrow(density_df))
+        site_to_idx[row.CODIGO] = rownum
+    end
+
+    density_cols = [Symbol("$(sp)_DEN") for sp in species_codes]
+
+    K_scaling = 1.5
+
+    carrying_capacity = Float64[]
+    for site in sites
+        if haskey(site_to_idx, site)
+            row_idx = site_to_idx[site]
+            row = density_df[row_idx, :]
+            total_density = 0.0
+            for col in density_cols
+                if hasproperty(row, col)
+                    val = row[col]
+                    if !ismissing(val) && !isnan(val) && val > 0
+                        total_density += val
+                    end
+                end
+            end
+            push!(carrying_capacity, total_density * K_scaling)
+        else
+            push!(carrying_capacity, 10.0)
+        end
+    end
+
+    println("Carrying capacity range: $(minimum(carrying_capacity)) - $(maximum(carrying_capacity))")
+    println("Mean carrying capacity: $(mean(carrying_capacity))")
+
+    return carrying_capacity
+end
+
+"""
     build_dispersal_scaling(species_codes::Vector{String})
 
 Build species-specific dispersal scaling factors based on literature values.
@@ -935,20 +994,20 @@ function prepare_ode_data(;
     println("="^60)
 
     # 1. Load site data
-    println("\n[1/8] Loading site data...")
+    println("\n[1/12] Loading site data...")
     site_df = load_site_data(connectivity_file, environmental_file)
     sites = String.(site_df.CODIGO)
     n_sites = length(sites)
     println("Found $n_sites sites")
 
     # 2. Load species density data
-    println("\n[2/8] Loading species density data...")
+    println("\n[2/12] Loading species density data...")
     density_df, species_codes = load_species_density_data(density_file)
     n_species = length(species_codes)
     println("Found $n_species species: $species_codes")
 
     # 3. Load species characteristics
-    println("\n[3/8] Loading species characteristics...")
+    println("\n[3/12] Loading species characteristics...")
     species_chars_df = load_species_characteristics(species_chars_file)
 
     # Get thermal parameters for our species
@@ -971,7 +1030,7 @@ function prepare_ode_data(;
     println("Thermal sigmas: $thermal_sigmas")
 
     # 4. Load interaction matrix
-    println("\n[4/8] Loading interaction matrix...")
+    println("\n[4/12] Loading interaction matrix...")
     interaction_matrix = load_interaction_matrix(interaction_file, species_codes)
 
     # 5. Build distance matrix
@@ -982,43 +1041,47 @@ function prepare_ode_data(;
     # Create elevation mapping
     site_to_elevation = Dict{String, Float64}(string(row.CODIGO) => Float64(coalesce(row.ALTITUD, 500.0)) for row in eachrow(site_df))
 
-    println("\n[5/8] Building distance matrix...")
+    println("\n[5/12] Building distance matrix...")
     distance_matrix = build_distance_matrix(distance_file, sites, site_to_subcatchment, site_to_river_distance, site_to_elevation)
 
     # 6. Build elevation vector
-    println("\n[6/8] Extracting elevations...")
+    println("\n[6/12] Extracting elevations...")
     elevations = build_elevation_vector(site_df, sites)
     println("Elevation range: $(minimum(elevations)) - $(maximum(elevations)) m")
 
     # 7. Build dam passability matrix
-    println("\n[7/8] Building dam passability matrix...")
+    println("\n[7/12] Building dam passability matrix...")
     dams = build_dam_passability_matrix(site_df, sites)
 
     # 8. Extract environmental parameters
-    println("\n[8/8] Extracting environmental parameters...")
+    println("\n[8/12] Extracting environmental parameters...")
     temperatures = extract_site_temperatures(site_df, sites)
     habitat_suitability = extract_habitat_suitability(site_df, sites)
     println("Temperature range: $(minimum(temperatures)) - $(maximum(temperatures))")
 
     # 9. Build intrinsic growth rates
-    println("\n[9/10] Building intrinsic growth rates...")
+    println("\n[9/12] Building intrinsic growth rates...")
     intrinsic_growth_rates = build_intrinsic_growth_rates(density_df, species_codes, sites, species_chars_df)
 
     # 10. Build species dispersal scaling factors
-    println("\n[10/10] Building species dispersal scaling factors...")
+    println("\n[10/12] Building species dispersal scaling factors...")
     dispersal_scaling = build_dispersal_scaling(species_codes)
     println("Dispersal scaling range: $(minimum(dispersal_scaling)) - $(maximum(dispersal_scaling))")
     println("Median-normalized scaling factors (median = 1.0)")
 
-    # 11. Precompute dispersal matrix
-    println("\n[11/10] Precomputing dispersal matrix...")
+    # 11. Build carrying capacities from observed density data
+    println("\n[11/12] Building carrying capacities...")
+    carrying_capacity = build_carrying_capacity(density_df, site_df, sites, species_codes)
+
+    # 12. Precompute dispersal matrix (using species-specific dispersal coefficients)
+    println("\n[12/12] Precomputing dispersal matrix...")
     dispersal_matrix = precompute_dispersal_matrix(
         n_sites,
         Matrix(distance_matrix),
         elevations,
         upstream_cost,
-        dispersal_intensity,
-        dams
+        dams,
+        species_codes
     )
     println("Dispersal matrix: $(Guadex.nnz(dispersal_matrix)) non-zero entries")
 
@@ -1037,7 +1100,8 @@ function prepare_ode_data(;
         temperatures,
         habitat_suitability,
         thermal_optima,
-        thermal_sigmas
+        thermal_sigmas,
+        carrying_capacity
     )
 
     return (

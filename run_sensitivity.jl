@@ -97,7 +97,8 @@ function run_single_simulation(data_base, upstream_cost, exploitation_dict, pass
         copy(data_base.params.temperatures),
         copy(data_base.params.habitat_suitability),
         copy(data_base.params.thermal_optima),
-        copy(data_base.params.thermal_sigmas)
+        copy(data_base.params.thermal_sigmas),
+        copy(data_base.params.carrying_capacity)
     )
 
     exploitation_vector = build_exploitation_vector(data_base.site_df, data_base.sites;
@@ -110,8 +111,9 @@ function run_single_simulation(data_base, upstream_cost, exploitation_dict, pass
     modified_dams = copy(data_base.dams)
     for j in 1:params_copy.n_sites
         for i in 1:params_copy.n_sites
-            if i != j
+            if i != j && modified_dams[i, j] < 1.0
                 modified_dams[i, j] *= passability_vector[j]
+                modified_dams[i, j] = min(1.0, modified_dams[i, j])
             end
         end
     end
@@ -121,8 +123,8 @@ function run_single_simulation(data_base, upstream_cost, exploitation_dict, pass
         Matrix(data_base.distance_matrix),
         data_base.elevations,
         upstream_cost,
-        dispersal_intensity,
-        modified_dams
+        modified_dams,
+        data_base.species
     )
 
     params_final = MetacommunityParams(
@@ -135,7 +137,8 @@ function run_single_simulation(data_base, upstream_cost, exploitation_dict, pass
         params_copy.temperatures,
         params_copy.habitat_suitability,
         params_copy.thermal_optima,
-        params_copy.thermal_sigmas
+        params_copy.thermal_sigmas,
+        params_copy.carrying_capacity
     )
 
     density_cols = [Symbol("$(sp)_DEN") for sp in data_base.species]

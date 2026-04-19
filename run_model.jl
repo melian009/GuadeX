@@ -105,7 +105,7 @@ end
     apply_passability_to_dams!(dams, passability_vector)
 
 Apply passability multipliers to dam passability matrix in-place.
-The passability vector values replace the baseline values for each origin site.
+Only applies to connections where dams[i,j] < 1.0 (i.e., sites with actual dams).
 """
 function apply_passability_to_dams!(dams, passability_vector)
     n_sites = length(passability_vector)
@@ -113,9 +113,9 @@ function apply_passability_to_dams!(dams, passability_vector)
 
     for j in 1:n_sites  # origin sites (columns)
         for i in 1:n_sites  # destination sites (rows)
-            if i != j
-                # Scale the existing passability by the origin site's passability factor
+            if i != j && dams[i, j] < 1.0
                 dams[i, j] *= passability_vector[j]
+                dams[i, j] = min(1.0, dams[i, j])
             end
         end
     end
@@ -193,8 +193,8 @@ new_dispersal_matrix = precompute_dispersal_matrix(
     Matrix(data.distance_matrix),
     data.elevations,
     UPSTREAM_COST,
-    DISPERSAL_INTENSITY,
-    modified_dams
+    modified_dams,
+    data.species
 )
 
 # Create new params with updated dispersal matrix
@@ -210,7 +210,8 @@ data_with_management = (
         data.params.temperatures,
         data.params.habitat_suitability,
         data.params.thermal_optima,
-        data.params.thermal_sigmas
+        data.params.thermal_sigmas,
+        data.params.carrying_capacity
     ),
     sites = data.sites,
     species = data.species,
