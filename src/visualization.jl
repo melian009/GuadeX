@@ -708,9 +708,9 @@ Save a Makie figure to file.
 # Arguments
 - `fig`: Makie Figure object
 - `filename`: Output filename (with extension)
-- `resolution`: Tuple for image resolution (default: (1200, 900))
+- `size`: Tuple for image size (default: (1200, 900))
 """
-function save_figure(fig, filename::String; resolution::Tuple = (1200, 900))
-    Makie.save(filename, fig, resolution = resolution)
+function save_figure(fig, filename::String; size::Tuple = (1200, 900))
+    Makie.save(filename, fig, size = size)
     println("Figure saved to: $filename")
 end
