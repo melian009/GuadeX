@@ -1051,7 +1051,6 @@ function plot_richness_timeseries_grid(sol, species, sites, site_df, native_idx,
     end
     lines!(axC, time, site_mean; color = :black, linewidth = 2.5, linestyle = :dash)
     hlines!(axC, [t0_inv_mean]; color = :black, linestyle = :dot, linewidth = 1)
-    axislegend(axC; position = :rt, fontsize = 6, nbanks = 3)
 
     # --- 2D: Per-Subcatchment Native ---
     axD = Axis(fig[2, 2];
@@ -1074,7 +1073,6 @@ function plot_richness_timeseries_grid(sol, species, sites, site_df, native_idx,
     end
     lines!(axD, time, site_mean_n; color = :black, linewidth = 2.5, linestyle = :dash)
     hlines!(axD, [t0_native_mean]; color = :black, linestyle = :dot, linewidth = 1)
-    axislegend(axD; position = :rt, fontsize = 6, nbanks = 3)
 
     Label(fig[0, :], "Species Richness Time Series", fontsize = 16, font = :bold)
 
