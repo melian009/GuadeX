@@ -733,7 +733,7 @@ end
 
 function _compute_richness_changes(sol, n_sites, n_species, gidx, row_to_sol, year0_idx, years; days_per_year=365)
     year0_mat = reshape(sol.u[year0_idx], n_sites, n_species)
-    results = Matrix{Float64}[]
+    results = Vector{Float64}[]
     for yr in years
         target_idx = year0_idx + round(Int, yr * days_per_year)
         yr_mat = reshape(sol.u[target_idx], n_sites, n_species)
