@@ -33,6 +33,10 @@ export plot_avg_total_biomass, plot_avg_species_richness
 export plot_sites_map, plot_site_connectivity_map, plot_subcatchment_network
 export plot_combined_analysis, save_figure
 
+# Export sensitivity visualization functions
+export plot_richness_change_per_site, plot_richness_change_per_subcatchment
+export plot_richness_timeseries_grid
+
 include("graph_construction.jl")
 include("visualize_graph.jl")
 include("ode_model.jl")
