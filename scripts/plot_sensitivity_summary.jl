@@ -4,14 +4,52 @@ using CairoMakie
 using Statistics
 using Guadex
 
+"""
+# USAGE
+
+## Original behavior (flat structure)
+julia scripts/plot_sensitivity_summary.jl results/sensitivity_temp_passability
+
+## Alt interactions (matrix-nested structure)
+julia scripts/plot_sensitivity_summary.jl results/sensitivity_alt_interactions
+
+## Default (no arg)
+julia scripts/plot_sensitivity_summary.jl
+"""
+
 const DAYS_PER_YEAR = 365
 const SIMULATION_YEARS = 3
 const NATIVE_SPECIES = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO"]
 const INVASIVE_SPECIES = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
 
-const BASE_DIR = "results/sensitivity_temp_passability"
-const OUTPUT_DIR = "results/sensitivity_summary_plots"
-mkpath(OUTPUT_DIR)
+# --- Configuration ---
+if length(ARGS) >= 1
+    BASE_DIR = ARGS[1]
+else
+    BASE_DIR = "results/sensitivity_temp_passability"
+end
+
+# Auto-detect matrix-level nesting
+base_entries = readdir(BASE_DIR; join=false, sort=false)
+matrix_names = String[]
+has_matrices = false
+for entry in base_entries
+    subdir = joinpath(BASE_DIR, entry)
+    if isdir(subdir) && !(entry in ["summary_plots", "sensitivity_summary_plots"])
+        nested = readdir(subdir; join=false, sort=false)
+        if any(startswith("dT_"), nested)
+            push!(matrix_names, entry)
+        end
+    end
+end
+sort!(matrix_names)
+has_matrices = !isempty(matrix_names)
+
+if has_matrices
+    println("Detected $(length(matrix_names)) interaction matrix variants: $(join(matrix_names, ", "))")
+else
+    println("No matrix-level nesting detected – working with flat structure.")
+end
 
 temperature_increases = [0.0, 1.0, 2.0, 3.0]
 upstream_costs = [0.01, 0.05, 0.1, 0.5]
@@ -27,22 +65,28 @@ function classify_species_indices(all_species, target_group)
     return [findfirst(==(sp), all_species) for sp in target_group if sp in all_species]
 end
 
+function jld2_path(base_dir, prefix, dt, uc, pass_name)
+    if isempty(prefix)
+        return joinpath(base_dir, "dT_$(dt)C", "uc_$(uc)", pass_name, "simulation_output.jld2")
+    else
+        return joinpath(base_dir, prefix, "dT_$(dt)C", "uc_$(uc)", pass_name, "simulation_output.jld2")
+    end
+end
+
 # =============================================================================
 # --- Load Scalar Metrics From All Runs ---
 # =============================================================================
 
-function load_all_metrics()
-    println("Loading metrics from all simulation runs...")
+function load_all_metrics(base_dir; path_prefix="")
+    target = isempty(path_prefix) ? base_dir : joinpath(base_dir, path_prefix)
+    println("Loading metrics from $target ...")
     metrics = []
 
     for dt in temperature_increases
         for uc in upstream_costs
             for pass_name in passability_scenarios
-                run_dir = joinpath(BASE_DIR, "dT_$(dt)C", "uc_$(uc)", pass_name)
-                jld2_file = joinpath(run_dir, "simulation_output.jld2")
-
+                jld2_file = jld2_path(base_dir, path_prefix, dt, uc, pass_name)
                 if !isfile(jld2_file)
-                    println("  WARNING: Missing $jld2_file")
                     continue
                 end
 
@@ -112,36 +156,51 @@ function get_metric_matrix(metrics, pass_name; field=:native_richness_change)
     return M, temperature_increases, upstream_costs
 end
 
+# Detect which passability scenarios actually have data
+function active_passability_scenarios(metrics)
+    pass_with_data = unique([m.pass for m in metrics])
+    return [p for p in passability_scenarios if p in pass_with_data]
+end
+
 # =============================================================================
 # --- Figure 1: Heatmap Grid — ΔRichness: Native & Invasive ---
 # =============================================================================
 
-function plot_richness_change_heatmaps(metrics)
+function plot_richness_change_heatmaps(metrics, output_dir; title_suffix="")
     println("Generating richness change heatmaps...")
 
     diverging_cmap = cgrad([RGBf(0.129, 0.4, 0.675), RGBf(0.97, 0.97, 0.97), RGBf(0.698, 0.094, 0.169)])
 
-    n_pass = length(passability_scenarios)
+    active_pass = active_passability_scenarios(metrics)
+    n_pass = length(active_pass)
+    if n_pass == 0
+        println("  No data — skipping heatmaps.")
+        return
+    end
+
     n_rows = 2
     n_cols = n_pass
 
     all_native = Float64[getfield(m, :native_richness_change) for m in metrics]
     all_invasive = Float64[getfield(m, :invasive_richness_change) for m in metrics]
     all_vals = vcat(all_native, all_invasive)
-    clim_max = maximum(abs.(all_vals))
+    valid_vals = filter(!isnan, all_vals)
+    if isempty(valid_vals)
+        println("  No valid data — skipping heatmaps.")
+        return
+    end
+    clim_max = maximum(abs.(valid_vals))
     clim_max = clim_max == 0.0 ? 1.0 : clim_max
     clims = (-clim_max, clim_max)
 
     fig = Figure(size = (280 * n_cols + 80, 280 * n_rows + 30))
 
-    row_labels = ["Native ΔRichness", "Invasive ΔRichness"]
-
     for (ri, (label, field)) in enumerate([("native_richness_change", :native_richness_change), ("invasive_richness_change", :invasive_richness_change)])
-        for (ci, pass_name) in enumerate(passability_scenarios)
+        for (ci, pass_name) in enumerate(active_pass)
             M, temps, costs = get_metric_matrix(metrics, pass_name; field=field)
 
             ax = Axis(fig[ri, ci];
-                title = ri == 1 ? pass_labels[pass_name] : "",
+                title = ri == 1 ? get(pass_labels, pass_name, pass_name) : "",
                 xlabel = ri == n_rows ? "ΔT (°C)" : "",
                 ylabel = ci == 1 ? "Upstream Cost" : "",
                 xticks = (1:length(temps), string.(temps)),
@@ -167,16 +226,20 @@ function plot_richness_change_heatmaps(metrics)
         end
     end
 
-    Label(fig[0, 1:n_cols], "Δ Species Richness: Native (top) vs Invasive (bottom)", fontsize = 15, font = :bold)
+    title_text = "Δ Species Richness: Native (top) vs Invasive (bottom)"
+    if !isempty(title_suffix)
+        title_text *= "  [$title_suffix]"
+    end
+    Label(fig[0, 1:n_cols], title_text, fontsize = 15, font = :bold)
 
-    save_figure(fig, joinpath(OUTPUT_DIR, "richness_change_heatmaps.png"); size = (280 * n_cols + 80, 280 * n_rows + 30))
+    save_figure(fig, joinpath(output_dir, "richness_change_heatmaps.png"); size = (280 * n_cols + 80, 280 * n_rows + 30))
 end
 
 # =============================================================================
 # --- Figure 2: Final-State Native vs Invasive Richness Scatter ---
 # =============================================================================
 
-function plot_native_vs_invasive_scatter(metrics)
+function plot_native_vs_invasive_scatter(metrics, output_dir; title_suffix="")
     println("Generating native vs invasive richness scatter...")
 
     markers = Dict("baseline" => :circle,
@@ -188,54 +251,71 @@ function plot_native_vs_invasive_scatter(metrics)
                       "reduced_passability" => :orange,
                       "blocked" => :firebrick)
 
+    active_pass = active_passability_scenarios(metrics)
+    if isempty(active_pass)
+        println("  No data — skipping scatter.")
+        return
+    end
+
     fig = Figure(size = (900, 750))
 
     ax = Axis(fig[1, 1];
         title = "Final Native vs Invasive Richness",
-        xlabel = "Mean Native Richness (Year 3)",
-        ylabel = "Mean Invasive Richness (Year 3)")
+        xlabel = "Mean Native Richness (Year $SIMULATION_YEARS)",
+        ylabel = "Mean Invasive Richness (Year $SIMULATION_YEARS)")
 
-    for pass_name in passability_scenarios
+    for pass_name in active_pass
         x_vals = Float64[getfield(m, :native_richness_T) for m in metrics if m.pass == pass_name]
         y_vals = Float64[getfield(m, :invasive_richness_T) for m in metrics if m.pass == pass_name]
-        scatter!(ax, x_vals, y_vals;
-            marker = markers[pass_name],
-            color = colors_map[pass_name],
-            markersize = 12,
-            label = pass_labels[pass_name])
+        if !isempty(x_vals)
+            scatter!(ax, x_vals, y_vals;
+                marker = get(markers, pass_name, :circle),
+                color = get(colors_map, pass_name, :black),
+                markersize = 12,
+                label = get(pass_labels, pass_name, pass_name))
+        end
     end
 
     Legend(fig[2, 1], ax; orientation = :horizontal, fontsize = 10)
 
-    Label(fig[0, :], "Trade-off Between Native and Invasive Species Richness", fontsize = 14, font = :bold)
+    title_text = "Trade-off Between Native and Invasive Species Richness"
+    if !isempty(title_suffix)
+        title_text *= "  [$title_suffix]"
+    end
+    Label(fig[0, :], title_text, fontsize = 14, font = :bold)
 
-    save_figure(fig, joinpath(OUTPUT_DIR, "native_vs_invasive_scatter.png"))
+    save_figure(fig, joinpath(output_dir, "native_vs_invasive_scatter.png"))
 end
 
 # =============================================================================
 # --- Figure 3: Line Plots — Richness × Temperature (by passability & upstream cost) ---
 # =============================================================================
 
-function plot_sensitivity_lines(metrics)
+function plot_sensitivity_lines(metrics, output_dir; title_suffix="")
     println("Generating sensitivity line plots...")
 
-    fig = Figure(size = (1000, 780))
+    active_pass = active_passability_scenarios(metrics)
+    n_pass = length(active_pass)
+    if n_pass == 0
+        println("  No data — skipping line plots.")
+        return
+    end
 
-    n_uc = length(upstream_costs)
     uc_colors = [:black, :dodgerblue, :darkorange, :crimson]
     uc_markers = [:circle, :utriangle, :dtriangle, :diamond]
 
-    pass_titles = pass_labels
-    rows = 2
-    cols = 2
+    rows = ceil(Int, sqrt(n_pass))
+    cols = ceil(Int, n_pass / rows)
 
+    fig = Figure(size = (280 * cols + 60, 260 * rows + 40))
     axes_refs = []
-    for (ci, pass_name) in enumerate(passability_scenarios)
+
+    for (ci, pass_name) in enumerate(active_pass)
         ri = (ci - 1) ÷ cols + 1
         cj = (ci - 1) % cols + 1
 
-        ax_nat = Axis(fig[ri, cj];
-            title = pass_titles[pass_name],
+        ax = Axis(fig[ri, cj];
+            title = get(pass_labels, pass_name, pass_name),
             xlabel = ri == rows ? "ΔT (°C)" : "",
             ylabel = cj == 1 ? "Mean Richness" : "",
             xticks = (0:3, string.(0:3)))
@@ -254,33 +334,36 @@ function plot_sensitivity_lines(metrics)
                     push!(ys_inv, sub_metrics[match].invasive_richness_T)
                 end
             end
-            lines!(ax_nat, xs, ys_nat; color = uc_colors[ui], linewidth = 2, linestyle = :solid)
-            scatter!(ax_nat, xs, ys_nat; color = uc_colors[ui], marker = uc_markers[ui],
-                markersize = 10, label = "uc=$(upstream_costs[ui]) (native)")
-            lines!(ax_nat, xs, ys_inv; color = uc_colors[ui], linewidth = 2, linestyle = :dash)
-            scatter!(ax_nat, xs, ys_inv; color = uc_colors[ui], marker = uc_markers[ui],
-                markersize = 10, label = "uc=$(upstream_costs[ui]) (invasive)")
+            if !isempty(xs)
+                lines!(ax, xs, ys_nat; color = uc_colors[ui], linewidth = 2, linestyle = :solid)
+                scatter!(ax, xs, ys_nat; color = uc_colors[ui], marker = uc_markers[ui],
+                    markersize = 10, label = "uc=$(uc) (native)")
+                lines!(ax, xs, ys_inv; color = uc_colors[ui], linewidth = 2, linestyle = :dash)
+                scatter!(ax, xs, ys_inv; color = uc_colors[ui], marker = uc_markers[ui],
+                    markersize = 10, label = "uc=$(uc) (invasive)")
+            end
         end
 
-        push!(axes_refs, ax_nat)
+        push!(axes_refs, ax)
     end
 
-    Legend(fig[3, :], axes_refs[1]; orientation = :horizontal, fontsize = 8, nbanks = 2)
+    Legend(fig[rows + 1, :], axes_refs[1]; orientation = :horizontal, fontsize = 8, nbanks = 2)
 
-    Label(fig[0, :],
-        "Native (solid) & Invasive (dashed) Richness vs Temperature — by Passability & Upstream Cost",
-        fontsize = 13, font = :bold)
+    title_text = "Native (solid) & Invasive (dashed) Richness vs Temperature — by Passability & Upstream Cost"
+    if !isempty(title_suffix)
+        title_text *= "  [$title_suffix]"
+    end
+    Label(fig[0, :], title_text, fontsize = 13, font = :bold)
 
-    save_figure(fig, joinpath(OUTPUT_DIR, "sensitivity_lines.png"))
+    save_figure(fig, joinpath(output_dir, "sensitivity_lines.png"))
 end
 
 # =============================================================================
 # --- Figure 4: Time Series for Key Scenarios ---
 # =============================================================================
 
-function load_timeseries(dt, uc, pass_name)
-    run_dir = joinpath(BASE_DIR, "dT_$(dt)C", "uc_$(uc)", pass_name)
-    jld2_file = joinpath(run_dir, "simulation_output.jld2")
+function load_timeseries(base_dir, path_prefix, dt, uc, pass_name)
+    jld2_file = jld2_path(base_dir, path_prefix, dt, uc, pass_name)
     jldopen(jld2_file, "r") do f
         return f["sol_t"], f["sol_u"], f["species"], f["sites"]
     end
@@ -311,29 +394,52 @@ function compute_biomass_timeseries(sol_t, sol_u, species, sites)
     return biomass
 end
 
-function plot_timeseries_comparison(metrics)
+function plot_timeseries_comparison(metrics, base_dir, output_dir; path_prefix="", title_suffix="")
     println("Generating time series comparison...")
 
-    ref_uc = 0.05
+    active_pass = active_passability_scenarios(metrics)
+    if isempty(active_pass)
+        println("  No data — skipping timeseries.")
+        return
+    end
+
+    # Use uc values actually present in the loaded metrics
+    actual_ucs = unique([m.uc for m in metrics])
+    ref_uc = 0.05 in actual_ucs ? 0.05 : actual_ucs[1]
+
+    # Use temperature values actually present
+    actual_temps = unique([m.dt for m in metrics])
+    ref_dt = temperature_increases[1] in actual_temps ? temperature_increases[1] : actual_temps[1]
+
+    # Check that the timeseries files exist for the reference combination
+    test_file = jld2_path(base_dir, path_prefix, ref_dt, ref_uc, active_pass[1])
+    if !isfile(test_file)
+        println("  Timeseries files not found — skipping timeseries comparison.")
+        return
+    end
 
     fig = Figure(size = (1650, 800))
 
-    pass_names_all = ["baseline", "improved_passability", "reduced_passability", "blocked"]
     temp_colors = [:dodgerblue, :darkorange, :crimson, :darkviolet]
-    pass_colors = Dict(zip(pass_names_all, [:dodgerblue, :darkgreen, :orange, :crimson]))
+    pass_colors_default = Dict(zip(["baseline", "improved_passability", "reduced_passability", "blocked"],
+                                    [:dodgerblue, :darkgreen, :orange, :crimson]))
 
-    # Panel A: Temperature effect on biomass & richness (baseline passability)
-    pass_name = "baseline"
+    # Panel A: Temperature effect on biomass & richness (baseline passability or first active)
+    ref_pass = "baseline" in active_pass ? "baseline" : active_pass[1]
     uc = ref_uc
     ax_bio = Axis(fig[1, 1];
-        title = "Total Biomass — Temperature Effect (baseline, uc=$uc)",
+        title = "Total Biomass — Temperature Effect ($ref_pass, uc=$uc)",
         xlabel = "Time (years)", ylabel = "Total Biomass")
     ax_rich = Axis(fig[2, 1];
-        title = "Species Richness — Temperature Effect (baseline, uc=$uc)",
+        title = "Species Richness — Temperature Effect ($ref_pass, uc=$uc)",
         xlabel = "Time (years)", ylabel = "Mean Richness")
 
-    for (ti, dt) in enumerate([0.0, 1.0, 2.0, 3.0])
-        sol_t, sol_u, species, sites = load_timeseries(dt, uc, pass_name)
+    for (ti, dt) in enumerate(temperature_increases)
+        ts_file = jld2_path(base_dir, path_prefix, dt, uc, ref_pass)
+        if !isfile(ts_file)
+            continue
+        end
+        sol_t, sol_u, species, sites = load_timeseries(base_dir, path_prefix, dt, uc, ref_pass)
         time_years = sol_t ./ DAYS_PER_YEAR
 
         native_idx = classify_species_indices(species, NATIVE_SPECIES)
@@ -356,8 +462,11 @@ function plot_timeseries_comparison(metrics)
     Legend(legend_col[1, 1], ax_bio; fontsize = 8, tellheight = false)
     Legend(legend_col[2, 1], ax_rich; fontsize = 7, nbanks = 2, tellheight = false)
 
-    # Panel B: Passability effect on biomass & richness (ΔT=1°C, uc=0.05)
+    # Panel B: Passability effect on biomass & richness
     dt = 1.0
+    if !(dt in temperature_increases)
+        dt = temperature_increases[1]
+    end
     ax_bio2 = Axis(fig[1, 2];
         title = "Total Biomass — Passability Effect (ΔT=$(dt)°C, uc=$uc)",
         xlabel = "Time (years)", ylabel = "Total Biomass")
@@ -365,8 +474,12 @@ function plot_timeseries_comparison(metrics)
         title = "Species Richness — Passability Effect (ΔT=$(dt)°C, uc=$uc)",
         xlabel = "Time (years)", ylabel = "Mean Richness")
 
-    for pass_name in pass_names_all
-        sol_t, sol_u, species, sites = load_timeseries(dt, uc, pass_name)
+    for pass_name in active_pass
+        ts_file = jld2_path(base_dir, path_prefix, dt, uc, pass_name)
+        if !isfile(ts_file)
+            continue
+        end
+        sol_t, sol_u, species, sites = load_timeseries(base_dir, path_prefix, dt, uc, pass_name)
         time_years = sol_t ./ DAYS_PER_YEAR
 
         native_idx = classify_species_indices(species, NATIVE_SPECIES)
@@ -376,72 +489,106 @@ function plot_timeseries_comparison(metrics)
         nat_rich = compute_richness_timeseries(sol_t, sol_u, species, sites, native_idx)
         inv_rich = compute_richness_timeseries(sol_t, sol_u, species, sites, invasive_idx)
 
-        lines!(ax_bio2, time_years, bio; color = pass_colors[pass_name], linewidth = 2,
-            label = pass_labels[pass_name])
+        lines!(ax_bio2, time_years, bio; color = get(pass_colors_default, pass_name, :black), linewidth = 2,
+            label = get(pass_labels, pass_name, pass_name))
 
-        lines!(ax_rich2, time_years, nat_rich; color = pass_colors[pass_name], linewidth = 2,
-            linestyle = :solid, label = "$(pass_labels[pass_name]) (native)")
-        lines!(ax_rich2, time_years, inv_rich; color = pass_colors[pass_name], linewidth = 2,
-            linestyle = :dash, label = "$(pass_labels[pass_name]) (invasive)")
+        lines!(ax_rich2, time_years, nat_rich; color = get(pass_colors_default, pass_name, :black), linewidth = 2,
+            linestyle = :solid, label = "$(get(pass_labels, pass_name, pass_name)) (native)")
+        lines!(ax_rich2, time_years, inv_rich; color = get(pass_colors_default, pass_name, :black), linewidth = 2,
+            linestyle = :dash, label = "$(get(pass_labels, pass_name, pass_name)) (invasive)")
     end
 
     Legend(legend_col[3, 1], ax_bio2; fontsize = 8, tellheight = false)
     Legend(legend_col[4, 1], ax_rich2; fontsize = 7, nbanks = 2, tellheight = false)
 
-    Label(fig[0, :], "Time Series Comparison — Temperature & Passability Effects",
-        fontsize = 15, font = :bold)
+    title_text = "Time Series Comparison — Temperature & Passability Effects"
+    if !isempty(title_suffix)
+        title_text *= "  [$title_suffix]"
+    end
+    Label(fig[0, :], title_text, fontsize = 15, font = :bold)
 
-    save_figure(fig, joinpath(OUTPUT_DIR, "timeseries_comparison.png"))
+    save_figure(fig, joinpath(output_dir, "timeseries_comparison.png"))
 end
 
 # =============================================================================
 # --- Figure 5: Biomass Change Bar Chart ---
 # =============================================================================
 
-function plot_biomass_change_bars(metrics)
+function plot_biomass_change_bars(metrics, output_dir; title_suffix="")
     println("Generating biomass change bar chart...")
 
-    fig = Figure(size = (1100, 680))
+    active_pass = active_passability_scenarios(metrics)
+    n_pass = length(active_pass)
+    if n_pass == 0
+        println("  No data — skipping bar chart.")
+        return
+    end
 
-    akw = Axis(fig[1, 1];
-        title = "Total Biomass Change (Year 0 → Year 3) by Passability Scenario",
+    fig = Figure(size = (220 * n_pass + 220, 680))
+
+    ax = Axis(fig[1, 1];
+        title = "Total Biomass Change (Year 0 → Year $SIMULATION_YEARS) by Passability Scenario",
         xlabel = "Passability Scenario",
         ylabel = "Δ Total Biomass",
         xticklabelrotation = 0.3)
 
-    n_pass = length(passability_scenarios)
-    n_combos = length(temperature_increases) * length(upstream_costs)
     bar_width = 0.18
     offsets = range(-1.5 * bar_width, 1.5 * bar_width; length=4)
-
     pass_colors_bar = [:dodgerblue, :darkgreen, :orange, :crimson]
 
-    for (ci, pass_name) in enumerate(passability_scenarios)
+    for (ci, pass_name) in enumerate(active_pass)
         vals = [getfield(m, :biomass_change) for m in metrics if m.pass == pass_name]
+        if isempty(vals)
+            continue
+        end
+        color_idx = findfirst(==(pass_name), passability_scenarios)
+        color_idx = color_idx === nothing ? 1 : color_idx
         xpos = ci .+ offsets[ci]
-        barplot!(akw, fill(xpos, length(vals)), vals;
-            color = (pass_colors_bar[ci], 0.6),
+        barplot!(ax, fill(xpos, length(vals)), vals;
+            color = (pass_colors_bar[mod1(color_idx, 4)], 0.6),
             width = bar_width,
-            label = pass_labels[pass_name],
-            strokecolor = pass_colors_bar[ci],
+            label = get(pass_labels, pass_name, pass_name),
+            strokecolor = pass_colors_bar[mod1(color_idx, 4)],
             strokewidth = 1)
 
         mean_val = mean(vals)
-        scatter!(akw, [ci], [mean_val];
-            color = pass_colors_bar[ci],
+        scatter!(ax, [ci], [mean_val];
+            color = pass_colors_bar[mod1(color_idx, 4)],
             marker = :diamond,
             markersize = 14,
             strokecolor = :black,
             strokewidth = 1)
     end
 
-    akw.xticks = (1:n_pass, [pass_labels[p] for p in passability_scenarios])
+    ax.xticks = (1:n_pass, [get(pass_labels, p, p) for p in active_pass])
 
-    Legend(fig[2, 1], akw; orientation = :horizontal, fontsize = 9)
+    Legend(fig[2, 1], ax; orientation = :horizontal, fontsize = 9)
 
-    Label(fig[0, :], "Biomass Change Across All Parameter Combinations", fontsize = 14, font = :bold)
+    title_text = "Biomass Change Across All Parameter Combinations"
+    if !isempty(title_suffix)
+        title_text *= "  [$title_suffix]"
+    end
+    Label(fig[0, :], title_text, fontsize = 14, font = :bold)
 
-    save_figure(fig, joinpath(OUTPUT_DIR, "biomass_change_bars.png"))
+    save_figure(fig, joinpath(output_dir, "biomass_change_bars.png"))
+end
+
+# =============================================================================
+# --- Run All Plots For a Given Metrics Collection ---
+# =============================================================================
+
+function run_all_plots(metrics, base_dir, output_dir; path_prefix="", title_suffix="")
+    mkpath(output_dir)
+    if isempty(metrics)
+        println("No metrics to plot — skipping.")
+        return
+    end
+    plot_richness_change_heatmaps(metrics, output_dir; title_suffix=title_suffix)
+    plot_native_vs_invasive_scatter(metrics, output_dir; title_suffix=title_suffix)
+    plot_sensitivity_lines(metrics, output_dir; title_suffix=title_suffix)
+    plot_timeseries_comparison(metrics, base_dir, output_dir; path_prefix=path_prefix, title_suffix=title_suffix)
+    plot_biomass_change_bars(metrics, output_dir; title_suffix=title_suffix)
+    println("  Plots saved to: $output_dir")
 end
 
 # =============================================================================
@@ -450,15 +597,21 @@ end
 
 println("="^60)
 println("Sensitivity Summary Plots")
+println("  Base directory: $BASE_DIR")
 println("="^60)
 
-metrics = load_all_metrics()
+if has_matrices
+    for matrix_name in matrix_names
+        println("\n--- Matrix: $matrix_name ---")
+        local metrics = load_all_metrics(BASE_DIR; path_prefix=matrix_name)
+        local out_dir = joinpath(BASE_DIR, matrix_name, "summary_plots")
+        run_all_plots(metrics, BASE_DIR, out_dir; path_prefix=matrix_name, title_suffix=matrix_name)
+    end
+else
+    metrics = load_all_metrics(BASE_DIR)
+    out_dir = joinpath(BASE_DIR, "summary_plots")
+    run_all_plots(metrics, BASE_DIR, out_dir)
+end
 
-plot_richness_change_heatmaps(metrics)
-plot_native_vs_invasive_scatter(metrics)
-plot_sensitivity_lines(metrics)
-plot_timeseries_comparison(metrics)
-plot_biomass_change_bars(metrics)
-
-println("\nAll summary plots saved to: $OUTPUT_DIR")
+println("\nAll summary plots complete.")
 println("="^60)

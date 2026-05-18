@@ -36,10 +36,16 @@ all_subcatchments = [1.1, 1.2, 1.3, 1.4, 2.2, 3.0, 6.0, 7.0, 9.0, 10.0, 11.3, 11
 #   passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
 # temperature_increases = [0.0, 3.0]
 upstream_costs       = [0.01, 0.5]
-passability_scenarios = Dict{String, Dict{Float64, Float64}}(
-    "baseline" => Dict{Float64, Float64}(a => 1.0 for a in all_subcatchments),
-    "reduced_passability" => Dict{Float64, Float64}(a => 0.5 for a in all_subcatchments),
-    "blocked" => Dict{Float64, Float64}(a => 0.1 for a in all_subcatchments),
+# passability_scenarios = Dict{String, Dict{Float64, Float64}}(
+#     "baseline" => Dict{Float64, Float64}(a => 1.0 for a in all_subcatchments),
+#     "reduced_passability" => Dict{Float64, Float64}(a => 0.5 for a in all_subcatchments),
+#     "blocked" => Dict{Float64, Float64}(a => 0.1 for a in all_subcatchments),
+# )
+passability_scenarios = Dict{String,Dict{Float64,Float64}}(
+    "baseline" => Dict{Float64,Float64}(a => 1.0 for a in all_subcatchments),
+    "improved_passability" => Dict{Float64,Float64}(a => 1.5 for a in all_subcatchments),
+    "reduced_passability" => Dict{Float64,Float64}(a => 0.5 for a in all_subcatchments),
+    "blocked" => Dict{Float64,Float64}(a => 0.1 for a in all_subcatchments),
 )
 
 # =============================================================================
