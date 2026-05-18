@@ -184,7 +184,7 @@ function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams)
 
             d_km = d_ij / 1000.0
 
-            rate = x * dams[j, i] / max(d_km, 0.001)
+            rate = x * dams[i, j] / max(d_km, 0.001)
 
             push!(I, i)
             push!(J, j)
