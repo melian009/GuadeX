@@ -188,7 +188,7 @@ function plot_native_vs_invasive_scatter(metrics)
                       "reduced_passability" => :orange,
                       "blocked" => :firebrick)
 
-    fig = Figure(size = (900, 700))
+    fig = Figure(size = (900, 750))
 
     ax = Axis(fig[1, 1];
         title = "Final Native vs Invasive Richness",
@@ -205,7 +205,7 @@ function plot_native_vs_invasive_scatter(metrics)
             label = pass_labels[pass_name])
     end
 
-    axislegend(ax; position = :rb, fontsize = 10)
+    Legend(fig[2, 1], ax; orientation = :horizontal, fontsize = 10)
 
     Label(fig[0, :], "Trade-off Between Native and Invasive Species Richness", fontsize = 14, font = :bold)
 
@@ -219,7 +219,7 @@ end
 function plot_sensitivity_lines(metrics)
     println("Generating sensitivity line plots...")
 
-    fig = Figure(size = (1000, 700))
+    fig = Figure(size = (1000, 780))
 
     n_uc = length(upstream_costs)
     uc_colors = [:black, :dodgerblue, :darkorange, :crimson]
@@ -229,6 +229,7 @@ function plot_sensitivity_lines(metrics)
     rows = 2
     cols = 2
 
+    axes_refs = []
     for (ci, pass_name) in enumerate(passability_scenarios)
         ri = (ci - 1) ÷ cols + 1
         cj = (ci - 1) % cols + 1
@@ -261,10 +262,10 @@ function plot_sensitivity_lines(metrics)
                 markersize = 10, label = "uc=$(upstream_costs[ui]) (invasive)")
         end
 
-        if ri == 1 && cj == 1
-            axislegend(ax_nat; position = :lt, fontsize = 7, nbanks = 2)
-        end
+        push!(axes_refs, ax_nat)
     end
+
+    Legend(fig[3, :], axes_refs[1]; orientation = :horizontal, fontsize = 8, nbanks = 2)
 
     Label(fig[0, :],
         "Native (solid) & Invasive (dashed) Richness vs Temperature — by Passability & Upstream Cost",
@@ -315,7 +316,7 @@ function plot_timeseries_comparison(metrics)
 
     ref_uc = 0.05
 
-    fig = Figure(size = (1400, 800))
+    fig = Figure(size = (1650, 800))
 
     pass_names_all = ["baseline", "improved_passability", "reduced_passability", "blocked"]
     temp_colors = [:dodgerblue, :darkorange, :crimson, :darkviolet]
@@ -351,8 +352,9 @@ function plot_timeseries_comparison(metrics)
             linestyle = :dash, label = "ΔT=$(dt)°C (invasive)")
     end
 
-    axislegend(ax_bio; position = :rb, fontsize = 8)
-    axislegend(ax_rich; position = :rb, fontsize = 7, nbanks = 2)
+    legend_col = GridLayout(fig[1:2, 3])
+    Legend(legend_col[1, 1], ax_bio; fontsize = 8, tellheight = false)
+    Legend(legend_col[2, 1], ax_rich; fontsize = 7, nbanks = 2, tellheight = false)
 
     # Panel B: Passability effect on biomass & richness (ΔT=1°C, uc=0.05)
     dt = 1.0
@@ -383,8 +385,8 @@ function plot_timeseries_comparison(metrics)
             linestyle = :dash, label = "$(pass_labels[pass_name]) (invasive)")
     end
 
-    axislegend(ax_bio2; position = :rb, fontsize = 8)
-    axislegend(ax_rich2; position = :rb, fontsize = 7, nbanks = 2)
+    Legend(legend_col[3, 1], ax_bio2; fontsize = 8, tellheight = false)
+    Legend(legend_col[4, 1], ax_rich2; fontsize = 7, nbanks = 2, tellheight = false)
 
     Label(fig[0, :], "Time Series Comparison — Temperature & Passability Effects",
         fontsize = 15, font = :bold)
@@ -399,7 +401,7 @@ end
 function plot_biomass_change_bars(metrics)
     println("Generating biomass change bar chart...")
 
-    fig = Figure(size = (1100, 600))
+    fig = Figure(size = (1100, 680))
 
     akw = Axis(fig[1, 1];
         title = "Total Biomass Change (Year 0 → Year 3) by Passability Scenario",
@@ -435,7 +437,7 @@ function plot_biomass_change_bars(metrics)
 
     akw.xticks = (1:n_pass, [pass_labels[p] for p in passability_scenarios])
 
-    axislegend(akw; position = :lt, fontsize = 9)
+    Legend(fig[2, 1], akw; orientation = :horizontal, fontsize = 9)
 
     Label(fig[0, :], "Biomass Change Across All Parameter Combinations", fontsize = 14, font = :bold)
 
