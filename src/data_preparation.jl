@@ -525,18 +525,19 @@ function build_elevation_vector(site_df::DataFrame, sites::Vector{String})
 end
 
 """
-    build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
+    build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String}, distances, elevations)
 
-Build a dam passability matrix based on dam distances.
-Lower passability if there are dams nearby.
+Build a dam passability matrix based on dam distances, directional river flow,
+and the physical location of dams relative to site pairs.
+
+A dam reduces passability (to 0.1) for a connection j → i only when the dam
+lies between the two sites along the river path. This is determined by:
+- Direction: whether i is downstream (e_i < e_j) or upstream (e_i > e_j) of j
+- Distance: whether the dam-to-site distance is less than the total river distance between sites
 """
-function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
+function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String}, distances, elevations)
     n_sites = length(sites)
 
-    # Create site index mapping
-    # site_to_idx = Dict(s => i for (i, s) in enumerate(sites))
-
-    # Get dam information per site
     site_dam_info = Dict{String, NamedTuple{(:dist_upstream, :dist_downstream), Tuple{Float64, Float64}}}()
 
     for row in eachrow(site_df)
@@ -544,37 +545,54 @@ function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
         dist_up = row.Demb_arr_m
         dist_down = row.Demb_ab_m
 
-        # If "No existe" was replaced with 0, it means no dam
-        # We use a large value to indicate no dam effect
         if dist_up == 0
-            dist_up = 1000_000.0  # No upstream dam
+            dist_up = 1000_000.0
         end
         if dist_down == 0
-            dist_down = 1000_000.0  # No downstream dam
+            dist_down = 1000_000.0
         end
 
         site_dam_info[codigo] = (dist_upstream=dist_up, dist_downstream=dist_down)
     end
 
-    # Build passability matrix
-    # Passability = 1.0 if no dam, decreases with dam proximity
     dams = ones(n_sites, n_sites)
 
-    for j in 1:n_sites  # origin
-        for i in 1:n_sites  # destination
+    for j in 1:n_sites
+        origin = sites[j]
+        if !haskey(site_dam_info, origin)
+            continue
+        end
+        origin_info = site_dam_info[origin]
+        e_j = elevations[j]
+
+        for i in 1:n_sites
             if i == j
                 continue
             end
-
-            origin = sites[j]
             dest = sites[i]
+            if !haskey(site_dam_info, dest)
+                continue
+            end
 
-            if haskey(site_dam_info, origin) && haskey(site_dam_info, dest)
-                # Check if there's a dam between origin and destination
-                # For now, use simple heuristic: if origin has downstream dam at all, reduce passability
-                dam_info = site_dam_info[origin]
-                if dam_info.dist_downstream < 1000_000
-                    # Dam downstream of origin - reduce passability
+            d_ij = distances[i, j]
+            if d_ij == 0 || isinf(d_ij)
+                continue
+            end
+
+            dest_info = site_dam_info[dest]
+            e_i = elevations[i]
+
+            if e_i <= e_j
+                # downstream or flat: origin's downstream dam or dest's upstream dam between them
+                if (origin_info.dist_downstream < 1000_000 && origin_info.dist_downstream < d_ij) ||
+                   (dest_info.dist_upstream < 1000_000 && dest_info.dist_upstream < d_ij)
+                    dams[i, j] = 0.1
+                end
+            end
+            if e_i >= e_j
+                # upstream or flat: origin's upstream dam or dest's downstream dam between them
+                if (origin_info.dist_upstream < 1000_000 && origin_info.dist_upstream < d_ij) ||
+                   (dest_info.dist_downstream < 1000_000 && dest_info.dist_downstream < d_ij)
                     dams[i, j] = 0.1
                 end
             end
@@ -1057,7 +1075,7 @@ function prepare_ode_data(;
 
     # 7. Build dam passability matrix
     println("\n[7/12] Building dam passability matrix...")
-    dams = build_dam_passability_matrix(site_df, sites)
+    dams = build_dam_passability_matrix(site_df, sites, distance_matrix, elevations)
 
     # 8. Extract environmental parameters
     println("\n[8/12] Extracting environmental parameters...")

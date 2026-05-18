@@ -320,7 +320,7 @@ function build_elevation_vector(site_df::DataFrame, sites::Vector{String})
     return elevations
 end
 
-function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
+function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String}, distances, elevations)
     n_sites = length(sites)
     site_dam_info = Dict{String, NamedTuple{(:dist_upstream, :dist_downstream), Tuple{Float64, Float64}}}()
     for row in eachrow(site_df)
@@ -338,15 +338,39 @@ function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String})
 
     dams = ones(n_sites, n_sites)
     for j in 1:n_sites
+        origin = sites[j]
+        if !haskey(site_dam_info, origin)
+            continue
+        end
+        origin_info = site_dam_info[origin]
+        e_j = elevations[j]
+
         for i in 1:n_sites
             if i == j
                 continue
             end
-            origin = sites[j]
             dest = sites[i]
-            if haskey(site_dam_info, origin) && haskey(site_dam_info, dest)
-                dam_info = site_dam_info[origin]
-                if dam_info.dist_downstream < 1000_000
+            if !haskey(site_dam_info, dest)
+                continue
+            end
+
+            d_ij = distances[i, j]
+            if d_ij == 0 || isinf(d_ij)
+                continue
+            end
+
+            dest_info = site_dam_info[dest]
+            e_i = elevations[i]
+
+            if e_i <= e_j
+                if (origin_info.dist_downstream < 1000_000 && origin_info.dist_downstream < d_ij) ||
+                   (dest_info.dist_upstream < 1000_000 && dest_info.dist_upstream < d_ij)
+                    dams[i, j] = 0.1
+                end
+            end
+            if e_i >= e_j
+                if (origin_info.dist_upstream < 1000_000 && origin_info.dist_upstream < d_ij) ||
+                   (dest_info.dist_downstream < 1000_000 && dest_info.dist_downstream < d_ij)
                     dams[i, j] = 0.1
                 end
             end
@@ -603,7 +627,7 @@ function prepare_data(;
     println("Elevation range: $(minimum(elevations)) - $(maximum(elevations)) m")
 
     println("\n[7/12] Building dam passability matrix...")
-    dams = build_dam_passability_matrix(site_df, sites)
+    dams = build_dam_passability_matrix(site_df, sites, distance_matrix, elevations)
 
     println("\n[8/12] Extracting environmental parameters...")
     temperatures = extract_site_temperatures(site_df, sites)
