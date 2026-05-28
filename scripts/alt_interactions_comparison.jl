@@ -117,13 +117,12 @@ function load_single_result(matrix_name, dT, uc, pass_name)
             n_sites=n_sites, n_species=n_species)
 end
 
-function compute_ss0_ratio(r)
+function compute_mean_end_richness(r)
     valid = r.richness_start .> 0.0
     if !any(valid)
         return NaN
     end
-    site_ratios = r.richness_end[valid] ./ r.richness_start[valid]
-    return mean(site_ratios)
+    return mean(r.richness_end[valid])
 end
 
 function build_subcatchment_map(site_df, sites)
@@ -158,7 +157,7 @@ function plot_overall_comparison_grid(all_data)
 
             ax = Axis(fig[ui, pi],
                 xlabel = ui == n_uc ? "ΔT (°C)" : "",
-                ylabel = pi == 1 ? "S/S₀" : "",
+                ylabel = pi == 1 ? "S / S₀ (ref: Original ΔT=0)" : "",
                 xticks = (0:1:3, ["0", "1", "2", "3"]),
                 yminorticksvisible = true,
                 yminorticks = IntervalsBetween(2),
@@ -166,6 +165,11 @@ function plot_overall_comparison_grid(all_data)
                 titlefont = :regular,
             )
             xlims!(ax, -0.3, 3.3)
+
+            ref_val = NaN
+            if haskey(data, "original") && haskey(data["original"], 0.0)
+                ref_val = compute_mean_end_richness(data["original"][0.0])
+            end
 
             for matrix_name in MATRIX_NAMES
                 if !haskey(data, matrix_name)
@@ -178,11 +182,11 @@ function plot_overall_comparison_grid(all_data)
                     if !haskey(data[matrix_name], dT)
                         continue
                     end
-                    r = compute_ss0_ratio(data[matrix_name][dT])
-                    if isnan(r)
+                    end_mean = compute_mean_end_richness(data[matrix_name][dT])
+                    if isnan(end_mean) || isnan(ref_val) || ref_val <= 0.0
                         continue
                     end
-                    push!(ratios, r)
+                    push!(ratios, end_mean / ref_val)
                     push!(dts, dT)
                     frac = (dT - minimum(TEMPERATURE_INCREASES)) / max(1e-9, maximum(TEMPERATURE_INCREASES) - minimum(TEMPERATURE_INCREASES))
                     push!(marker_colors, cgrad(DT_CMAP)[frac])
