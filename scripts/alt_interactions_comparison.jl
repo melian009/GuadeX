@@ -226,6 +226,77 @@ function plot_overall_comparison_grid(all_data)
     return fig
 end
 
+function plot_overall_comparison_single(all_data, uc, pass_name)
+    key = (uc, pass_name)
+    if !haskey(all_data, key)
+        println("  No data for uc=$(uc), pass=$(pass_name)")
+        return nothing
+    end
+    data = all_data[key]
+
+    fig = Figure(size = (900, 650))
+    ax = Axis(fig[1, 1],
+        xlabel = "Climate Warming Stress Gradient (ΔT in °C)",
+        ylabel = "Proportional Native Species Richness Remaining (S / S₀)",
+        xticks = (0:1:3, ["0", "1", "2", "3"]),
+        yminorticksvisible = true,
+        yminorticks = IntervalsBetween(2),
+        title = "Native Richness Retention vs Warming\n(uc = $(uc), passability = $(pass_name))",
+        titlefont = :bold,
+    )
+    xlims!(ax, -0.3, 3.3)
+
+    ref_val = NaN
+    if haskey(data, "original") && haskey(data["original"], 0.0)
+        ref_val = compute_mean_end_richness(data["original"][0.0])
+    end
+
+    for matrix_name in MATRIX_NAMES
+        if !haskey(data, matrix_name)
+            continue
+        end
+        ratios = Float64[]
+        dts = Float64[]
+        marker_colors = RGBAf[]
+        for dT in TEMPERATURE_INCREASES
+            if !haskey(data[matrix_name], dT)
+                continue
+            end
+            end_mean = compute_mean_end_richness(data[matrix_name][dT])
+            if isnan(end_mean) || isnan(ref_val) || ref_val <= 0.0
+                continue
+            end
+            push!(ratios, end_mean / ref_val)
+            push!(dts, dT)
+            frac = (dT - minimum(TEMPERATURE_INCREASES)) / max(1e-9, maximum(TEMPERATURE_INCREASES) - minimum(TEMPERATURE_INCREASES))
+            push!(marker_colors, cgrad(DT_CMAP)[frac])
+        end
+        if length(dts) < 2
+            continue
+        end
+        lines!(ax, dts, ratios, color = MATRIX_COLORS[matrix_name], linewidth = 2.5,
+               label = MATRIX_DISPLAY[matrix_name])
+        scatter!(ax, dts, ratios, color = marker_colors, marker = MATRIX_MARKERS[matrix_name],
+                 markersize = 14, strokecolor = MATRIX_COLORS[matrix_name], strokewidth = 1.5)
+    end
+
+    axislegend(ax, position = :rt, fontsize = 11, backgroundcolor = (:white, 0.7), framevisible = true)
+
+    Colorbar(fig[1, 2], colormap = DT_CMAP, limits = (0, 3),
+             label = "Climate Warming Stress\nGradient (ΔT in °C)",
+             ticks = 0:1:3, ticklabelsize = 10, labelsize = 12,
+             vertical = true, width = 25, height = Relative(0.6))
+
+    colsize!(fig.layout, 1, Relative(0.72))
+    colsize!(fig.layout, 2, Relative(0.08))
+    colgap!(fig.layout, 20)
+
+    out_path = joinpath(OUTPUT_DIR, "comparison_overall_uc$(uc)_$(pass_name).png")
+    save(out_path, fig, size = (1000, 650))
+    println("Saved: $out_path")
+    return fig
+end
+
 # =============================================================================
 # Plot 2: Per-subcatchment heatmap — single (uc, pass) combo
 # =============================================================================
@@ -441,8 +512,19 @@ function main()
     println("\n=== Plot 1: Overall comparison grid (all uc × pass) ===")
     plot_overall_comparison_grid(all_data)
 
-    println("\n=== Plot 2: Per-subcatchment heatmap (uc=$(uc_target), $(pass_target)) ===")
-    plot_subcatchment_heatmaps(all_data, all_sc_data, site_to_sc, uc_target, pass_target)
+    println("\n=== Plot 1b: Individual overall comparison plots (all uc × pass) ===")
+    for (key, _) in all_data
+        uc_p, pass_p = key
+        plot_overall_comparison_single(all_data, uc_p, pass_p)
+    end
+
+    println("\n=== Plot 2: Per-subcatchment heatmaps (all uc × pass) ===")
+    for (key, _) in all_data
+        uc_h, pass_h = key
+        if haskey(all_sc_data, key)
+            plot_subcatchment_heatmaps(all_data, all_sc_data, site_to_sc, uc_h, pass_h)
+        end
+    end
 
     println("\nDone. Output saved to: $(abspath(OUTPUT_DIR))")
 end
