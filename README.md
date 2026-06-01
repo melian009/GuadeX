@@ -44,7 +44,7 @@ The core purpose of the modeling is to address the research gap regarding intera
 
 Beyond which specific simulation framework we choose, there are elements that will be required:
 
-* Species-specific biological parameters (e.g., migration, life history traits, size) 
+* Species-specific biological parameters (e.g., migration, life history traits, size)
 * Dendritic fragmentation: Assessing the impact of connectivity changes and the creation of reservoirs
 * Exotic species dynamics: Simulating native and endemic species' responses to exotic species invasions, considering competition and predation
 * Climate change effects: Accounting for increased drought and desiccation**, reduction in channel width, and habitat loss
@@ -97,3 +97,4 @@ The final deliverable is a **spatially-explicit modeling tool** with a user-frie
 * [Working draft](https://overleaf.ifisc.uib-csic.es/8616281494pxdkjvdrhxjw#e7584b)
 * [data](https://drive.switch.ch/index.php/s/rNd3V73S2ca6MkT)
 * [Other data](https://www.dropbox.com/sh/fndht5q3bxoyv05/AADjAs5uQrO5V4SnjvJC3pEZa?dl=0)
+* [A mindmap of the available data](https://notebooklm.google.com/notebook/88f85179-bc67-4995-9347-d09ea5af60f5/artifact/f943558a-1131-4b33-9321-ae8015e11e2a?utm_source=nlm_web_share&utm_medium=google_oo&utm_campaign=art_share_1&utm_content=&utm_smc=nlm_web_share_google_oo_art_share_1_) (Google NotebookLM - requires a Google account)
