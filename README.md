@@ -94,6 +94,6 @@ The final deliverable is a **spatially-explicit modeling tool** with a user-frie
 
 ## Original sources
 
-* [Working draft](https://de.sharelatex.com/project/5ac1f0c58dd6a14ec01055e3)
+* [Working draft](https://overleaf.ifisc.uib-csic.es/8616281494pxdkjvdrhxjw#e7584b)
 * [data](https://drive.switch.ch/index.php/s/rNd3V73S2ca6MkT)
 * [Other data](https://www.dropbox.com/sh/fndht5q3bxoyv05/AADjAs5uQrO5V4SnjvJC3pEZa?dl=0)
