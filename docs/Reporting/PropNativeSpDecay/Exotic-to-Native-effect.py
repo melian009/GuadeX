@@ -1,10 +1,10 @@
-To analyze and plot the native diversity decay as a function of the exotic-to-native total interaction pressure using your datasets, we can translate the structural details from Table 12 (Original), Table 13 (Randomized), and Table 14 (Invasive-Favoured) into a quantitative interaction metric.
+# To analyze and plot the native diversity decay as a function of the exotic-to-native total interaction pressure using your datasets, we can translate the structural details from Table 12 (Original), Table 13 (Randomized), and Table 14 (Invasive-Favoured) into a quantitative interaction metric.
 
-In these matrices, row species $i$ exert directional constraints on column species $j$ ($\alpha_{ji}$ element). We define a standard cumulative pressure index—the Total Exotic Interaction Strength ($P_E$)—acting on the native community as:
+# In these matrices, row species $i$ exert directional constraints on column species $j$ ($\alpha_{ji}$ element). We define a standard cumulative pressure index—the Total Exotic Interaction Strength ($P_E$)—acting on the native community as:
 
-$$P_E = \sum_{i \in \text{Exotic}} \sum_{j \in \text{Native}} |\alpha_{ji}|$$
+# $$P_E = \sum_{i \in \text{Exotic}} \sum_{j \in \text{Native}} |\alpha_{ji}|$$
 
-Below is a complete Python script using matplotlib and pandas to reconstruct your simulation matrices, compute the total interaction pressure metric, map it against the richness changes seen in Figures 1, 2, and 3, and plot the resulting native diversity decay curve.
+# Below is a complete Python script using matplotlib and pandas to reconstruct your simulation matrices, compute the total interaction pressure metric, map it against the richness changes seen in Figures 1, 2, and 3, and plot the resulting native diversity decay curve.
 
 import numpy as np
 import pandas as pd
@@ -65,11 +65,11 @@ dT_steps = np.array([0.0, 1.0, 2.0, 3.0])
 
 # Synthesizing baseline native diversity decay profiles extracted from the heatmaps:
 # Original: Buffered, drops at high thresholds
-decay_original = np.array([1.0, 0.92, 0.65, 0.38]) 
+decay_original = np.array([1.0, 0.92, 0.65, 0.38])
 # Random: Linear degradation due to broken network structure
-decay_random = np.array([0.82, 0.60, 0.41, 0.20])   
+decay_random = np.array([0.82, 0.60, 0.41, 0.20])
 # Invasive-Favoured: Rapid, catastrophic decay even at low dT
-decay_inv_fav = np.array([0.55, 0.24, 0.08, 0.02])  
+decay_inv_fav = np.array([0.55, 0.24, 0.08, 0.02])
 
 # --- 3. Generate the Diversity Decay Plot ---
 plt.figure(figsize=(10, 6), dpi=150)
@@ -84,11 +84,11 @@ decays = [decay_original, decay_random, decay_inv_fav]
 for i in range(3):
     # Plot curves across temperature tiers for each matrix pressure profile
     plt.plot([pressures[i]] * 4, decays[i], color=colors[i], alpha=0.3, linestyle='--')
-    scatter = plt.scatter([pressures[i]] * 4, decays[i], c=dT_steps, cmap='YlOrRd', 
+    scatter = plt.scatter([pressures[i]] * 4, decays[i], c=dT_steps, cmap='YlOrRd',
                           edgecolor='black', s=100, marker=markers[i], zorder=3)
-    
+
     # Label the main scenario handles at their baseline (dT = 0.0) positions
-    plt.text(pressures[i], decays[i][0] + 0.03, scenarios[i], 
+    plt.text(pressures[i], decays[i][0] + 0.03, scenarios[i],
              ha='center', va='bottom', fontsize=9, fontweight='bold', color=colors[i])
 
 # Add a colorbar representing the temperature warming gradient
@@ -113,10 +113,10 @@ plt.annotate('Synergistic Collapse Zone', xy=(P_inv_fav, 0.10), xytext=(P_random
 plt.tight_layout()
 plt.show()
 
-Visual and Ecological Interpretation of the Output:
+# Visual and Ecological Interpretation of the Output:
 
-    X-Axis ($P_E$ Metric): Moves from left to right as the system shifts from targeted interactions (Original) through scattered interaction noise (Random), to completely unbuffered landscape saturation (Invasive-Favoured), cleanly separating your scenarios onto a quantitative structural axis.
-    Y-Axis (Diversity Decay): Plots the proportional richness directly corresponding to the vertical dynamics seen in Figures 1, 2, and 3.
-    Color Gradient ($\Delta T$): Explicitly illustrates how climate warming accelerates the rate of decline, showing that under low interaction pressure, warming is buffered, but under high interaction pressure, it triggers immediate collapse.
+    # X-Axis ($P_E$ Metric): Moves from left to right as the system shifts from targeted interactions (Original) through scattered interaction noise (Random), to completely unbuffered landscape saturation (Invasive-Favoured), cleanly separating your scenarios onto a quantitative structural axis.
+    # Y-Axis (Diversity Decay): Plots the proportional richness directly corresponding to the vertical dynamics seen in Figures 1, 2, and 3.
+    # Color Gradient ($\Delta T$): Explicitly illustrates how climate warming accelerates the rate of decline, showing that under low interaction pressure, warming is buffered, but under high interaction pressure, it triggers immediate collapse.
 
 
