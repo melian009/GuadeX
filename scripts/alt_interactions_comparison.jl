@@ -7,17 +7,18 @@
 # Usage:
 #   julia --project=. scripts/alt_interactions_comparison.jl
 #
-#   Optional arguments (named, any subset):
-#     -c, --cost VALUE       upstream_cost (default 0.01; also plots 0.5)
-#     -p, --pass SCENARIO    passability scenario (default "baseline")
+#   Optional arguments (any subset):
 #     -b, --base-dir PATH    base results directory (default "results/sensitivity_alt_interactions")
 #     -h, --help             show help
 #
 #   Examples:
 #     julia --project=. scripts/alt_interactions_comparison.jl
-#     julia --project=. scripts/alt_interactions_comparison.jl --pass blocked
-#     julia --project=. scripts/alt_interactions_comparison.jl -c 0.05 -p blocked
 #     julia --project=. scripts/alt_interactions_comparison.jl --base-dir other_results
+#     julia --project=. scripts/alt_interactions_comparison.jl -b custom/sims
+#
+#   The script discovers uc and passability combinations from the directory
+#   structure under the base results directory (upstream_costs × pass_scenarios
+#   are taken from UPSTREAM_COSTS and PASS_SCENARIOS constants).
 #
 # Output:
 #   results/sensitivity_alt_interactions/comparison_plots/
@@ -487,37 +488,20 @@ end
 # =============================================================================
 
 function parse_args()
-    uc_target = 0.01
-    pass_target = "baseline"
     base_dir = DEFAULT_BASE_RESULTS_DIR
     i = 1
     while i <= length(ARGS)
         arg = ARGS[i]
-        if arg in ("--cost", "-c")
-            i += 1
-            if i > length(ARGS); error("--cost requires a value"); end
-            uc_target = parse(Float64, ARGS[i])
-        elseif startswith(arg, "--cost=")
-            uc_target = parse(Float64, arg[8:end])
-        elseif arg in ("--pass", "-p")
-            i += 1
-            if i > length(ARGS); error("--pass requires a value"); end
-            pass_target = ARGS[i]
-        elseif startswith(arg, "--pass=")
-            pass_target = arg[8:end]
-        elseif arg in ("--base-dir", "-b")
+        if arg in ("--base-dir", "-b")
             i += 1
             if i > length(ARGS); error("--base-dir requires a value"); end
             base_dir = ARGS[i]
         elseif startswith(arg, "--base-dir=")
             base_dir = arg[12:end]
         elseif arg in ("--help", "-h")
-            println(strip(read(@__FILE__, String)) == read(@__FILE__, String) ? "" : "")
             println("Usage: julia --project=. scripts/alt_interactions_comparison.jl [options]")
             println()
             println("Options:")
-            println("  --cost, -c VALUE       Upstream cost (default: 0.01)")
-            println("  --pass, -p SCENARIO    Passability scenario (default: baseline)")
             println("  --base-dir, -b PATH    Base results directory (default: $DEFAULT_BASE_RESULTS_DIR)")
             println("  --help, -h             Show this help")
             exit(0)
@@ -526,7 +510,7 @@ function parse_args()
         end
         i += 1
     end
-    return uc_target, pass_target, base_dir
+    return base_dir
 end
 
 function main()
@@ -534,11 +518,11 @@ function main()
     println("Alternative Interaction Matrix Comparison Plots")
     println("="^60)
 
-    uc_target, pass_target, base_dir = parse_args()
+    base_dir = parse_args()
 
     output_dir = make_output_dir(base_dir)
 
-    println("\nSettings: default uc = $(uc_target), passability = $(pass_target), base_dir = $(base_dir)")
+    println("\nbase_dir = $(base_dir)")
     mkpath(output_dir)
 
     println("\nLoading site_df for subcatchment mapping...")
