@@ -7,6 +7,7 @@ using LinearAlgebra
 using JLD2
 using Guadex
 using Random
+using Dates
 
 # =============================================================================
 # Sensitivity sweep with alternative interaction matrices
@@ -213,7 +214,7 @@ println("="^60)
 println("Alternative Interaction Matrix Sensitivity Analysis")
 println("="^60)
 
-base_output_dir = "results/sensitivity_alt_interactions"
+base_output_dir = "results/sensitivity_alt_interactions_$(Dates.format(Dates.now(), "yyyy-mm-dd_HHMMSS"))"
 mkpath(base_output_dir)
 
 println("\nLoading base data (once)...")
