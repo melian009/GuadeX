@@ -24,6 +24,7 @@ using Dates
 const DAYS_PER_YEAR = 365
 const SIMULATION_YEARS = 3
 const T_SPAN = (0.0, Float64(SIMULATION_YEARS * DAYS_PER_YEAR))
+const THERMAL_SIGMA_MULTIPLIER = 1.0  # factor applied to thermal_sigmas (default 1.0, no change)
 
 const NATIVE_SPECIES = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO"]
 const INVASIVE_SPECIES = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
@@ -128,7 +129,8 @@ function classify_species_indices(all_species, target_group)
 end
 
 function run_single_simulation(data_base, temp_increase, upstream_cost, passability_dict;
-    simulation_years=SIMULATION_YEARS, interaction_matrix=nothing)
+    simulation_years=SIMULATION_YEARS, interaction_matrix=nothing,
+    thermal_sigma_multiplier=THERMAL_SIGMA_MULTIPLIER)
 
     t_span = (0.0, Float64(simulation_years * DAYS_PER_YEAR))
 
@@ -144,7 +146,7 @@ function run_single_simulation(data_base, temp_increase, upstream_cost, passabil
         copy(data_base.params.temperatures) .+ temp_increase,
         copy(data_base.params.habitat_suitability),
         copy(data_base.params.thermal_optima),
-        copy(data_base.params.thermal_sigmas),
+        copy(data_base.params.thermal_sigmas) .* thermal_sigma_multiplier,
         copy(data_base.params.carrying_capacity)
     )
 
@@ -210,12 +212,38 @@ end
 # --- Main Sweep Loop ---
 # =============================================================================
 
+thermal_sigma_multiplier = THERMAL_SIGMA_MULTIPLIER
+i = 1
+while i <= length(ARGS)
+    arg = ARGS[i]
+    if arg in ("--sigma", "-s")
+        i += 1
+        if i > length(ARGS); error("--sigma requires a value"); end
+        thermal_sigma_multiplier = parse(Float64, ARGS[i])
+    elseif startswith(arg, "--sigma=")
+        thermal_sigma_multiplier = parse(Float64, arg[9:end])
+    elseif arg in ("--help", "-h")
+        println("Usage: julia --project=. run_alt_interactions.jl [options]")
+        println()
+        println("Options:")
+        println("  --sigma, -s VALUE    Thermal sigma multiplier (default: $THERMAL_SIGMA_MULTIPLIER)")
+        println("  --help, -h           Show this help")
+        exit(0)
+    else
+        error("Unknown argument: $arg (use --help for usage)")
+    end
+    i += 1
+end
+
 println("="^60)
 println("Alternative Interaction Matrix Sensitivity Analysis")
 println("="^60)
 
-base_output_dir = "results/sensitivity_alt_interactions_$(Dates.format(Dates.now(), "yyyy-mm-dd_HHMMSS"))_temp=$(join(temperature_increases, "-"))_uc=$(join(upstream_costs, "-"))"
+base_output_dir = "results/sensitivity_alt_interactions_$(Dates.format(Dates.now(), "yyyy-mm-dd_HHMMSS"))_temp=$(join(temperature_increases, "-"))_uc=$(join(upstream_costs, "-"))_sigma=$(thermal_sigma_multiplier)"
 mkpath(base_output_dir)
+
+println("\nSettings: sigma_multiplier = $(thermal_sigma_multiplier)")
+println()
 
 println("\nLoading base data (once)...")
 data_base = prepare_ode_data(upstream_cost = 0.05)
@@ -253,7 +281,8 @@ for (matrix_name, matrix) in matrices
 
                 sol, pass_vec = run_single_simulation(
                     data_base, dt, uc, pass_dict;
-                    interaction_matrix=matrix
+                    interaction_matrix=matrix,
+                    thermal_sigma_multiplier=thermal_sigma_multiplier
                 )
 
                 output_jld2 = joinpath(run_dir, "simulation_output.jld2")
@@ -267,7 +296,8 @@ for (matrix_name, matrix) in matrices
                     simulation_years=SIMULATION_YEARS,
                     passability_scenario=pass_name,
                     passability_vector=pass_vec,
-                    interaction_matrix_type=matrix_name
+                    interaction_matrix_type=matrix_name,
+                    thermal_sigma_multiplier=thermal_sigma_multiplier
                 )
 
                 fig_biomass = plot_avg_total_biomass(sol, data_base.sites, data_base.species)
