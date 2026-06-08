@@ -259,6 +259,7 @@ function plot_overall_comparison_single(all_data, uc, pass_name, output_dir)
         ref_val = compute_mean_end_richness(data["original"][0.0])
     end
 
+    has_plots = false
     for matrix_name in MATRIX_NAMES
         if !haskey(data, matrix_name)
             continue
@@ -286,9 +287,12 @@ function plot_overall_comparison_single(all_data, uc, pass_name, output_dir)
                label = MATRIX_DISPLAY[matrix_name])
         scatter!(ax, dts, ratios, color = marker_colors, marker = MATRIX_MARKERS[matrix_name],
                  markersize = 14, strokecolor = MATRIX_COLORS[matrix_name], strokewidth = 1.5)
+        has_plots = true
     end
 
-    axislegend(ax, position = :rt, fontsize = 11, backgroundcolor = (:white, 0.7), framevisible = true)
+    if has_plots
+        axislegend(ax, position = :rt, fontsize = 11, backgroundcolor = (:white, 0.7), framevisible = true)
+    end
 
     Colorbar(fig[1, 2], colormap = DT_CMAP, limits = (0, 3),
              label = "Climate Warming Stress\nGradient (ΔT in °C)",
