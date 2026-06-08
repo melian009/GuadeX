@@ -7,13 +7,17 @@
 # Usage:
 #   julia --project=. scripts/alt_interactions_comparison.jl
 #
-#   Optional arguments:
-#     arg1 (Float64): upstream_cost (default 0.01; also plots 0.5)
-#     arg2 (String):  passability scenario (default "baseline")
+#   Optional arguments (named, any subset):
+#     -c, --cost VALUE       upstream_cost (default 0.01; also plots 0.5)
+#     -p, --pass SCENARIO    passability scenario (default "baseline")
+#     -b, --base-dir PATH    base results directory (default "results/sensitivity_alt_interactions")
+#     -h, --help             show help
 #
 #   Examples:
 #     julia --project=. scripts/alt_interactions_comparison.jl
-#     julia --project=. scripts/alt_interactions_comparison.jl 0.05 blocked
+#     julia --project=. scripts/alt_interactions_comparison.jl --pass blocked
+#     julia --project=. scripts/alt_interactions_comparison.jl -c 0.05 -p blocked
+#     julia --project=. scripts/alt_interactions_comparison.jl --base-dir other_results
 #
 # Output:
 #   results/sensitivity_alt_interactions/comparison_plots/
@@ -43,8 +47,11 @@ const DAYS_PER_YEAR = 365
 const FINAL_YEAR = 3
 const RICHNESS_THRESHOLD = 0.1
 
-const BASE_RESULTS_DIR = "results/sensitivity_alt_interactions"
-const OUTPUT_DIR = joinpath(BASE_RESULTS_DIR, "comparison_plots")
+const DEFAULT_BASE_RESULTS_DIR = "results/sensitivity_alt_interactions"
+
+function make_output_dir(base_dir)
+    return joinpath(base_dir, "comparison_plots")
+end
 
 const NATIVE_SPECIES_CODES = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO"]
 
@@ -96,8 +103,8 @@ function compute_native_richness_per_site(u_vec, n_sites, n_species, native_idx)
     return richness
 end
 
-function load_single_result(matrix_name, dT, uc, pass_name)
-    jld2_path = joinpath(BASE_RESULTS_DIR, matrix_name, "dT_$(dT)C", "uc_$(uc)", pass_name, "simulation_output.jld2")
+function load_single_result(base_dir, matrix_name, dT, uc, pass_name)
+    jld2_path = joinpath(base_dir, matrix_name, "dT_$(dT)C", "uc_$(uc)", pass_name, "simulation_output.jld2")
     if !isfile(jld2_path)
         return nothing
     end
@@ -141,7 +148,7 @@ end
 # Plot 1: Overall comparison — multi-panel (uc × pass)
 # =============================================================================
 
-function plot_overall_comparison_grid(all_data)
+function plot_overall_comparison_grid(all_data, output_dir)
     n_uc = length(UPSTREAM_COSTS)
     n_pass = length(PASS_SCENARIOS)
 
@@ -220,13 +227,13 @@ function plot_overall_comparison_grid(all_data)
           "Climate Warming Stress Gradient (ΔT in °C)",
           fontsize = 11)
 
-    out_path = joinpath(OUTPUT_DIR, "comparison_overall_grid.png")
+    out_path = joinpath(output_dir, "comparison_overall_grid.png")
     save(out_path, fig, size = (380 * n_pass + 80, 320 * n_uc + 60))
     println("Saved: $out_path")
     return fig
 end
 
-function plot_overall_comparison_single(all_data, uc, pass_name)
+function plot_overall_comparison_single(all_data, uc, pass_name, output_dir)
     key = (uc, pass_name)
     if !haskey(all_data, key)
         println("  No data for uc=$(uc), pass=$(pass_name)")
@@ -291,7 +298,7 @@ function plot_overall_comparison_single(all_data, uc, pass_name)
     colsize!(fig.layout, 2, Relative(0.08))
     colgap!(fig.layout, 20)
 
-    out_path = joinpath(OUTPUT_DIR, "comparison_overall_uc$(uc)_$(pass_name).png")
+    out_path = joinpath(output_dir, "comparison_overall_uc$(uc)_$(pass_name).png")
     save(out_path, fig, size = (1000, 650))
     println("Saved: $out_path")
     return fig
@@ -301,7 +308,7 @@ end
 # Plot 2: Per-subcatchment heatmap — single (uc, pass) combo
 # =============================================================================
 
-function plot_subcatchment_heatmaps(all_data, all_sc_data, site_to_sc, uc, pass_name)
+function plot_subcatchment_heatmaps(all_data, all_sc_data, site_to_sc, uc, pass_name, output_dir)
     key = (uc, pass_name)
     if !haskey(all_data, key) || !haskey(all_sc_data, key)
         println("No data for uc=$(uc), pass=$(pass_name)")
@@ -386,7 +393,7 @@ function plot_subcatchment_heatmaps(all_data, all_sc_data, site_to_sc, uc, pass_
     colsize!(fig.layout, 4, Relative(0.05))
     colgap!(fig.layout, 10)
 
-    out_path = joinpath(OUTPUT_DIR, "comparison_subcatchment_heatmap_uc$(uc)_$(pass_name).png")
+    out_path = joinpath(output_dir, "comparison_subcatchment_heatmap_uc$(uc)_$(pass_name).png")
     save(out_path, fig, size = (1600, 500))
     println("Saved: $out_path")
     return fig
@@ -396,7 +403,7 @@ end
 # Data Collection
 # =============================================================================
 
-function collect_all_results()
+function collect_all_results(base_dir)
     all_data = Dict{Tuple{Float64, String}, Dict{String, Dict{Float64, Any}}}()
     all_sc_data = Dict{Tuple{Float64, String}, Dict{String, Dict{String, Dict{Float64, Float64}}}}()
 
@@ -405,7 +412,7 @@ function collect_all_results()
             key = (uc, pass_name)
             has_any = false
             for matrix_name in MATRIX_NAMES
-                jld2_path = joinpath(BASE_RESULTS_DIR, matrix_name, "dT_0.0C", "uc_$(uc)", pass_name, "simulation_output.jld2")
+                jld2_path = joinpath(base_dir, matrix_name, "dT_0.0C", "uc_$(uc)", pass_name, "simulation_output.jld2")
                 if isfile(jld2_path)
                     has_any = true
                     break
@@ -422,7 +429,7 @@ function collect_all_results()
                 data[matrix_name] = Dict{Float64, Any}()
                 sc_data_matrix[matrix_name] = Dict{String, Dict{Float64, Float64}}()
                 for dT in TEMPERATURE_INCREASES
-                    r = load_single_result(matrix_name, dT, uc, pass_name)
+                    r = load_single_result(base_dir, matrix_name, dT, uc, pass_name)
                     if r === nothing
                         continue
                     end
@@ -479,22 +486,60 @@ end
 # Main
 # =============================================================================
 
+function parse_args()
+    uc_target = 0.01
+    pass_target = "baseline"
+    base_dir = DEFAULT_BASE_RESULTS_DIR
+    i = 1
+    while i <= length(ARGS)
+        arg = ARGS[i]
+        if arg in ("--cost", "-c")
+            i += 1
+            if i > length(ARGS); error("--cost requires a value"); end
+            uc_target = parse(Float64, ARGS[i])
+        elseif startswith(arg, "--cost=")
+            uc_target = parse(Float64, arg[8:end])
+        elseif arg in ("--pass", "-p")
+            i += 1
+            if i > length(ARGS); error("--pass requires a value"); end
+            pass_target = ARGS[i]
+        elseif startswith(arg, "--pass=")
+            pass_target = arg[8:end]
+        elseif arg in ("--base-dir", "-b")
+            i += 1
+            if i > length(ARGS); error("--base-dir requires a value"); end
+            base_dir = ARGS[i]
+        elseif startswith(arg, "--base-dir=")
+            base_dir = arg[12:end]
+        elseif arg in ("--help", "-h")
+            println(strip(read(@__FILE__, String)) == read(@__FILE__, String) ? "" : "")
+            println("Usage: julia --project=. scripts/alt_interactions_comparison.jl [options]")
+            println()
+            println("Options:")
+            println("  --cost, -c VALUE       Upstream cost (default: 0.01)")
+            println("  --pass, -p SCENARIO    Passability scenario (default: baseline)")
+            println("  --base-dir, -b PATH    Base results directory (default: $DEFAULT_BASE_RESULTS_DIR)")
+            println("  --help, -h             Show this help")
+            exit(0)
+        else
+            error("Unknown argument: $arg (use --help for usage)")
+        end
+        i += 1
+    end
+    return uc_target, pass_target, base_dir
+end
+
 function main()
     println("="^60)
     println("Alternative Interaction Matrix Comparison Plots")
     println("="^60)
 
-    uc_target = 0.01
-    pass_target = "baseline"
-    if length(ARGS) >= 1
-        uc_target = parse(Float64, ARGS[1])
-    end
-    if length(ARGS) >= 2
-        pass_target = ARGS[2]
-    end
+    uc_target, pass_target, base_dir = parse_args()
 
-    println("\nSettings: default uc = $(uc_target), passability = $(pass_target)")
-    mkpath(OUTPUT_DIR)
+    output_dir = make_output_dir(base_dir)
+
+    println("\nSettings: default uc = $(uc_target), passability = $(pass_target), base_dir = $(base_dir)")
+    mkpath(output_dir)
 
     println("\nLoading site_df for subcatchment mapping...")
     data_base = prepare_ode_data(upstream_cost = 0.05)
@@ -502,7 +547,7 @@ function main()
     println("  $(length(all_scs)) subcatchments found.")
 
     println("\nLoading simulation results across all uc × pass combos...")
-    all_data, all_sc_data = collect_all_results()
+    all_data, all_sc_data = collect_all_results(base_dir)
     n_total = sum(sum(length(keys(data[m])) for m in keys(data)) for (_, data) in all_data)
     println("  Loaded $(n_total) total simulation result sets across $(length(all_data)) parameter combos.")
 
@@ -510,23 +555,23 @@ function main()
     all_sc_data = compute_subcatchment_ratios(all_data, all_sc_data, site_to_sc)
 
     println("\n=== Plot 1: Overall comparison grid (all uc × pass) ===")
-    plot_overall_comparison_grid(all_data)
+    plot_overall_comparison_grid(all_data, output_dir)
 
     println("\n=== Plot 1b: Individual overall comparison plots (all uc × pass) ===")
     for (key, _) in all_data
         uc_p, pass_p = key
-        plot_overall_comparison_single(all_data, uc_p, pass_p)
+        plot_overall_comparison_single(all_data, uc_p, pass_p, output_dir)
     end
 
     println("\n=== Plot 2: Per-subcatchment heatmaps (all uc × pass) ===")
     for (key, _) in all_data
         uc_h, pass_h = key
         if haskey(all_sc_data, key)
-            plot_subcatchment_heatmaps(all_data, all_sc_data, site_to_sc, uc_h, pass_h)
+            plot_subcatchment_heatmaps(all_data, all_sc_data, site_to_sc, uc_h, pass_h, output_dir)
         end
     end
 
-    println("\nDone. Output saved to: $(abspath(OUTPUT_DIR))")
+    println("\nDone. Output saved to: $(abspath(output_dir))")
 end
 
 main()
