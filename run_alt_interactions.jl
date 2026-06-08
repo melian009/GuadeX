@@ -32,7 +32,7 @@ all_subcatchments = [1.1, 1.2, 1.3, 1.4, 2.2, 3.0, 6.0, 7.0, 9.0, 10.0, 11.3, 11
 
 # --- Parameter Grid (reduced for faster iteration; expand to match original sweep if needed) ---
 # Full grid from run_sensitivity_report.jl:
-  temperature_increases = [0.0, 1.0, 2.0, 3.0]
+  temperature_increases = [0.0, 4.0, 8.0, 12.0]
 #   upstream_costs       = [0.01, 0.05, 0.1, 0.5]
 #   passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
 # temperature_increases = [0.0, 3.0]
@@ -214,7 +214,7 @@ println("="^60)
 println("Alternative Interaction Matrix Sensitivity Analysis")
 println("="^60)
 
-base_output_dir = "results/sensitivity_alt_interactions_$(Dates.format(Dates.now(), "yyyy-mm-dd_HHMMSS"))"
+base_output_dir = "results/sensitivity_alt_interactions_$(Dates.format(Dates.now(), "yyyy-mm-dd_HHMMSS"))_temp=$(join(temperature_increases, "-"))_uc=$(join(upstream_costs, "-"))"
 mkpath(base_output_dir)
 
 println("\nLoading base data (once)...")
