@@ -73,7 +73,28 @@ const MATRIX_MARKERS = Dict(
     "invasive_favoring"  => :utriangle,
 )
 
-const TEMPERATURE_INCREASES = [0.0, 1.0, 2.0, 3.0]
+TEMPERATURE_INCREASES = [0.0, 1.0, 2.0, 3.0]
+
+function discover_temperature_increases(base_dir)
+    vals = Float64[]
+    for matrix_name in MATRIX_NAMES
+        matrix_dir = joinpath(base_dir, matrix_name)
+        if !isdir(matrix_dir)
+            continue
+        end
+        for entry in readdir(matrix_dir)
+            m = match(r"^dT_([\d.]+)C$", entry)
+            if m !== nothing && isdir(joinpath(matrix_dir, entry))
+                push!(vals, parse(Float64, m.captures[1]))
+            end
+        end
+        if !isempty(vals)
+            break
+        end
+    end
+    sort!(unique!(vals))
+    return vals
+end
 const DT_CMAP = :YlOrRd
 const UPSTREAM_COSTS = [0.01, 0.5]
 const PASS_SCENARIOS = ["baseline", "reduced_passability", "blocked"]
@@ -166,13 +187,15 @@ function plot_overall_comparison_grid(all_data, output_dir)
             ax = Axis(fig[ui, pi],
                 xlabel = ui == n_uc ? "ΔT (°C)" : "",
                 ylabel = pi == 1 ? "S / S₀ (ref: Original ΔT=0)" : "",
-                xticks = (0:1:3, ["0", "1", "2", "3"]),
+                xticks = (TEMPERATURE_INCREASES, [v == round(v) ? string(Int(v)) : string(v) for v in TEMPERATURE_INCREASES]),
                 yminorticksvisible = true,
                 yminorticks = IntervalsBetween(2),
                 title = "uc=$(uc)  $(pass_name)",
                 titlefont = :regular,
             )
-            xlims!(ax, -0.3, 3.3)
+            dt_range = maximum(TEMPERATURE_INCREASES) - minimum(TEMPERATURE_INCREASES)
+            dt_pad = max(0.3, dt_range * 0.1)
+            xlims!(ax, minimum(TEMPERATURE_INCREASES) - dt_pad, maximum(TEMPERATURE_INCREASES) + dt_pad)
 
             ref_val = NaN
             if haskey(data, "original") && haskey(data["original"], 0.0)
@@ -218,8 +241,9 @@ function plot_overall_comparison_grid(all_data, output_dir)
            "Matrix Type", orientation = :vertical, framevisible = false,
            tellwidth = false, tellheight = false)
 
-    Colorbar(fig[2:3, n_pass + 1], colormap = DT_CMAP, limits = (0, 3),
-             label = "ΔT (°C)", ticks = 0:1:3, vertical = true, width = 25,
+    dt_min, dt_max = minimum(TEMPERATURE_INCREASES), maximum(TEMPERATURE_INCREASES)
+    Colorbar(fig[2:3, n_pass + 1], colormap = DT_CMAP, limits = (dt_min, dt_max),
+             label = "ΔT (°C)", ticks = TEMPERATURE_INCREASES, vertical = true, width = 25,
              tellwidth = false, tellheight = true)
 
     Label(fig[0, :], "Native Richness Retention (S/S₀) vs Warming Across Parameter Combinations",
@@ -246,13 +270,16 @@ function plot_overall_comparison_single(all_data, uc, pass_name, output_dir)
     ax = Axis(fig[1, 1],
         xlabel = "Climate Warming Stress Gradient (ΔT in °C)",
         ylabel = "Proportional Native Species Richness Remaining (S / S₀)",
-        xticks = (0:1:3, ["0", "1", "2", "3"]),
+        xticks = (TEMPERATURE_INCREASES, [v == round(v) ? string(Int(v)) : string(v) for v in TEMPERATURE_INCREASES]),
         yminorticksvisible = true,
         yminorticks = IntervalsBetween(2),
         title = "Native Richness Retention vs Warming\n(uc = $(uc), passability = $(pass_name))",
         titlefont = :bold,
     )
-    xlims!(ax, -0.3, 3.3)
+    dt_min, dt_max = minimum(TEMPERATURE_INCREASES), maximum(TEMPERATURE_INCREASES)
+    dt_range = dt_max - dt_min
+    dt_pad = max(0.3, dt_range * 0.1)
+    xlims!(ax, dt_min - dt_pad, dt_max + dt_pad)
 
     ref_val = NaN
     if haskey(data, "original") && haskey(data["original"], 0.0)
@@ -294,9 +321,9 @@ function plot_overall_comparison_single(all_data, uc, pass_name, output_dir)
         axislegend(ax, position = :rt, fontsize = 11, backgroundcolor = (:white, 0.7), framevisible = true)
     end
 
-    Colorbar(fig[1, 2], colormap = DT_CMAP, limits = (0, 3),
+    Colorbar(fig[1, 2], colormap = DT_CMAP, limits = (dt_min, dt_max),
              label = "Climate Warming Stress\nGradient (ΔT in °C)",
-             ticks = 0:1:3, ticklabelsize = 10, labelsize = 12,
+             ticks = TEMPERATURE_INCREASES, ticklabelsize = 10, labelsize = 12,
              vertical = true, width = 25, height = Relative(0.6))
 
     colsize!(fig.layout, 1, Relative(0.72))
@@ -533,6 +560,9 @@ function main()
     data_base = prepare_ode_data(upstream_cost = 0.05)
     site_to_sc, all_scs = build_subcatchment_map(data_base.site_df, data_base.sites)
     println("  $(length(all_scs)) subcatchments found.")
+
+    global TEMPERATURE_INCREASES = discover_temperature_increases(base_dir)
+    println("  Discovered dT values: $(TEMPERATURE_INCREASES)")
 
     println("\nLoading simulation results across all uc × pass combos...")
     all_data, all_sc_data = collect_all_results(base_dir)
