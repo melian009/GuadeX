@@ -51,6 +51,14 @@ where:
 - $\text{opt}_s$ is the optimal temperature for species $s$.
 - $\sigma_s$ is the thermal tolerance (standard deviation) of species $s$, derived from the temperature range as $\sigma_s \approx \text{range}/6$.
 
+The parameter $\sigma_s$ (thermal breadth) controls the shape of the thermal niche:
+- At $T_i = \text{opt}_s$, the filter equals 1.0 (maximum growth), regardless of $\sigma_s$.
+- At $T_i = \text{opt}_s \pm \sigma_s$, the filter drops to $e^{-1/2} \approx 0.607$.
+- At $T_i = \text{opt}_s \pm 2\sigma_s$, the filter drops to $e^{-2} \approx 0.135$.
+- A smaller $\sigma_s$ means a narrower thermal niche (specialist species: growth decays rapidly as temperature deviates from optimum).
+- A larger $\sigma_s$ means a broader thermal niche (generalist species: tolerant of wider temperature ranges).
+- Two species with the same optimum but different $\sigma_s$ at a given temperature will experience different growth reductions. For example, with $T_i - \text{opt}_s = +3^\circ\text{C}$: a species with $\sigma_s = 3^\circ\text{C}$ grows at 61% of maximum, while a species with $\sigma_s = 6^\circ\text{C}$ grows at 88%.
+
 #### Habitat Suitability
 - $h_i$ is the habitat suitability index at site $i$, derived from the Trophic State Index (IET). Higher IET values indicate lower suitability, and $h_i$ is normalized to range from 0.1 to 1.0.
 
@@ -62,12 +70,15 @@ The spatial component models the movement of individuals through the river netwo
 
 The base dispersal rate $m_{ij}$ from site $i$ to site $j$ is defined as:
 
-$$m_{ij} = \frac{x_{ij} \cdot p_{ij}}{d_{ij}}$$
+$$m_{ij} = D_{\text{median}} \cdot \frac{x_{ij} \cdot p_{ij}}{d_{ij}}$$
 
 where:
+- $D_{\text{median}} \approx 0.0274 \ \text{km/day}$ is the median daily dispersal speed (derived from literature annual dispersal rates: 10 km/year ÷ 365 days/year).
 - $d_{ij}$ is the hydrological distance between site $i$ and $j$ (in km).
 - $x_{ij}$ is the 3D connectivity factor (elevation cost).
 - $p_{ij}$ is the dam passability factor (ranging from 0.0 to 1.0).
+
+Species-specific dispersal rates are obtained by scaling the base matrix per species: $m_{ij}^s = \text{dispersal\_scaling}_s \cdot m_{ij}$, where $\text{dispersal\_scaling}_s = D_s / D_{\text{median}}$.
 
 ### 3.2. Elevation Cost (Upstream vs. Downstream)
 
@@ -107,6 +118,7 @@ Loads data from `data/ABIOTIC/caracteristicas_peces_Guadalquivir_03-04-2018.csv`
 - Thermal optima are calculated as the midpoint of temperature ranges (`TEMPERATURE_C`)
 - Thermal breadth ($\sigma_s$) is approximated as $\sigma_s \approx \text{range}/6$
 - Max size (`MAX_SIZE_mm`) is available for reference
+- Species codes in the characteristics file use title case (e.g., `Ah`, `Sa`), while the density matrix uses uppercase (e.g., `AH`, `SA`). The lookup uses case-insensitive matching to correctly assign per-species thermal parameters.
 
 ### 4.2. Site Data (`load_site_data`)
 

@@ -1040,11 +1040,14 @@ function prepare_ode_data(;
 
     # Use thermal optimum and sigma (thermal breadth) from species characteristics
     # Sigma is derived from the temperature range in the data (sigma ≈ range/6)
+    sp_lookup = Dict(lowercase(r.SP) => (opt=r.thermal_optimum, sig=r.thermal_sigma) for r in eachrow(species_chars_df))
+
     for sp in species_codes
-        sp_row = findfirst(row -> row.SP == sp, eachrow(species_chars_df))
-        if sp_row !== nothing
-            push!(thermal_optima, species_chars_df.thermal_optimum[sp_row])
-            push!(thermal_sigmas, species_chars_df.thermal_sigma[sp_row])
+        key = lowercase(sp)
+        vals = get(sp_lookup, key, nothing)
+        if vals !== nothing
+            push!(thermal_optima, vals.opt)
+            push!(thermal_sigmas, vals.sig)
         else
             push!(thermal_optima, 15.0)
             push!(thermal_sigmas, 3.0)

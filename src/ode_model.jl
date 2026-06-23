@@ -30,6 +30,14 @@ struct MetacommunityParams{T<:Real, M<:AbstractMatrix{T}, V<:AbstractVector{T}, 
     carrying_capacity::V
 end
 
+const ANNUAL_DISPERSAL_RATES = Dict{String, Float64}(
+    "AB" => 0.3, "AH" => 0.2, "SP" => 3.0, "PW" => 27.5, "LS" => 20.0,
+    "SA" => 5.0, "IL" => 1.25, "CP" => 1.25, "IO" => 0.5,
+    "GH" => 25.0, "MS" => 17.5, "LG" => 25.0, "CC" => 20.0, "CG" => 10.0,
+    "AM" => 10.0, "OM" => 12.5, "EL" => 12.5, "GL" => 3.0, "TT" => 6.0,
+    "AA" => 5.0, "MC" => 75.0, "LR" => 75.0, "ST" => 12.5,
+)
+
 """
     gaussian_thermal_filter(temp, opt, sigma)
 
@@ -158,11 +166,15 @@ Dispersal rates from literature are reported as km/year and converted to daily:
 # References
 See docs/Fish Growth and Dispersal Data Request.md for full citations.
 
-Note: The base dispersal matrix uses the median species dispersal rate (5 km/year).
+Note: The base dispersal matrix uses the median species dispersal rate (10 km/year).
 Species-specific dispersal is handled via the dispersal_scaling vector in MetacommunityParams,
 which is applied per-species in the ODE function.
+
+The daily dispersal coefficient D_daily defaults to 10/365 km/day (the median of
+literature-derived annual dispersal rates). Callers that know the exact species codes
+should pass the dynamically computed median.
 """
-function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams)
+function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, D_daily::Float64=10.0/365.0)
     I = Int[]
     J = Int[]
     V = Float64[]
@@ -184,7 +196,7 @@ function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams)
 
             d_km = d_ij / 1000.0
 
-            rate = x * dams[i, j] / max(d_km, 0.001)
+            rate = D_daily * x * dams[i, j] / max(d_km, 0.001)
 
             push!(I, i)
             push!(J, j)
@@ -196,5 +208,7 @@ function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams)
 end
 
 function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, species_codes)
-    return precompute_dispersal_matrix(n_sites, distances, elevations, c, dams)
+    rates_for_median = Float64[get(ANNUAL_DISPERSAL_RATES, sp, 5.0) for sp in species_codes]
+    D_daily = median(rates_for_median) / 365.0
+    return precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, D_daily)
 end
