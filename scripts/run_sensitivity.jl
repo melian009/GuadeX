@@ -16,31 +16,50 @@ using Guadex
 # Results are saved in organized folder structure.
 # =============================================================================
 
-const DAYS_PER_YEAR = 365
-const SIMULATION_YEARS = 1
+# --- Load run parameters (single source of truth: parameters.toml) ---
+const _GUADEX_ROOT = isfile(joinpath(@__DIR__, "parameters.jl")) ? (@__DIR__) : dirname(@__DIR__)
+include(joinpath(_GUADEX_ROOT, "parameters.jl"))
+using .SimulationParameters
+const GUADEX_PARAMS = SimulationParameters.load()
+SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obstacles", "subcatchments", "scenarios", "run_sensitivity")
+
+const DAYS_PER_YEAR = Int(GUADEX_PARAMS["general"]["days_per_year"])
+const SIMULATION_YEARS = Int(GUADEX_PARAMS["run_sensitivity"]["simulation_years"])
 const T_SPAN = (0.0, Float64(SIMULATION_YEARS * DAYS_PER_YEAR))
 
-all_subcatchments = [1.1, 1.2, 1.3, 1.4, 2.2, 3.0, 6.0, 7.0, 9.0, 10.0, 11.3, 11.5, 11.2, 11.1, 11.4, 12.0, 13.3, 13.2, 13.1, 14.0, 15.2, 15.1, 16.0, 17.0, 18.1, 18.3, 18.2, 19.0, 20.0, 21.0, 22.1, 22.4, 22.2, 23.0, 24.1, 24.2, 25.0, 26.1, 26.2, 26.3, 26.4, 26.5, 26.6, 27.0, 28.1, 28.2, 28.3, 28.4, 29.0, 30.1, 30.2, 30.3, 30.4, 30.5, 30.6, 30.7, 31.0, 32.4, 32.3, 32.1, 32.2, 33.0, 34.1, 34.2, 34.3, 34.4, 35.0, 36.1, 36.2, 36.3, 36.4, 37.0, 38.0, 39.0, 40.1, 40.2, 41.0]
+# Updated 2045 inputs.  CEDEX climate tables are loaded for provenance and
+# scenario selection; obstacle_mode=:overlay applies the spatial obstacle
+# overlay to the dispersal network.  Each value can be overridden per run via
+# its GUADEX_* environment variable (see docs/updated_inputs_simulations.md).
+const CEDEX_VAR_FILE = get(ENV, "GUADEX_CEDEX_VAR_FILE", GUADEX_PARAMS["inputs"]["cedex_var_file"])
+const CEDEX_UTS_FILE = get(ENV, "GUADEX_CEDEX_UTS_FILE", GUADEX_PARAMS["inputs"]["cedex_esc_uts_file"])
+const OBSTACLES_FILE = get(ENV, "GUADEX_OBSTACLES_FILE", GUADEX_PARAMS["inputs"]["obstacles_file"])
+const OBSTACLE_MODE = Symbol(get(ENV, "GUADEX_OBSTACLE_MODE", GUADEX_PARAMS["obstacles"]["mode"]))
+const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOLERANCE_M", string(GUADEX_PARAMS["obstacles"]["matching_tolerance_m"])))
+const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
+const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
 
 # =============================================================================
 # --- Define Parameter Grid ---
+# Grid values and scenario names are read from the [run_sensitivity] section
+# of parameters.toml.
 # =============================================================================
 
-upstream_costs = [0.01, 0.05, 0.1, 0.5]
+all_subcatchments = SimulationParameters.float_vector(GUADEX_PARAMS["subcatchments"]["all"])
 
-exploitation_scenarios = Dict{String, Dict{Float64, Float64}}(
-    "baseline" => Dict{Float64, Float64}(a => 1.0 for a in all_subcatchments),
-    "low_exploitation" => Dict{Float64, Float64}(a => 0.9 for a in all_subcatchments),
-    "medium_exploitation" => Dict{Float64, Float64}(a => 0.7 for a in all_subcatchments),
-    "high_exploitation" => Dict{Float64, Float64}(a => 0.5 for a in all_subcatchments),
-)
+upstream_costs = SimulationParameters.float_vector(GUADEX_PARAMS["run_sensitivity"]["upstream_costs"])
 
-passability_scenarios = Dict{String, Dict{Float64, Float64}}(
-    "baseline" => Dict{Float64, Float64}(a => 1.0 for a in all_subcatchments),
-    "improved_passability" => Dict{Float64, Float64}(a => 1.5 for a in all_subcatchments),
-    "reduced_passability" => Dict{Float64, Float64}(a => 0.5 for a in all_subcatchments),
-    "blocked" => Dict{Float64, Float64}(a => 0.1 for a in all_subcatchments),
-)
+exploitation_scenarios = SimulationParameters.scenario_library(
+    all_subcatchments, GUADEX_PARAMS["scenarios"]["exploitation"], GUADEX_PARAMS["run_sensitivity"]["exploitation_scenarios"])
+
+passability_scenarios = SimulationParameters.scenario_library(
+    all_subcatchments, GUADEX_PARAMS["scenarios"]["passability"], GUADEX_PARAMS["run_sensitivity"]["passability_scenarios"])
+
+# Stop before data loading when GUADEX_CONFIG_ONLY=1 (configuration smoke test).
+if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
+    println("[parameters] configuration smoke test passed")
+    exit(0)
+end
 
 # =============================================================================
 # --- Helper Functions (from run_model.jl) ---
@@ -175,7 +194,16 @@ base_output_dir = "results/sensitivity"
 mkpath(base_output_dir)
 
 println("\nLoading base data (once)...")
-data_base = prepare_ode_data(upstream_cost = 0.05)
+data_base = prepare_ode_data(
+    upstream_cost = 0.05,
+    cedex_var_file = CEDEX_VAR_FILE,
+    cedex_esc_uts_file = CEDEX_UTS_FILE,
+    obstacles_file = OBSTACLES_FILE,
+    obstacle_mode = OBSTACLE_MODE,
+    obstacle_matching_tolerance = OBSTACLE_MATCHING_TOLERANCE,
+    obstacle_passability = OBSTACLE_PASSABILITY,
+    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY
+)
 
 total_runs = length(upstream_costs) * length(exploitation_scenarios) * length(passability_scenarios)
 current_run = 0
@@ -205,7 +233,16 @@ for uc in upstream_costs
                 exploitation_scenario = exp_name,
                 passability_scenario = pass_name,
                 exploitation_vector = exp_vec,
-                passability_vector = pass_vec
+                passability_vector = pass_vec,
+                cedex_var_file = CEDEX_VAR_FILE,
+                cedex_uts_file = CEDEX_UTS_FILE,
+                obstacles_file = OBSTACLES_FILE,
+                obstacle_mode = string(OBSTACLE_MODE),
+                obstacle_matching_tolerance_m = OBSTACLE_MATCHING_TOLERANCE,
+                obstacle_passability = OBSTACLE_PASSABILITY,
+                obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY,
+                obstacle_matched_count = count(data_base.obstacle_mapping_diagnostics.matched),
+                obstacle_total_count = nrow(data_base.obstacle_mapping_diagnostics)
             )
 
             fig_biomass = plot_avg_total_biomass(sol, data_base.sites, data_base.species)

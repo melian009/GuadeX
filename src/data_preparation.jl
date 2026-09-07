@@ -242,6 +242,307 @@ function load_species_density_data(density_file::String)
 end
 
 """
+    _normalise_cedex_scenario(value)
+
+Return a comparable scenario code while preserving the original labels in the
+loaded data.  The two CEDEX files currently use labels such as `SSP 585` and
+`SSP285`, so whitespace is removed but no spelling correction is attempted.
+"""
+function _normalise_cedex_scenario(value)
+    return uppercase(replace(strip(string(value)), r"\s+" => ""))
+end
+
+"""
+    load_cedex_var(file::AbstractString)
+
+Load the 2045 CEDEX basin-level projection table.  The source contains rows
+for precipitation (`PRE`), potential and actual evapotranspiration (`ETP`,
+`ETR`), recharge (`REC`), and runoff (`ESC`) under two scenarios.  The columns
+`A`--`U` are source region/classes and are intentionally not mapped to model
+sites here.  Duplicate source headers are retained by CSV.jl as unique names
+(e.g. `MAX` and `MAX_1`).
+"""
+function load_cedex_var(file::AbstractString)
+    println("Loading CEDEX basin projections from: $file")
+    df = CSV.read(file, DataFrame; normalizenames=false)
+    required = ["VAR", "ESCEN"]
+    missing_columns = setdiff(required, names(df))
+    isempty(missing_columns) || error("CEDEX VAR file is missing columns: $(join(missing_columns, ", "))")
+
+    # Keep source values and add a stable key for joins/lookups.  Do not infer
+    # whether these values are percentages, millimetres, or temperatures.
+    df.cedex_variable = uppercase.(string.(df[!, "VAR"]))
+    df.cedex_scenario = _normalise_cedex_scenario.(df[!, "ESCEN"])
+    numeric_columns = setdiff(names(df), ["VAR", "ESCEN", "cedex_variable", "cedex_scenario"])
+    for column in numeric_columns
+        df[!, column] = passmissing(Float64).(df[!, column])
+    end
+
+    println("Loaded $(nrow(df)) CEDEX basin projection rows")
+    return df
+end
+
+"""
+    load_cedex_esc_uts(file::AbstractString)
+
+Load the two-row-header CEDEX seasonal table in tidy form.  Each output row
+contains one UTS, scenario, measure (`percent` or `mm`), season, and value.
+`Media` and `Mediana` rows are retained with `row_type == \"summary\"`; callers
+can exclude them when constructing spatial inputs.
+"""
+function load_cedex_esc_uts(file::AbstractString)
+    println("Loading CEDEX seasonal UTS projections from: $file")
+    raw = CSV.read(file, DataFrame; header=false, types=String,
+        normalizenames=false, silencewarnings=true)
+    ncol(raw) >= 17 || error("CEDEX UTS file must contain at least 17 columns")
+
+    seasons = ["OND", "EFM", "AMJ", "JAS"]
+    # Source columns 2:17 are four groups of four seasonal values.  The first
+    # header row carries the scenario and measure for each group.
+    group_headers = [string(raw[1, 2 + 4 * group]) for group in 0:3]
+    out = DataFrame(
+        uts=String[], scenario=String[], measure=String[], season=String[],
+        value=Union{Missing,Float64}[], row_type=String[], source_row=Int[]
+    )
+
+    for row_number in 3:nrow(raw)
+        uts_value = raw[row_number, 1]
+        ismissing(uts_value) && continue
+        uts = strip(string(uts_value))
+        isempty(uts) && continue
+        row_type = uppercase(uts) in ("MEDIA", "MEDIANA") ? "summary" : "spatial"
+
+        for group in 0:3
+            header = strip(group_headers[group + 1])
+            isempty(header) && continue
+            tokens = split(header)
+            length(tokens) >= 3 || error("Unexpected CEDEX UTS header '$header'")
+            scenario = _normalise_cedex_scenario(tokens[2])
+            measure = lowercase(tokens[3]) == "%" ? "percent" : lowercase(tokens[3])
+
+            for season_index in 1:4
+                cell = raw[row_number, 2 + group * 4 + season_index - 1]
+                value = missing
+                if !ismissing(cell) && !isempty(strip(string(cell)))
+                    value = try
+                        parse(Float64, strip(string(cell)))
+                    catch
+                        missing
+                    end
+                end
+                push!(out, (uts, scenario, measure, seasons[season_index],
+                    value, row_type, row_number))
+            end
+        end
+    end
+
+    println("Loaded $(nrow(out)) tidy CEDEX UTS projection values")
+    return out
+end
+
+"""
+    select_cedex_uts(uts_df; uts, scenario, measure, season,
+                     include_summary=false)
+
+Select a single CEDEX UTS value.  This helper deliberately requires an
+explicit UTS, scenario, measure, and season so that a seasonal projection is
+never silently applied to all sites.
+"""
+function select_cedex_uts(uts_df::DataFrame; uts::AbstractString,
+                          scenario::AbstractString, measure::AbstractString,
+                          season::AbstractString, include_summary::Bool=false)
+    scenario_code = _normalise_cedex_scenario(scenario)
+    measure_code = lowercase(strip(measure))
+    season_code = uppercase(strip(season))
+    selected = filter(row -> row.uts == uts &&
+        row.scenario == scenario_code && row.measure == measure_code &&
+        row.season == season_code && (include_summary || row.row_type == "spatial"), uts_df)
+    nrow(selected) == 1 || error("Expected one CEDEX UTS value, found $(nrow(selected))")
+    return selected[1, :]
+end
+
+"""
+    load_obstacles(file::AbstractString)
+
+Load the 2026 inventory of obstacles that are not completely passable.  Raw
+Spanish categorical fields are retained.  Parsed convenience columns are
+added for coordinates, height, and the source `IF` index.  `IF` is not
+interpreted as a passability probability by this loader.
+"""
+function load_obstacles(file::AbstractString)
+    println("Loading obstacle inventory from: $file")
+    df = CSV.read(file, DataFrame; normalizenames=false)
+    required = ["ID_CLAVE_MGM", "COORD_X", "COORD_Y", "TRAMO_COD"]
+    missing_columns = setdiff(required, names(df))
+    isempty(missing_columns) || error("Obstacle file is missing columns: $(join(missing_columns, ", "))")
+
+    parse_optional_float(value) = begin
+        if ismissing(value) || isempty(strip(string(value)))
+            missing
+        else
+            text = strip(string(value))
+            uppercase(text) in ("NA", "SD", "DE", "NO", "N/D", "-") ? missing :
+                try
+                    parse(Float64, replace(text, ',' => '.'))
+                catch
+                    missing
+                end
+        end
+    end
+
+    df.coord_x_m = parse_optional_float.(df[!, "COORD_X"])
+    df.coord_y_m = parse_optional_float.(df[!, "COORD_Y"])
+    df.height_m = parse_optional_float.(df[!, "Altura"])
+    df.if_index = parse_optional_float.(df[!, "IF"])
+    df.has_valid_coordinates = .!(ismissing.(df.coord_x_m) .| ismissing.(df.coord_y_m))
+
+    println("Loaded $(nrow(df)) obstacles; $(count(df.has_valid_coordinates)) have valid coordinates")
+    return df
+end
+
+"""
+    build_site_coordinate_matrix(site_df, sites)
+
+Return an `n_sites × 2` matrix of UTM X/Y coordinates in model site order.
+"""
+function build_site_coordinate_matrix(site_df::DataFrame, sites::Vector{String})
+    coordinate_lookup = Dict{String,Tuple{Float64,Float64}}()
+    for row in eachrow(site_df)
+        x = hasproperty(row, :UTMX) ? row.UTMX : missing
+        y = hasproperty(row, :UTMY) ? row.UTMY : missing
+        if !ismissing(x) && !ismissing(y)
+            coordinate_lookup[string(row.CODIGO)] = (Float64(x), Float64(y))
+        end
+    end
+
+    coordinates = fill(NaN, length(sites), 2)
+    for (index, site) in enumerate(sites)
+        if haskey(coordinate_lookup, site)
+            coordinates[index, :] .= coordinate_lookup[site]
+        end
+    end
+    return coordinates
+end
+
+"""
+    build_obstacle_passability_matrix(obstacles, site_df, sites, distances, elevations;
+                                      matching_tolerance=2000.0,
+                                      obstacle_passability=0.1,
+                                      obstacle_downstream_passability=0.5)
+
+Create an obstacle overlay for the existing site network.  Each obstacle is
+matched to the nearest straight line segment between connected site pairs,
+using UTM coordinates and the supplied tolerance.  Matched edges restrict
+movement towards the higher-elevation (upstream) site to `obstacle_passability`
+and movement towards the lower-elevation (downstream) site to
+`obstacle_downstream_passability`: downstream passage is reduced but remains
+more accessible than upstream passage.  Equal-elevation edges are left
+unchanged because their flow direction cannot be inferred from the current
+inputs.
+The return value contains the overlay and a diagnostics DataFrame.  This is a
+transparent first-pass spatial approximation; it does not interpret `IF` or
+infer species-specific passage.
+"""
+function build_obstacle_passability_matrix(obstacles::DataFrame, site_df::DataFrame,
+                                            sites::Vector{String}, distances,
+                                            elevations::AbstractVector;
+                                            matching_tolerance::Float64=2000.0,
+                                            obstacle_passability::Float64=0.1,
+                                            obstacle_downstream_passability::Float64=0.5)
+    matching_tolerance >= 0 || error("matching_tolerance must be non-negative")
+    0.0 <= obstacle_passability <= 1.0 || error("obstacle_passability must be between 0 and 1")
+    0.0 <= obstacle_downstream_passability <= 1.0 || error("obstacle_downstream_passability must be between 0 and 1")
+
+    n_sites = length(sites)
+    length(elevations) == n_sites || error("elevations must contain one value per site")
+    coordinates = build_site_coordinate_matrix(site_df, sites)
+    edges = Tuple{Int,Int}[]
+    for i in 1:n_sites, j in (i + 1):n_sites
+        if (isfinite(coordinates[i, 1]) && isfinite(coordinates[i, 2]) &&
+            isfinite(coordinates[j, 1]) && isfinite(coordinates[j, 2]) &&
+            (distances[i, j] > 0 || distances[j, i] > 0))
+            push!(edges, (i, j))
+        end
+    end
+
+    overlay = ones(Float64, n_sites, n_sites)
+    obstacle_ids = String[]
+    matched = Bool[]
+    edge_from = String[]
+    edge_to = String[]
+    restricted_origin = String[]
+    restricted_destination = String[]
+    match_distance_m = Union{Missing,Float64}[]
+
+    for row in eachrow(obstacles)
+        push!(obstacle_ids, string(row.ID_CLAVE_MGM))
+        x, y = row.coord_x_m, row.coord_y_m
+        if ismissing(x) || ismissing(y)
+            push!(matched, false); push!(edge_from, ""); push!(edge_to, "")
+            push!(restricted_origin, ""); push!(restricted_destination, "")
+            push!(match_distance_m, missing)
+            continue
+        end
+
+        best_edge = nothing
+        best_distance = Inf
+        for (i, j) in edges
+            x1, y1 = coordinates[i, 1], coordinates[i, 2]
+            x2, y2 = coordinates[j, 1], coordinates[j, 2]
+            dx, dy = x2 - x1, y2 - y1
+            length_squared = dx * dx + dy * dy
+            length_squared == 0 && continue
+            projection = ((Float64(x) - x1) * dx + (Float64(y) - y1) * dy) / length_squared
+            # Do not attach an obstacle to an unrelated edge through an endpoint.
+            if projection < 0.0 || projection > 1.0
+                continue
+            end
+            closest_x = x1 + projection * dx
+            closest_y = y1 + projection * dy
+            distance_to_edge = hypot(Float64(x) - closest_x, Float64(y) - closest_y)
+            if distance_to_edge < best_distance
+                best_distance = distance_to_edge
+                best_edge = (i, j)
+            end
+        end
+
+        if best_edge === nothing || best_distance > matching_tolerance
+            push!(matched, false); push!(edge_from, ""); push!(edge_to, "")
+            push!(restricted_origin, ""); push!(restricted_destination, "")
+            push!(match_distance_m, best_edge === nothing ? missing : best_distance)
+        else
+            i, j = best_edge
+            # Dispersal entries are keyed [destination, origin].  Movement
+            # towards the higher-elevation (upstream) site is the limiting
+            # direction; the downstream direction is reduced but remains more
+            # passable.
+            if elevations[i] > elevations[j]
+                overlay[i, j] = min(overlay[i, j], obstacle_passability)
+                overlay[j, i] = min(overlay[j, i], obstacle_downstream_passability)
+                origin, destination = sites[j], sites[i]
+            elseif elevations[j] > elevations[i]
+                overlay[j, i] = min(overlay[j, i], obstacle_passability)
+                overlay[i, j] = min(overlay[i, j], obstacle_downstream_passability)
+                origin, destination = sites[i], sites[j]
+            else
+                origin, destination = "", ""
+            end
+            push!(matched, true); push!(edge_from, sites[i]); push!(edge_to, sites[j])
+            push!(restricted_origin, origin); push!(restricted_destination, destination)
+            push!(match_distance_m, best_distance)
+        end
+    end
+
+    diagnostics = DataFrame(
+        obstacle_id=obstacle_ids, matched=matched, edge_from=edge_from,
+        edge_to=edge_to, restricted_origin=restricted_origin,
+        restricted_destination=restricted_destination,
+        match_distance_m=match_distance_m
+    )
+    return (passability=overlay, diagnostics=diagnostics)
+end
+
+"""
     load_interaction_matrix(interaction_file::String, species_codes::Vector{String})
 
 Load and parse the species interaction matrix.
@@ -983,7 +1284,14 @@ end
         environmental_file::String = "data/ABIOTIC/Matriz_Ambiental_Data.csv",
         distance_file::String = "data/Matrix_distances_1037puntos_BRUTO_FINAL.csv",
         interaction_file::String = "data/BIOTIC/Interacciones_peces_Guadalquivir_03-04-2018_ENG.csv",
-        upstream_cost::Float64 = 0.01
+        upstream_cost::Float64 = 0.01,
+        cedex_var_file::Union{Nothing,String} = nothing,
+        cedex_esc_uts_file::Union{Nothing,String} = nothing,
+        obstacles_file::Union{Nothing,String} = nothing,
+        obstacle_mode::Symbol = :legacy,
+        obstacle_matching_tolerance::Float64 = 2000.0,
+        obstacle_passability::Float64 = 0.1,
+        obstacle_downstream_passability::Float64 = 0.5
     )
 
 Prepare all data needed for the ODE metacommunity model.
@@ -995,6 +1303,11 @@ Prepare all data needed for the ODE metacommunity model.
 - `distance_file`: Path to distance matrix data
 - `interaction_file`: Path to species interaction data
 - `upstream_cost`: Additional cost factor for upstream dispersal
+- `obstacles_file`: Optional obstacle inventory; loaded but ignored unless `obstacle_mode = :overlay`
+- `obstacle_mode`: `:legacy` (default, no obstacle overlay) or `:overlay`
+- `obstacle_matching_tolerance`: Matching tolerance in metres for the obstacle overlay
+- `obstacle_passability`: Passability applied to upstream movement on matched edges
+- `obstacle_downstream_passability`: Passability applied to downstream movement on matched edges
 
 ## Returns a NamedTuple with:
 - params: MetacommunityParams struct
@@ -1002,7 +1315,11 @@ Prepare all data needed for the ODE metacommunity model.
 - species: Vector of species codes
 - distance_matrix: Sparse distance matrix
 - elevations: Vector of elevations
-- dams: Dam passability matrix
+- dams: Effective dam/obstacle passability matrix
+- legacy_dams: Passability matrix from the legacy connectivity fields
+- obstacle_overlay: Passability matrix derived from the optional obstacle inventory
+- obstacle_mapping_diagnostics: Per-obstacle network matching diagnostics
+- cedex_var_df, cedex_esc_uts_df, obstacles_df: Optional loaded updated inputs
 """
 function prepare_ode_data(;
     connectivity_file::String = "data/ConnectivityUTM.csv",
@@ -1011,7 +1328,14 @@ function prepare_ode_data(;
     environmental_file::String = "data/ABIOTIC/Matriz_Ambiental_Data.csv",
     distance_file::String = "data/Matrix_distances_1037puntos_BRUTO_FINAL.csv",
     interaction_file::String = "data/BIOTIC/Interacciones_peces_Guadalquivir_03-04-2018_ENG.csv",
-    upstream_cost::Float64 = 0.01
+    upstream_cost::Float64 = 0.01,
+    cedex_var_file::Union{Nothing,String} = nothing,
+    cedex_esc_uts_file::Union{Nothing,String} = nothing,
+    obstacles_file::Union{Nothing,String} = nothing,
+    obstacle_mode::Symbol = :legacy,
+    obstacle_matching_tolerance::Float64 = 2000.0,
+    obstacle_passability::Float64 = 0.1,
+    obstacle_downstream_passability::Float64 = 0.5
 )
     println("="^60)
     println("Preparing data for ODE metacommunity model")
@@ -1023,6 +1347,15 @@ function prepare_ode_data(;
     sites = String.(site_df.CODIGO)
     n_sites = length(sites)
     println("Found $n_sites sites")
+
+    obstacle_mode in (:legacy, :overlay) || error("obstacle_mode must be :legacy or :overlay")
+
+    # Optional updated inputs are loaded explicitly and kept separate from the
+    # legacy site/environment tables.  This avoids silently changing the model
+    # when a file is present but no crosswalk or transformation was selected.
+    cedex_var_df = cedex_var_file === nothing ? nothing : load_cedex_var(cedex_var_file)
+    cedex_esc_uts_df = cedex_esc_uts_file === nothing ? nothing : load_cedex_esc_uts(cedex_esc_uts_file)
+    obstacles_df = obstacles_file === nothing ? nothing : load_obstacles(obstacles_file)
 
     # 2. Load species density data
     println("\n[2/12] Loading species density data...")
@@ -1078,7 +1411,27 @@ function prepare_ode_data(;
 
     # 7. Build dam passability matrix
     println("\n[7/12] Building dam passability matrix...")
-    dams = build_dam_passability_matrix(site_df, sites, distance_matrix, elevations)
+    legacy_dams = build_dam_passability_matrix(site_df, sites, distance_matrix, elevations)
+    dams = copy(legacy_dams)
+    obstacle_overlay = ones(Float64, n_sites, n_sites)
+    obstacle_mapping_diagnostics = DataFrame(
+        obstacle_id=String[], matched=Bool[], edge_from=String[], edge_to=String[],
+        restricted_origin=String[], restricted_destination=String[],
+        match_distance_m=Union{Missing,Float64}[]
+    )
+    if obstacles_df !== nothing && obstacle_mode == :overlay
+        println("Applying obstacle passability overlay (tolerance=$(obstacle_matching_tolerance)m, upstream passability=$(obstacle_passability), downstream passability=$(obstacle_downstream_passability))...")
+        obstacle_result = build_obstacle_passability_matrix(
+            obstacles_df, site_df, sites, distance_matrix, elevations;
+            matching_tolerance=obstacle_matching_tolerance,
+            obstacle_passability=obstacle_passability,
+            obstacle_downstream_passability=obstacle_downstream_passability
+        )
+        obstacle_overlay = obstacle_result.passability
+        obstacle_mapping_diagnostics = obstacle_result.diagnostics
+        dams = min.(dams, obstacle_overlay)
+        println("Matched $(count(obstacle_mapping_diagnostics.matched)) of $(nrow(obstacle_mapping_diagnostics)) obstacles to network edges")
+    end
 
     # 8. Extract environmental parameters
     println("\n[8/12] Extracting environmental parameters...")
@@ -1138,6 +1491,12 @@ function prepare_ode_data(;
         distance_matrix = distance_matrix,
         elevations = elevations,
         dams = dams,
+        legacy_dams = legacy_dams,
+        obstacle_overlay = obstacle_overlay,
+        obstacle_mapping_diagnostics = obstacle_mapping_diagnostics,
+        obstacles_df = obstacles_df,
+        cedex_var_df = cedex_var_df,
+        cedex_esc_uts_df = cedex_esc_uts_df,
         site_df = site_df,
         species_chars_df = species_chars_df,
         density_df = density_df

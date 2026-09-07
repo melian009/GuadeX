@@ -1,5 +1,29 @@
 # Summary of the data
 
+## Updated 2045 and obstacle inputs
+
+### data/2045_CEDEX_GUADALQUIVIR_VAR.csv
+
+A basin-level CEDEX projection table for 2045. It contains 10 rows: the variables `PRE` (precipitation), `ETP` (potential evapotranspiration), `ETR` (actual evapotranspiration), `REC` (recharge), and `ESC` (runoff/escorrentía), each under `SSP 585` and `SSP 245`. The columns `A`, `D`, `E`, `F`, `G`, `H`, `I`, `K`, `M`, `R`, and `U` are source CEDEX region or reporting classes; `MAX`, `MED`, `PC50`, and the duplicate `MAX` column (read by CSV.jl as `MAX_1`) are summary columns.
+
+* `VAR`: projected hydrological variable code
+* `ESCEN`: source climate-scenario label
+* region/class columns and summary columns: projected changes relative to the CEDEX baseline, as supplied by the source
+
+The values are not temperatures: this file contains hydrological indicators and does not provide a site-level temperature delta. It therefore must not be added directly to `params.temperatures` without a documented CEDEX crosswalk and transformation.
+
+### data/2045_CEDEX_GUADALQUIVIR_ESC_por_UTS.csv
+
+Seasonal 2045 runoff/escorrentía projections for 25 UTS units (`ES050_01`--`ES050_25`). The two header rows identify four seasons (`OND`, `EFM`, `AMJ`, `JAS`) for percentage-change and millimetre-change measures under the source labels `SSP245` and `SSP285`. The final `Media` and `Mediana` rows are basin summaries, not spatial UTS units.
+
+The repository loader converts this wide, two-row-header file to a tidy table with `uts`, `scenario`, `measure` (`percent` or `mm`), `season`, `value`, and `row_type`. `SSP 585` and `SSP585` are normalised to `SSP585`; the source's `SSP285` spelling is retained rather than silently corrected. There is currently no checked-in crosswalk from UTS identifiers to `CODIGO` sites or `CODIGO_S` subcatchments.
+
+### data/obstacles_1658_Obstaculos_No_Completamente_Franqueables _2026-02-16_Guadex.csv
+
+Inventory of 1,658 obstacles that are not completely passable, dated 2026-02-16. Each record describes an infrastructure or transverse obstacle and its water-body/river-segment identifiers, UTM coordinates, obstacle type, passage facilities and condition, hydraulic measurements, observations, the source `IF` index, and whether it is a priority for EPC (`PRIORITARIO_EPC`). Important source fields include `ID_CLAVE_MGM`, `CODMAS`, `TRAMO_COD`, `COORD_X`, `COORD_Y`, `TIPO_INFR_MUESTREADOR_P_HMF`, `EXIS_PASO`, `ESTADO_PASO`, `Altura`, `IF`, and `OBSERVACIONES_FRANQUEABILIDAD`.
+
+The loader preserves the source fields and adds parsed `coord_x_m`, `coord_y_m`, `height_m`, and `if_index` columns. `IF` is retained as an index only; its scale is not assumed to be a probability of fish passage. Coordinates make a spatial overlay with the sampled network possible, but obstacle-to-site/segment matching and passability rules remain modelling choices.
+
 ## File headers
 
 ### data/FishSizeMatrix.csv

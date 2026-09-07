@@ -1,0 +1,139 @@
+# =============================================================================
+# GuadeX simulation parameters
+#
+# This is the single source of truth for run settings across the maintained
+# entry scripts:
+#
+#   scripts/run_model.jl
+#   scripts/run_sensitivity.jl
+#   run_sensitivity_report.jl
+#   run_alt_interactions.jl
+#
+# Library defaults in src/data_preparation.jl are intentionally unchanged;
+# the scripts read their values from this file instead.
+#
+# To change an experiment, edit this file.  For a fully tracked experiment,
+# copy it (e.g. parameters_2026_09_experiment_a.toml), edit the copy, and run
+# with GUADEX_PARAMETERS_FILE=<path>.  Individual values can still be
+# overridden per run with the GUADEX_* environment variables documented in
+# docs/updated_inputs_simulations.md.
+# =============================================================================
+
+[general]
+# Time configuration: 1 time unit = 1 day.
+days_per_year = 365
+
+# ---------------------------------------------------------------------------
+# Updated 2045 inputs shared by all scripts.
+# ---------------------------------------------------------------------------
+
+[inputs]
+# CEDEX basin-level 2045 projection table (hydrological indicators, not
+# temperatures).  Loaded for provenance and scenario selection.
+cedex_var_file = "data/2045_CEDEX_GUADALQUIVIR_VAR.csv"
+
+# CEDEX 2045 seasonal runoff projections per UTS.  Loaded for provenance and
+# scenario selection.
+cedex_esc_uts_file = "data/2045_CEDEX_GUADALQUIVIR_ESC_por_UTS.csv"
+
+# 2026 inventory of obstacles that are not completely passable.
+obstacles_file = "data/obstacles_1658_Obstaculos_No_Completamente_Franqueables _2026-02-16_Guadex.csv"
+
+[obstacles]
+# "legacy" disables the spatial obstacle overlay; "overlay" applies it.
+mode = "overlay"
+
+# Obstacles closer than this (metres) to a straight line segment between two
+# connected sites are assigned to that segment.
+matching_tolerance_m = 2000.0
+
+# Passability applied to movement towards the higher-elevation (upstream) site.
+# This is the limiting direction.
+upstream_passability = 0.1
+
+# Passability applied to movement towards the lower-elevation (downstream)
+# site.  Reduced but more accessible than upstream.
+downstream_passability = 0.5
+
+# ---------------------------------------------------------------------------
+# Species groups used to classify simulation outputs.
+# ---------------------------------------------------------------------------
+
+[species]
+native = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO"]
+invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
+
+# ---------------------------------------------------------------------------
+# Modelled subcatchments.  Exploitation and passability scenarios apply one
+# factor per subcatchment; sites in unlisted subcatchments receive 1.0.
+# ---------------------------------------------------------------------------
+
+[subcatchments]
+all = [1.1, 1.2, 1.3, 1.4, 2.2, 3.0, 6.0, 7.0, 9.0, 10.0, 11.3, 11.5, 11.2, 11.1, 11.4, 12.0, 13.3, 13.2, 13.1, 14.0, 15.2, 15.1, 16.0, 17.0, 18.1, 18.3, 18.2, 19.0, 20.0, 21.0, 22.1, 22.4, 22.2, 23.0, 24.1, 24.2, 25.0, 26.1, 26.2, 26.3, 26.4, 26.5, 26.6, 27.0, 28.1, 28.2, 28.3, 28.4, 29.0, 30.1, 30.2, 30.3, 30.4, 30.5, 30.6, 30.7, 31.0, 32.4, 32.3, 32.1, 32.2, 33.0, 34.1, 34.2, 34.3, 34.4, 35.0, 36.1, 36.2, 36.3, 36.4, 37.0, 38.0, 39.0, 40.1, 40.2, 41.0]
+
+# ---------------------------------------------------------------------------
+# Scenario library.
+#
+# Exploitation scenarios: factors < 1.0 reduce the intrinsic growth rate of a
+# site (harvesting/mortality); 1.0 = no exploitation (baseline).
+# Passability scenarios: multipliers applied to the dam/obstacle passability of
+# a site; 1.0 = baseline, > 1.0 = improved passage, < 1.0 = reduced passage.
+#
+# A scenario has a uniform `factor` applied to every subcatchment and may add a
+# per-subcatchment `overrides` table for heterogeneous scenarios, e.g.
+#
+#   [scenarios.exploitation.fish_refuge]
+#   factor = 1.0
+#   [scenarios.exploitation.fish_refuge.overrides]
+#   "3.1" = 0.7
+#   "4.2" = 0.5
+# ---------------------------------------------------------------------------
+
+[scenarios.exploitation]
+baseline = { factor = 1.0 }
+low_exploitation = { factor = 0.9 }
+medium_exploitation = { factor = 0.7 }
+high_exploitation = { factor = 0.5 }
+example_exploitation = { factor = 0.9 }
+
+[scenarios.passability]
+baseline = { factor = 1.0 }
+improved_passability = { factor = 1.5 }
+reduced_passability = { factor = 0.5 }
+blocked = { factor = 0.1 }
+example_passability = { factor = 1.0 }
+
+# ---------------------------------------------------------------------------
+# Entry script settings.
+#
+# Each maintained entry script reads its own section.  The sensitivity scripts
+# sweep over the listed grids and scenario names; run_model.jl applies a single
+# exploitation and passability scenario.
+# ---------------------------------------------------------------------------
+
+[run_model]
+simulation_years = 1
+upstream_cost = 0.05
+exploitation_scenario = "example_exploitation"
+passability_scenario = "example_passability"
+
+[run_sensitivity]
+simulation_years = 1
+upstream_costs = [0.01, 0.05, 0.1, 0.5]
+exploitation_scenarios = ["baseline", "low_exploitation", "medium_exploitation", "high_exploitation"]
+passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
+
+[run_sensitivity_report]
+simulation_years = 3
+temperature_increases = [0.0, 1.0, 2.0, 3.0]
+upstream_costs = [0.01, 0.05, 0.1, 0.5]
+passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
+report_years = [1, 2, 3]
+
+[run_alt_interactions]
+simulation_years = 3
+thermal_sigma_multiplier = 0.3
+temperature_increases = [0.0, 4.0, 8.0, 12.0]
+upstream_costs = [0.01, 0.5]
+passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
+report_years = [1, 2, 3]

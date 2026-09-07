@@ -282,6 +282,112 @@ end
         @test scaling[5] ≈ 25.0 / median_rate
     end
 
+    @testset "updated CEDEX and obstacle inputs" begin
+        cedex_var = Guadex.load_cedex_var(CEDEX_VAR_FILE)
+        @test nrow(cedex_var) == 10
+        @test Set(cedex_var.cedex_variable) == Set(["PRE", "ETP", "ETR", "REC", "ESC"])
+        @test Set(cedex_var.cedex_scenario) == Set(["SSP245", "SSP585"])
+        @test "MAX_1" in names(cedex_var)  # duplicate source header is retained safely
+
+        cedex_uts = Guadex.load_cedex_esc_uts(CEDEX_UTS_FILE)
+        @test nrow(cedex_uts) == 432
+        @test count(==("spatial"), cedex_uts.row_type) == 400
+        @test count(==("summary"), cedex_uts.row_type) == 32
+        @test Set(cedex_uts.scenario) == Set(["SSP245", "SSP285"])
+        @test Set(cedex_uts.measure) == Set(["percent", "mm"])
+        selected = Guadex.select_cedex_uts(cedex_uts; uts="ES050_01",
+            scenario="SSP245", measure="percent", season="AMJ")
+        @test selected.value == -25.0
+        @test selected.row_type == "spatial"
+
+        obstacles = Guadex.load_obstacles(OBSTACLES_FILE)
+        @test nrow(obstacles) == 1658
+        @test count(obstacles.has_valid_coordinates) == 1658
+        @test :coord_x_m in propertynames(obstacles)
+        @test :if_index in propertynames(obstacles)
+
+        # An obstacle on the only connected segment should limit upstream
+        # movement to `obstacle_passability` and downstream movement to
+        # `obstacle_downstream_passability` (more accessible than upstream),
+        # while the diagonal remains fully passable.
+        site_df = DataFrame(CODIGO=["a", "b"], UTMX=[0.0, 100.0], UTMY=[0.0, 0.0])
+        sites = ["a", "b"]
+        distances = sparse([2, 1], [1, 2], [100.0, 100.0], 2, 2)
+        elevations = [100.0, 200.0]
+        obstacle = DataFrame(ID_CLAVE_MGM=["ob1"], coord_x_m=[50.0], coord_y_m=[2.0])
+        result = Guadex.build_obstacle_passability_matrix(obstacle, site_df, sites, distances, elevations;
+            matching_tolerance=10.0, obstacle_passability=0.25,
+            obstacle_downstream_passability=0.5)
+        @test result.passability[1, 1] == 1.0
+        @test result.passability[1, 2] == 0.5   # downstream: b → a (more accessible)
+        @test result.passability[2, 1] == 0.25  # upstream: a → b (limiting)
+        @test result.diagnostics.matched == [true]
+        @test result.diagnostics.restricted_origin == ["a"]
+        @test result.diagnostics.restricted_destination == ["b"]
+
+        # Downstream passability is configured independently of upstream.
+        custom = Guadex.build_obstacle_passability_matrix(obstacle, site_df, sites, distances, elevations;
+            matching_tolerance=10.0, obstacle_passability=0.2,
+            obstacle_downstream_passability=0.8)
+        @test custom.passability[1, 2] == 0.8
+        @test custom.passability[2, 1] == 0.2
+
+        # Without an elevation difference the flow direction cannot be
+        # inferred, so neither direction is restricted.
+        flat = Guadex.build_obstacle_passability_matrix(obstacle, site_df, sites, distances, [100.0, 100.0];
+            matching_tolerance=10.0, obstacle_passability=0.25,
+            obstacle_downstream_passability=0.5)
+        @test flat.passability[1, 2] == 1.0
+        @test flat.passability[2, 1] == 1.0
+        @test flat.diagnostics.restricted_origin == [""]
+        @test flat.diagnostics.restricted_destination == [""]
+
+        no_match = Guadex.build_obstacle_passability_matrix(obstacle, site_df, sites, distances, elevations;
+            matching_tolerance=1.0, obstacle_passability=0.25)
+        @test no_match.diagnostics.matched == [false]
+        @test no_match.passability[1, 2] == 1.0
+        @test no_match.passability[2, 1] == 1.0
+    end
+
+    @testset "prepare_ode_data obstacle overlay integration" begin
+        data = Guadex.prepare_ode_data(
+            connectivity_file=CONNECTIVITY_FILE,
+            density_file=DENSITY_FILE,
+            species_chars_file=SPECIES_CHARS_FILE,
+            environmental_file=ENVIRONMENTAL_FILE,
+            distance_file=DISTANCE_FILE,
+            interaction_file=INTERACTION_FILE,
+            upstream_cost=0.01,
+            cedex_var_file=CEDEX_VAR_FILE,
+            cedex_esc_uts_file=CEDEX_UTS_FILE,
+            obstacles_file=OBSTACLES_FILE,
+            obstacle_mode=:overlay,
+            obstacle_matching_tolerance=2000.0,
+            obstacle_passability=0.1,
+            obstacle_downstream_passability=0.5
+        )
+
+        @test nrow(data.cedex_var_df) == 10
+        @test nrow(data.cedex_esc_uts_df) == 432
+        @test nrow(data.obstacles_df) == 1658
+        @test nrow(data.obstacle_mapping_diagnostics) == 1658
+        matched_count = count(data.obstacle_mapping_diagnostics.matched)
+        @test matched_count > 680  # 2000 m must match at least the 1000 m count
+        @test matched_count < 1658
+        @test any(data.obstacle_overlay .< 1.0)
+        @test any(data.dams .!= data.legacy_dams)
+
+        # The upstream direction is limited to 0.1 and the paired downstream
+        # direction to 0.5 (more accessible but not fully open).
+        upstream_hit = findfirst(==(0.1), data.obstacle_overlay)
+        @test upstream_hit !== nothing
+        if upstream_hit !== nothing
+            destination, origin = Tuple(upstream_hit)
+            @test data.elevations[destination] > data.elevations[origin]
+            @test data.obstacle_overlay[origin, destination] == 0.5
+        end
+    end
+
     @testset "build_distance_matrix (via prepare_ode_data)" begin
         data = Guadex.prepare_ode_data(
             connectivity_file=CONNECTIVITY_FILE,
