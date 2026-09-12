@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Interactive 3D visualization of the Guadalquivir river basin and GuadeX sampling sites" />
+    <title>GuadeX · Guadalquivir Basin 3D</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+
+      <div id="loading" class="overlay">
+        <div class="loading-card">
+          <div class="spinner"></div>
+          <h2>GuadeX · Guadalquivir Basin</h2>
+          <p id="loading-text">Loading GIS layers…</p>
+        </div>
+      </div>
+
+      <header id="topbar">
+        <div class="brand">
+          <span class="brand-mark">◈</span>
+          <div>
+            <strong>GuadeX</strong>
+            <span class="brand-sub">Guadalquivir basin · 3-D site explorer</span>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button id="btn-reset" class="btn ghost" title="Reset camera (R)">Reset view</button>
+          <button id="btn-panel" class="btn ghost" title="Toggle panel (P)">Panel</button>
+        </div>
+      </header>
+
+      <aside id="panel" aria-label="Controls">
+        <div class="panel-tabs" role="tablist">
+          <button class="tab active" data-tab="display">Display</button>
+          <button class="tab" data-tab="data">Data</button>
+          <button class="tab" data-tab="help">Help</button>
+        </div>
+
+        <div class="panel-body">
+          <!-- DISPLAY ------------------------------------------------ -->
+          <section class="tab-panel active" data-panel="display">
+            <div class="group">
+              <div class="group-title">Layers</div>
+              <div id="layer-toggles" class="toggle-list"></div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Scene</div>
+              <label class="row">
+                <span>Interpolated relief</span>
+                <input type="checkbox" id="chk-relief" checked />
+              </label>
+              <label class="row range-row">
+                <span>Vertical exaggeration</span>
+                <input type="range" id="range-exagg" min="1" max="40" step="1" value="14" />
+                <output id="out-exagg">14×</output>
+              </label>
+              <label class="row range-row">
+                <span>Column height</span>
+                <input type="range" id="range-height" min="0" max="40" step="1" value="14" />
+                <output id="out-height">14</output>
+              </label>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Show sites</div>
+              <label class="row">
+                <span>Only sites with data</span>
+                <input type="checkbox" id="chk-onlydata" />
+              </label>
+              <label class="row">
+                <span>Label selection</span>
+                <input type="checkbox" id="chk-labels" checked />
+              </label>
+            </div>
+          </section>
+
+          <!-- DATA --------------------------------------------------- -->
+          <section class="tab-panel" data-panel="data">
+            <div class="group">
+              <div class="group-title">Colour / height by</div>
+              <label class="stack">
+                <span>Source</span>
+                <select id="sel-source">
+                  <option value="base">Site attributes</option>
+                  <option value="results">Simulation results</option>
+                </select>
+              </label>
+              <label class="stack">
+                <span>Variable</span>
+                <select id="sel-metric"></select>
+              </label>
+              <label class="stack">
+                <span>Color scheme</span>
+                <select id="sel-ramp">
+                  <option value="viridis">Viridis</option>
+                  <option value="turbo">Turbo</option>
+                  <option value="magma">Magma</option>
+                  <option value="rdbu">Diverging (blue–red)</option>
+                  <option value="terrain">Terrain</option>
+                  <option value="categorical">Categorical</option>
+                </select>
+              </label>
+              <div id="time-wrap" class="hidden">
+                <label class="stack">
+                  <span>Time / scenario</span>
+                  <input type="range" id="range-time" min="0" max="0" step="1" value="0" />
+                </label>
+                <output id="out-time">—</output>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Simulation results</div>
+              <p class="hint">
+                Load a JSON or CSV file keyed by site code (<code>CODIGO</code>). The full object you
+                provide is shown in the site panel, so you can attach any values you like.
+              </p>
+              <div id="drop-zone" class="drop-zone">
+                <input type="file" id="file-results" accept=".json,.csv,.txt" hidden />
+                <button class="btn" id="btn-load-file">Choose file…</button>
+                <span>or drop a file here</span>
+              </div>
+              <div class="row gap">
+                <button class="btn ghost small" id="btn-load-demo-timeseries">Load demo (time series)</button>
+                <button class="btn ghost small" id="btn-load-demo-metrics">Load demo (metrics)</button>
+              </div>
+              <div id="results-status" class="status">No results loaded — showing site attributes.</div>
+              <button class="btn ghost small" id="btn-clear-results">Clear results</button>
+            </div>
+          </section>
+
+          <!-- HELP --------------------------------------------------- -->
+          <section class="tab-panel" data-panel="help">
+            <div class="group">
+              <div class="group-title">Controls</div>
+              <ul class="help-list">
+                <li><b>Orbit</b> — left-drag</li>
+                <li><b>Pan</b> — right-drag / two-finger</li>
+                <li><b>Zoom</b> — wheel / pinch</li>
+                <li><b>Select site</b> — click a marker or a catchment</li>
+                <li><b>Reset</b> — <kbd>R</kbd> · <b>Panel</b> — <kbd>P</kbd> · <b>Search</b> — <kbd>F</kbd></li>
+              </ul>
+            </div>
+            <div class="group">
+              <div class="group-title">Results file format</div>
+              <p class="hint">Any object keyed by site code works. Supported shapes:</p>
+              <pre class="code">{
+  "name": "Extinction risk",
+  "unit": "probability",
+  "steps": ["2026", "2050", "2100"],
+  "data": {
+    "1.1.2": [0.11, 0.24, 0.61],
+    "1.1.3": [0.08, 0.19, 0.55]
+  }
+}</pre>
+              <pre class="code">// per-site key/value metrics (no time axis)
+{
+  "name": "Simulation output",
+  "data": {
+    "1.1.2": { "risk": 0.31, "population": 4200 },
+    "1.1.3": { "risk": 0.22, "population": 9800 }
+  }
+}</pre>
+              <p class="hint">
+                CSV: <code>CODIGO,step,value</code> (long) or <code>CODIGO,metricA,metricB</code> (wide).
+              </p>
+              <p class="hint">
+                Programmatic: <code>window.GuadeX.setResults(obj)</code>,
+                <code>window.GuadeX.loadResults(url)</code>,
+                <code>window.GuadeX.selectSite("1.1.2")</code>.
+              </p>
+            </div>
+            <div class="group">
+              <div class="group-title">Data provenance</div>
+              <p class="hint">
+                1,037 sampling sites and the catchment/river/reservoir geometry come from the GuadeX
+                GIS archive (EPSG:25830, ETRS89 / UTM 30N). Relief is interpolated (IDW) from the 776
+                sites that carry an altitude, masked to the catchment union — it is an aid to reading the
+                landscape, not a survey DEM.
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <div class="panel-search">
+          <input type="search" id="search" placeholder="Search site code… (/ or F)" list="site-codes" />
+          <datalist id="site-codes"></datalist>
+        </div>
+      </aside>
+
+      <div id="legend" class="legend hidden">
+        <div class="legend-title" id="legend-title">—</div>
+        <div class="legend-bar" id="legend-bar"></div>
+        <div class="legend-range"><span id="legend-min">—</span><span id="legend-max">—</span></div>
+        <div class="legend-scale"><span id="legend-caption">—</span></div>
+      </div>
+
+      <div id="tooltip" class="tooltip hidden"></div>
+      <div id="site-label" class="site-label hidden"></div>
+
+      <section id="info" class="info hidden" aria-label="Selected site">
+        <header class="info-head">
+          <div>
+            <div class="eyebrow">Selected site</div>
+            <h2 id="info-title">—</h2>
+            <div id="info-sub" class="info-sub">—</div>
+          </div>
+          <button class="icon-btn" id="info-close" title="Close">×</button>
+        </header>
+        <div id="info-body" class="info-body"></div>
+      </section>
+
+      <div id="stats" class="stats"></div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

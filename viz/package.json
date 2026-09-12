@@ -1,0 +1,22 @@
+{
+  "name": "guadex-viz",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Interactive 3D visualization of the Guadalquivir river basin and GuadeX sampling sites",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "data": "node scripts/build-data.mjs",
+    "smoke": "node scripts/smoke-test.mjs",
+    "inspect": "node scripts/inspect-data.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "shapefile": "^0.6.6",
+    "vite": "^7.1.0"
+  }
+}
