@@ -26,6 +26,43 @@ npm run preview
 
 ---
 
+## Hosting on GitHub Pages (no server needed)
+
+The app is fully static, so GitHub Pages can host it for free. A workflow is provided
+at `.github/workflows/deploy-viz.yml`; it installs dependencies, regenerates the web data
+from the tracked GIS sources, builds the site, and deploys `viz/dist`.
+
+One-time setup (repo **Settings**):
+
+1. **Pages → Build and deployment → Source = “GitHub Actions”**.
+2. **Actions → General → Workflow permissions**: the workflow declares its own
+   `pages: write` / `id-token: write` permissions, so the default read-only setting is fine.
+   Just make sure Actions are enabled.
+3. The repository must be **public** (Pages on a private repo requires a paid plan).
+4. Push to `master` (or run the workflow manually). The site appears at
+   `https://<owner>.github.io/GuadeX/`.
+
+`vite.config.js` uses `base: './'` and the loader uses relative paths, so the project-page
+subpath works without further configuration. Because the workflow runs `npm run data`, the
+generated `public/data/` does not have to be committed (you may add it to `.gitignore`).
+
+### Can users upload their own simulation results?
+
+Yes — entirely in the browser, with no server involved:
+
+* The **Data → Simulation results** panel accepts a JSON/CSV file (choose or drag-and-drop).
+* Uploaded files never leave the user's machine; the static host only serves the app.
+* Uploads are per-session: refreshing clears them. To share a result set, commit the JSON
+  next to the app (e.g. `public/data/my_results.json`) and send a deep link such as
+  `?results=./data/my_results.json&site=1.1.2`, or host the JSON anywhere with CORS enabled
+  and pass its URL to `?results=` / `window.GuadeX.loadResults(url)`.
+
+Requirements for a user file: it must be keyed by the site code (`CODIGO`, e.g. `"1.1.2"`);
+codes that do not match one of the 1,037 sites are ignored. Persisting uploads for other
+users centrally would require a backend, which Pages does not provide.
+
+---
+
 ## What is on screen
 
 * **Catchments** (`Cuencas_masas_agua_4c`, 468 polygons) — drape the basin and act as a
