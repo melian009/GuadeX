@@ -29,8 +29,22 @@ npm run preview
 ## Hosting on GitHub Pages (no server needed)
 
 The app is fully static, so GitHub Pages can host it for free. A workflow is provided
-at `.github/workflows/deploy-viz.yml`; it installs dependencies, regenerates the web data
-from the tracked GIS sources, builds the site, and deploys `viz/dist`.
+at `.github/workflows/deploy-viz.yml`; it installs dependencies, runs the smoke tests,
+builds the site, and deploys `viz/dist` whenever `viz/**` is pushed to `master`.
+
+The raw GIS sources in `data/` are tracked with **Git LFS** (`*.shp`, `*.csv`), and
+`actions/checkout` does not fetch LFS objects by default. To avoid pulling ~100 MB of LFS
+objects on every deploy, CI builds from the **already generated and committed**
+`viz/public/data/` instead of regenerating it. To refresh the site's data:
+
+```bash
+cd viz
+npm run data      # regenerate from ../data
+git add public/data && git commit -m "Update web data"
+```
+
+(If you would rather have CI regenerate from the GIS sources, add `lfs: true` to the
+`actions/checkout` step and re-add a `npm run data` step — at the cost of LFS bandwidth.)
 
 One-time setup (repo **Settings**):
 
@@ -39,12 +53,11 @@ One-time setup (repo **Settings**):
    `pages: write` / `id-token: write` permissions, so the default read-only setting is fine.
    Just make sure Actions are enabled.
 3. The repository must be **public** (Pages on a private repo requires a paid plan).
-4. Push to `master` (or run the workflow manually). The site appears at
+4. Push to `master` (or run the workflow manually from the Actions tab). The site appears at
    `https://<owner>.github.io/GuadeX/`.
 
 `vite.config.js` uses `base: './'` and the loader uses relative paths, so the project-page
-subpath works without further configuration. Because the workflow runs `npm run data`, the
-generated `public/data/` does not have to be committed (you may add it to `.gitignore`).
+subpath works without further configuration.
 
 ### Can users upload their own simulation results?
 

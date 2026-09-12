@@ -1,17 +1,22 @@
 name: Deploy GuadeX 3-D viewer
 
-# Builds viz/ (regenerating the web data from the tracked GIS sources) and
-# publishes it to GitHub Pages. No server is required: the app is static.
+# Builds viz/ and publishes it to GitHub Pages. No server is required: the app
+# is fully static.
 #
-# One-time setup: Settings -> Pages -> Build and deployment -> Source =
-# "GitHub Actions". Then push to master (or run this workflow manually).
+# The raw GIS sources in data/ are tracked with Git LFS (*.shp, *.csv), and
+# actions/checkout does not fetch LFS objects by default. Rather than pull
+# ~100 MB of LFS objects on every push, this workflow builds from the already
+# generated and committed viz/public/data. To refresh the site's data, run
+# `npm run data` locally in viz/ and commit viz/public/data, then push.
+#
+# One-time setup: Settings -> Pages -> Build and deployment ->
+# Source = "GitHub Actions".
 
 on:
   push:
     branches: [master]
     paths:
       - 'viz/**'
-      - 'data/**'
       - '.github/workflows/deploy-viz.yml'
   workflow_dispatch:
 
@@ -45,8 +50,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web data from GIS sources
-        run: npm run data
+      - name: Verify committed web data is present
+        run: |
+          test -f public/data/manifest.json || { echo "Missing viz/public/data — run 'npm run data' locally and commit it."; exit 1; }
 
       - name: Run logic smoke tests
         run: npm run smoke
