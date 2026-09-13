@@ -1,0 +1,8 @@
+[fig01_tw_vs_ta_scatter.png] Tw vs Ta coloured by site; pooled OLS line. N=39944 observations, 980 sites. Aerated/canal sites not filtered.
+[fig02_residuals_month_elevation.png] Model residual diagnostics. Left: monthly mean residual with 1 SD. Right: residual vs site elevation with OLS trend. N=39944.
+[fig03_loso_pred_vs_obs.png] Predicted vs observed water temperature for leave-one-station-out validation of Model 2 (month + Ta + elevation interaction). N=40715 held-out observations.
+[fig04_site_map.png] Elevation-coloured map of all 992 retained water-temperature sites; the 46 Guadalquivir (ES050) sites are ringed. Basin outline = dissolved CHG ES050 water-body catchments.
+[fig05_gq_timeseries.png] Air temperature (lapse-corrected NASA POWER) and observed water temperature for the three Guadalquivir GEMSTAT sites (N=67, 58, 68).
+[fig08_elevation_response.png] Per-station dTw/dTa slope and mean (Tw-Ta) offset against elevation, with 95% CI on slopes. N=642 stations with >=15 observations.
+[fig07_future_delta_box.png] Distribution of 2036-2055 Tw change (per GCM x site) by SSP; N=352 values.
+[fig06_future_monthly_ensemble.png] Monthly ensemble-median Tw for 2036-2055 by SSP; shading is the interquartile range across sites. N=8 sites x 20 years.

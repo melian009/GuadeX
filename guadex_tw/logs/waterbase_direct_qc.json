@@ -1,0 +1,24 @@
+{
+  "grqa_qc_rows": 23443,
+  "grqa_sites": 181,
+  "direct_units_removed": 0,
+  "direct_plausibility_removed": 0,
+  "direct_detection_limit_removed": 0,
+  "direct_daily_rows": 26295,
+  "direct_rows_removed_as_grqa_duplicates": 0,
+  "direct_sites_dropped_lt12": 1808,
+  "direct_obs_removed_lt12": 9461,
+  "direct_sites_retained": 799,
+  "direct_obs_retained": 16834,
+  "combined_rows": 40277,
+  "combined_sites": 980,
+  "combined_by_source": {
+    "GLORICH": 22237,
+    "WATERBASE_DIRECT": 16834,
+    "GEMSTAT": 1206
+  },
+  "combined_span": [
+    "1979-01-11",
+    "2024-12-30"
+  ]
+}

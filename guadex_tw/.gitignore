@@ -1,0 +1,14 @@
+# large raw downloads and the virtual environment are not tracked
+.venv/
+data/raw/TEMP_GRQA.csv
+data/raw/GRQA_data_v1.3.zip
+data/raw/WISE6_DisaggregatedData-csv.zip
+data/raw/nasa_power/
+data/raw/openmeteo/
+data/raw/waterbase/
+data/raw/*.zip
+data/raw/*.json
+data/interim/pnacc_cache/
+data/interim/tw_future_ensemble_daily.parquet
+__pycache__/
+*.pyc

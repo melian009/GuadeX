@@ -1,0 +1,21 @@
+{
+  "eligible_sites": [
+    "ES020ESPF004300618",
+    "ES091R0571",
+    "ESCHC2621"
+  ],
+  "n_sites_fitted": 3,
+  "candidate_models": [
+    "M3_same_day",
+    "M3_same+d3d7",
+    "M3_lag_bank",
+    "M3_d30"
+  ],
+  "rows": 12,
+  "single_year_sites_no_timesplit": [
+    "ES020ESPF004300618",
+    "ES091R0571",
+    "ESCHC2621"
+  ],
+  "note": "All cadence-eligible sites are confined to a single year (2024); time-blocked CV is impossible, so lag models are in-sample only and not used as a primary model."
+}

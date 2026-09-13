@@ -1,0 +1,86 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link href="vendor/bootstrap.min.css" rel="stylesheet" />
+
+    <link href="vendor/fa/css/all.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="spinner.css" />
+    <title>DISCODATA</title>
+</head>
+<body>
+
+    <div id="root"></div>
+        
+    <!--
+    m(".sideInfo", [
+        m(".closeBox", {onclick:close}, [
+            m("i.far.fa-times-circle"),
+            m("h4", "Dremio syntax tips"),
+            m("p", "Generally speaking, Dremio syntax is very close to SQL Server. However, there are some minor differences worth noting. Also, the discodata backend will perform some automatic transfromations on you query to adapt it."),
+            m("p", [
+                m("strong", "Use table aliases"),
+                m("br"),
+                "The Discodata backend needs to add certain prefixes to table names. In your query, create an alias for each of your tables, and use it when referencing fields. Example:",
+                m("pre", "")
+            ]),
+
+            m("p", [
+                m("strong", "Escaping identifiers"),
+                m("br"),
+                "SQL Server escapes table and column names using brackets '[' and ']'. Dremio uses double quotes"
+            ])
+        ]),
+    ])
+    -->
+
+    <script src="vendor/jquery-3.4.1.min.js"></script>
+    <script src="vendor/popper.min.js"></script>
+    <script src="vendor/bootstrap.min.js"></script>
+    <script src="./vendor/ace/ace.js" type="text/javascript" charset="utf-8"></script>
+    <script src="./vendor/split.min.js" type="text/javascript"></script>
+
+    <!-- gates of moria -->
+    <script src="./vendor/mithril-2.0.4.js"></script>
+
+    <script>
+        var serviceUrl = "."
+        //var serviceUrl = "http://localhost:57746"
+        //var serviceUrl = "https://discomap.eea.europa.eu/App/SqlEndpointDevel"
+    </script>
+
+    <script src="./script/component/BsSelect.js"></script>
+    <script src="./script/component/BsInput.js"></script>
+
+    <script src="./script/util.js"></script>
+    <script src="./script/model/metadata.js"></script>
+    <script src="./script/model/userMetadata.js"></script>
+    <script src="./script/model/dbMetadata.js"></script>
+    <script src="./script/model/externalMetadata.js"></script>
+    <script src="./script/model/user.js"></script>
+    <script src="./script/model/query.js"></script>
+
+    <script src="./script/view/contextmenu.js"></script>
+    <script src="./script/view/projectmenu.js"></script>
+    <script src="./script/view/dbexplorer.js"></script>
+    <script src="./script/view/navbar.js"></script>
+    <script src="./script/view/queryarea.js"></script>
+    <script src="./script/view/metadataArea.js"></script>
+    <script src="./script/view/layout.js"></script>
+    <script src="./script/app.js"></script>
+
+    <!-- Temporary featured card for new Dremio functionality -->
+    <script>
+        $('#featured').on('closed.bs.alert', function () {
+            extendToBottom();
+        })
+    </script>
+
+
+
+</body>

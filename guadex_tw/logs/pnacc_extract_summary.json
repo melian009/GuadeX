@@ -1,0 +1,20 @@
+{
+  "n_gcm": 11,
+  "scenarios": [
+    "ssp126",
+    "ssp245",
+    "ssp370",
+    "ssp585"
+  ],
+  "sites": [
+    "ES050ESPF10705",
+    "ES050ESPF40901",
+    "ESP00016",
+    "ESP00017",
+    "ESP00018",
+    "ES050ESPF30502",
+    "ES050ESPF40345",
+    "ES050ESPF51204"
+  ],
+  "seconds": 4148.6
+}

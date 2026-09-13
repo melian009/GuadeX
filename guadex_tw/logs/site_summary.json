@@ -1,0 +1,26 @@
+{
+  "n_sites": 992,
+  "n_sites_guadalquivir": 46,
+  "elevation_range_all_m": [
+    0.0,
+    1451.9296875
+  ],
+  "elevation_range_guadalquivir_m": [
+    0.5,
+    1126.6109619140625
+  ],
+  "n_elevation_discrepancy_gt50m": 0,
+  "n_missing_elevation": 0,
+  "site_class_counts": {
+    "river": 925,
+    "reservoir": 35,
+    "estuary": 24,
+    "canal": 8
+  },
+  "source_counts": {
+    "WATERBASE_DIRECT": 799,
+    "GLORICH": 164,
+    "GEMSTAT": 20,
+    "WATERBASE": 9
+  }
+}

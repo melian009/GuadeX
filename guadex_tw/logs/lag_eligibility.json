@@ -1,0 +1,9 @@
+{
+  "cadence_rule_obs_per_year": 24,
+  "n_sites_eligible": 3,
+  "eligible_site_ids": [
+    "ES020ESPF004300618",
+    "ES091R0571",
+    "ESCHC2621"
+  ]
+}

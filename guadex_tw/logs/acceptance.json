@@ -1,0 +1,152 @@
+[
+  {
+    "item": "Guadalquivir extract reproduces verified counts",
+    "pass": true,
+    "detail": "195 rows / 5 sites"
+  },
+  {
+    "item": "date ranges 1990-1995 for GEMSTAT sites",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "bbox contamination excluded (6 non-Guadalquivir sites)",
+    "pass": true,
+    "detail": "bbox 406 rows / 11 sites"
+  },
+  {
+    "item": "national elevation range wider than Guadalquivir",
+    "pass": true,
+    "detail": "all 0-1452 m; GQ 0.5-1127 m"
+  },
+  {
+    "item": "elevation available for every retained site",
+    "pass": true,
+    "detail": "992 sites"
+  },
+  {
+    "item": "Waterbase outcome recorded (direct SUCCESS)",
+    "pass": true,
+    "detail": "27203 obs"
+  },
+  {
+    "item": "paired_observations.csv exists",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "paired_sites_matched.csv exists",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "lag-eligibility rule applied and reported",
+    "pass": true,
+    "detail": "3 sites (all single-year) -> lag models in-sample only"
+  },
+  {
+    "item": "Model1_per_station_month present in cv_metrics",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "Model2_month present in cv_metrics",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "Model4_mixedlm present in cv_metrics",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "baseline_Tw=Ta present in cv_metrics",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "baseline_Ta+offset present in cv_metrics",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "baseline_monthly_climatology present in cv_metrics",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "leave-one-basin-out present",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "elevation interaction tested with LRT (b3)",
+    "pass": true,
+    "detail": "{'stat': 471.0014681452885, 'p': 1.9401817570701197e-104}"
+  },
+  {
+    "item": "future projections >=3 SSPs, 11 GCMs",
+    "pass": true,
+    "detail": "4 SSPs, 11 GCMs, 1056 rows"
+  },
+  {
+    "item": "ensemble median/IQR/P10-P90 columns present",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "thermal_metrics.csv present",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "historical_sites table present",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "all figures present (>=7)",
+    "pass": true,
+    "detail": "8 PNGs"
+  },
+  {
+    "item": "figure captions with N present",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "REPORT.md exists",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "LIMITATIONS.md exists",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "PROVENANCE.md exists",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "run_all.py exists",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "requirements.txt exists",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "plain-language bottom line at top of REPORT.md",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "no credential literal in tracked files",
+    "pass": true,
+    "detail": ""
+  }
+]
