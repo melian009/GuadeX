@@ -29,6 +29,12 @@ export compute_site_metrics, aggregate_metrics, site_connectivity_metrics
 export export_run_outputs, write_viewer_outputs
 export load_temperature_projections, basin_warming_curve, warming_matrix
 
+# Export climate-scenario figure functions
+export plot_climate_scenario_figures, plot_climate_run_figure
+export plot_ensemble_level_figure, plot_across_scenarios_figure, plot_final_year_summary
+export discover_climate_runs, load_climate_run, run_level_stats, ensemble_level_stats
+export climate_metric_column
+
 # Export data preparation functions
 export prepare_ode_data, save_ode_data
 export load_species_characteristics, load_site_data, load_species_density_data
@@ -55,5 +61,6 @@ include("ode_model.jl")
 include("data_preparation.jl")
 include("outputs.jl")
 include("visualization.jl")
+include("climate_figures.jl")
 
 end # module Guadex

@@ -65,6 +65,7 @@ save_interval_days = 30.4167   # 365/12, so monthly saves land on year boundarie
 elevation_scaling = false
 presence_threshold = 0.1
 upstream_cost = 0.05
+make_figures = true            # generate the four-level figures after the run
 temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
 scenarios = ["ssp126", "ssp245", "ssp370", "ssp585"]
 gcms = ["ACCESS-CM2", "CMCC-CM2-SR5", ...]
@@ -86,6 +87,7 @@ Environment overrides (useful for smoke tests):
 | `GUADEX_CLIMATE_ELEVATION_SCALING` | `1`/`true` enables elevation scaling |
 | `GUADEX_CLIMATE_MAX_RUNS` | cap the number of runs (testing aid) |
 | `GUADEX_CLIMATE_FORCE` | `1`/`true` recomputes runs whose `simulation_output.jld2` already exists |
+| `GUADEX_CLIMATE_PLOT` | `0`/`false` skips the post-run figure generation (`make_figures`) |
 | `GUADEX_CLIMATE_PROJECTIONS_FILE` | alternative projection table |
 
 Completed runs are skipped by default (set `GUADEX_CLIMATE_FORCE=1` to recompute),
@@ -140,6 +142,45 @@ The per-level time-series JSON files use the same shape but are keyed by
 subcatchment, water body or `ES050`; the current viewer renders only site-level
 data, so these are ready for a future level selector.
 
+## Climate figures
+
+`src/climate_figures.jl` turns the four-level CSVs into report figures. It reads
+only `export/levels/*.csv` (plus `export/run_metadata.json` for discovery) and
+never re-runs the model, so figures can be regenerated at any time:
+
+```bash
+julia --project=. scripts/plot_climate_scenarios.jl [results_root] [figures_dir]
+```
+
+Defaults: `results_root = results/climate_scenarios` and
+`figures_dir = <results_root>/figures`. `results_root` must contain either a
+`runs_index.csv` (preferred) or a `<scenario>/<gcm>/export/levels/level_basin.csv`
+tree. `GUADEX_CLIMATE_END_YEAR` overrides the expected final year.
+
+The same plotting runs automatically at the end of `run_climate_scenarios.jl`
+when `make_figures = true` (the default); disable it with
+`make_figures = false` or `GUADEX_CLIMATE_PLOT=0`.
+
+### Figure inventory
+
+| path | content |
+| :--- | :--- |
+| `per_run/<scenario>__<gcm>.png` | one run: 5 metrics (rows) x 4 levels (columns); nested levels show the across-unit median with a 10-90% band (site spread at the sampling point) |
+| `ensemble/ensemble_<scenario>_<level>.png` | one scenario + level: 5 metric panels with the median across the 11 GCMs and 25-75 / 10-90% bands |
+| `comparison/across_scenarios_<level>.png` | one level: 5 metric panels, one ensemble-median line per SSP (with a light 10-90% band) |
+| `summary_2045.png` | final-year summary: 4 levels x 5 metrics, per-scenario median with 25-75% and 10-90% spreads |
+| `figure_inventory.csv` | manifest (category, scenario, gcm, metric, level, path, status) |
+
+The shipping ensemble yields 65 PNGs: 44 `per_run` (4 SSPs x 11 GCMs), 16
+`ensemble` (4 SSPs x 4 levels), 4 `comparison` and 1 final-year summary. Files
+are written at ~200 dpi (`px_per_unit = 2`).
+
+Run discovery and completeness detection mirror `runs_index.csv`: a run whose
+year range does not cover the reference horizon (for example the 2-year smoke
+run `GUADEX_CLIMATE_END_YEAR=2027`) is flagged `[INCOMPLETE]` in its per-run
+title and excluded from every ensemble band and summary, so a truncated run can
+never bias the across-GCM statistics.
+
 ## Other entry points
 
 The four-level + viewer export is also wired into:
@@ -182,6 +223,9 @@ include them).
 * `test/test_outputs.jl` covers the crosswalk mapping, per-site metrics,
   four-level aggregation, the temperature schedule, the warming curve and the
   end-to-end file export.
+* `test/test_climate_figures.jl` covers run discovery, incomplete-run detection,
+  per-run level statistics and across-GCM ensemble quantiles from synthetic CSVs
+  (no figures are rendered in tests).
 * `test/test_ode.jl` checks that the scheduled ODE reproduces the static model
   when the anomalies are zero and responds correctly to warming.
 * `GUADEX_CONFIG_ONLY=1` on any entry script validates the configuration without

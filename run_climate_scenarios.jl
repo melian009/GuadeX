@@ -63,6 +63,8 @@ const ELEVATION_SCALING = lowercase(get(ENV, "GUADEX_CLIMATE_ELEVATION_SCALING",
 const PRESENCE_THRESHOLD = Float64(_climate_setting("presence_threshold", 0.1))
 const MAX_RUNS = parse(Int, get(ENV, "GUADEX_CLIMATE_MAX_RUNS", "0"))  # 0 = no cap (testing aid)
 const FORCE_RERUN = lowercase(get(ENV, "GUADEX_CLIMATE_FORCE", "0")) in ("1", "true", "yes")
+const MAKE_FIGURES = lowercase(get(ENV, "GUADEX_CLIMATE_PLOT",
+    string(_climate_setting("make_figures", true)))) in ("1", "true", "yes")
 
 const CLIMATE_SCENARIOS = String.(get(GUADEX_PARAMS["run_climate_scenarios"], "scenarios",
     ["ssp126", "ssp245", "ssp370", "ssp585"]))
@@ -278,4 +280,16 @@ if nrow(index_df) > 0
     println("="^70)
 else
     println("\nNo climate runs were produced.")
+end
+
+if MAKE_FIGURES
+    println("\nGenerating climate figures...")
+    try
+        plot_climate_scenario_figures(base_output_dir;
+            figures_dir=joinpath(base_output_dir, "figures"))
+    catch err
+        @warn "climate figure generation failed" exception=err
+    end
+else
+    println("\nSkipping figures (GUADEX_CLIMATE_PLOT=0).")
 end
