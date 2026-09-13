@@ -8,7 +8,7 @@ compression method 9 (Deflate64), handled by the `inflate64` package.
 from __future__ import annotations
 
 import csv
-import struct
+import os
 import sys
 import time
 from pathlib import Path
@@ -19,12 +19,16 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as C
 
-TOKEN = "ZcJ37WK6oaWonFJ"
+# The EEA SDI public share is a tokenised WebDAV endpoint. The token is read
+# from the environment (never committed); it is only needed for the initial
+# download. If the archive is already cached, extraction reads it locally and
+# makes no authenticated request at all.
+TOKEN = os.environ.get("GUADEX_WISEDAV_TOKEN", "")
 ZIP_URL = ("https://sdi.eea.europa.eu/datashare/public.php/webdav/"
            "WISE6_DisaggregatedData-csv.zip")
 LICENSE = "EEA open data"
 VERSION = "WISE6 v2025 (Waterbase WQ ICM 2026, 1900-2025)"
-AUTH = (TOKEN, "")
+AUTH = (TOKEN, "") if TOKEN else None
 ZIP = C.RAW / "WISE6_DisaggregatedData-csv.zip"
 
 OUT_RAW = C.INTERIM / "waterbase_obs_raw_spain.csv"
@@ -38,6 +42,8 @@ def download_zip() -> None:
     if ZIP.exists() and ZIP.stat().st_size > 1_600_000_000:
         print(f"zip already present ({ZIP.stat().st_size:,} bytes)")
         return
+    if not TOKEN:
+        raise RuntimeError("WISE6 zip not cached and GUADEX_WISEDAV_TOKEN is not set")
     print("Downloading WISE6 disaggregated zip ...")
     t0 = time.time()
     with requests.get(ZIP_URL, auth=AUTH, stream=True, timeout=(60, 300)) as r:
@@ -58,21 +64,21 @@ def download_zip() -> None:
 
 
 def member_info() -> tuple[int, int]:
-    """Return (data_start, csize) for the single CSV member."""
-    tail = requests.get(ZIP_URL, headers={"Range": "bytes=-300000"}, auth=AUTH, timeout=180).content
-    eocd = tail.rfind(b"PK\x05\x06")
-    cd_size = struct.unpack_from("<I", tail, eocd + 12)[0]
-    cd_off = struct.unpack_from("<I", tail, eocd + 16)[0]
-    cd = requests.get(ZIP_URL, headers={"Range": f"bytes={cd_off}-{cd_off + cd_size - 1}"},
-                      auth=AUTH, timeout=180).content
-    csize = struct.unpack_from("<I", cd, 20)[0]
-    lhoff = struct.unpack_from("<I", cd, 42)[0]
-    # read local header from the local copy
-    with open(ZIP, "rb") as fh:
-        fh.seek(lhoff)
-        hdr = fh.read(300)
-    fn_len, ex_len = struct.unpack_from("<2H", hdr, 26)
-    return lhoff + 30 + fn_len + ex_len, csize
+    """Return (data_start, csize) for the CSV member of the local zip.
+
+    Reads the central directory from the cached archive, so no remote request
+    (and no WebDAV token) is needed once the file is on disk.
+    """
+    import zipfile
+
+    with zipfile.ZipFile(ZIP) as zf:
+        infos = [i for i in zf.infolist() if i.filename.lower().endswith(".csv")]
+        if not infos:
+            raise RuntimeError("no CSV member found in WISE6 archive")
+        info = max(infos, key=lambda i: i.compress_size)
+        fn = info.filename.encode("utf-8")
+        data_start = info.header_offset + 30 + len(fn) + len(info.extra)
+        return data_start, info.compress_size
 
 
 def stream_local(data_start: int, csize: int):

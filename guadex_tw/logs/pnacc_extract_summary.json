@@ -1,5 +1,18 @@
 {
   "n_gcm": 11,
+  "gcms": [
+    "ACCESS-CM2",
+    "CMCC-CM2-SR5",
+    "CNRM-ESM2-1",
+    "EC-Earth3-Veg",
+    "IITM-ESM",
+    "KACE-1-0-G",
+    "MIROC6",
+    "MPI-ESM1-2-HR",
+    "MRI-ESM2-0",
+    "NorESM2-MM",
+    "UKESM1-0-LL"
+  ],
   "scenarios": [
     "ssp126",
     "ssp245",
@@ -7,14 +20,32 @@
     "ssp585"
   ],
   "sites": [
-    "ES050ESPF10705",
-    "ES050ESPF40901",
     "ESP00016",
     "ESP00017",
     "ESP00018",
+    "ES050ESPF51611",
+    "ES050ESPF20103",
+    "ES050ESPF20104",
     "ES050ESPF30502",
     "ES050ESPF40345",
+    "ES050ESPF10802",
     "ES050ESPF51204"
   ],
-  "seconds": 4148.6
+  "site_elevations_m": {
+    "ESP00016": 232.4522705078125,
+    "ESP00017": 38.21369552612305,
+    "ESP00018": 0.5,
+    "ES050ESPF51611": 11.357329368591309,
+    "ES050ESPF20103": 849.6998901367188,
+    "ES050ESPF20104": 1126.6109619140625,
+    "ES050ESPF30502": 448.0970153808594,
+    "ES050ESPF40345": 537.3150024414062,
+    "ES050ESPF10802": 235.21194458007807,
+    "ES050ESPF51204": 69.83641815185547
+  },
+  "elevation_range_m": [
+    0.5,
+    1126.6109619140625
+  ],
+  "seconds": 16.8
 }

@@ -63,7 +63,7 @@ def power_series(sid: str) -> tuple[pd.DataFrame, dict]:
 def main() -> None:
     sites = load_sites()
     obs = pd.read_csv(C.PROCESSED / "water_temp_all_qc.csv", parse_dates=["obs_date"],
-                      dtype={"site_id": str})
+                      dtype={"site_id": str}, low_memory=False)
     obs = obs.merge(sites[["site_id", "elevation_m", "site_class", "in_guadalquivir_basin",
                            "source"]].rename(columns={"source": "site_source"}),
                     on="site_id", how="left")
@@ -78,8 +78,9 @@ def main() -> None:
         if ser.empty:
             continue
         z_cell = meta.get("power_elevation_m")
-        if z_site is not np.nan and z_cell is not None and np.isfinite(z_cell):
-            lapse = GAMMA * (z_site - z_cell)
+        if (np.isfinite(z_site) and z_cell is not None
+                and np.isfinite(float(z_cell))):
+            lapse = GAMMA * (z_site - float(z_cell))
         else:
             lapse = 0.0
         ser = ser.sort_values("date").set_index("date")

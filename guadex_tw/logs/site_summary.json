@@ -9,8 +9,11 @@
     0.5,
     1126.6109619140625
   ],
+  "n_elevation_dual_source": 9,
   "n_elevation_discrepancy_gt50m": 0,
+  "n_dem_center_discrepancy_gt50m": 0,
   "n_missing_elevation": 0,
+  "elevation_note": "Copernicus DEM GLO-30 3x3 median is the elevation source for all 992 sites; an independent Open-Meteo DEM90 value exists for only 9 sites, so the dual-source cross-check is limited to those.",
   "site_class_counts": {
     "river": 925,
     "reservoir": 35,

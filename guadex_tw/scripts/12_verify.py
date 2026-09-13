@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -44,6 +45,11 @@ def main() -> None:
           f"GQ {gqs.elevation_m.min():.1f}-{gqs.elevation_m.max():.0f} m")
     check("elevation available for every retained site", sites.elevation_m.isna().sum() == 0,
           f"{len(sites)} sites")
+    site_sum = json.loads((CM.LOGS / "site_summary.json").read_text())
+    check("elevation cross-check coverage reported honestly",
+          "n_elevation_dual_source" in site_sum,
+          f"Copernicus DEM is single-source for most sites; independent Open-Meteo DEM90 "
+          f"cross-check on {site_sum.get('n_elevation_dual_source', '?')} sites")
 
     wb = CM.INTERIM / "waterbase_temp_spain.csv"
     check("Waterbase outcome recorded (direct SUCCESS)",
@@ -61,11 +67,18 @@ def main() -> None:
         check(f"{m} present in cv_metrics", m in set(cv.model_name))
     for b in ("baseline_Tw=Ta", "baseline_Ta+offset", "baseline_monthly_climatology"):
         check(f"{b} present in cv_metrics", b in set(cv.model_name))
+    check("true pooled NSE reported (not only mean-of-station NSE)",
+          ((cv.model_name == "Model2_month") & (cv.test_station == "POOLED_HELDOUT")).any())
     check("leave-one-basin-out present",
           "Spain_to_Guadalquivir" in set(cv.scope.astype(str)))
     co = json.loads((CM.MODELS / "model_coefficients.json").read_text())
-    check("elevation interaction tested with LRT (b3)",
-          "lr_test_ta_z" in co.get("Spain", {}), str(co.get("Spain", {}).get("lr_test_ta_z")))
+    sp = co.get("Spain", {})
+    check("elevation interaction tested cluster-robust and by MixedLM LRT",
+          "wald_test_ta_z_cluster" in sp and "lr_ta_z" in sp.get("mixedlm", {}),
+          f"cluster Wald={sp.get('wald_test_ta_z_cluster')}; "
+          f"MixedLM LRT={sp.get('mixedlm', {}).get('lr_ta_z')}")
+    check("primary Model 2 is area-free (transferable to Guadalquivir)",
+          sp.get("primary_model") == "area-free", str(sp.get("formula")))
 
     fut = pd.read_csv(CM.TABLES / "water_temp_future_2045.csv")
     check("future projections >=3 SSPs, 11 GCMs",
@@ -74,6 +87,20 @@ def main() -> None:
     check("ensemble median/IQR/P10-P90 columns present",
           all(c in fut.columns for c in ("ensemble_median", "ensemble_p25", "ensemble_p75",
                                          "ensemble_p10", "ensemble_p90")))
+    check("ensemble spread separated from between-site spread",
+          (CM.TABLES / "water_temp_future_ensemble_summary.csv").exists())
+    ps = json.loads((CM.LOGS / "projection_summary.json").read_text())
+    elev = ps.get("projected_site_elevation_range_m", [0, 0])
+    sel = json.loads((CM.LOGS / "pnacc_extract_summary.json").read_text())
+    sel_elev = sel.get("elevation_range_m", [0, 0])
+    check("PNACC site selection spans the basin elevation gradient",
+          len(sel_elev) == 2 and sel_elev[1] >= 800.0,
+          f"selected {sel_elev[0]:.0f}-{sel_elev[1]:.0f} m; shipped full-coverage "
+          f"projection {elev[0]:.0f}-{elev[1]:.0f} m")
+    check("projection elevation profile and fitted slope recorded",
+          (CM.TABLES / "water_temp_future_elevation_profile.csv").exists()
+          and "model_ta_z_coef" in ps,
+          f"b_ta_z={ps.get('model_ta_z_coef')}")
     check("thermal_metrics.csv present", (CM.TABLES / "thermal_metrics.csv").exists())
     check("historical_sites table present",
           (CM.TABLES / "water_temp_historical_sites.csv").exists())
@@ -89,13 +116,17 @@ def main() -> None:
     check("plain-language bottom line at top of REPORT.md",
           "Bottom line (plain language)" in report[:2000])
 
-    secret = False
+    suspicious = []
+    token_literal = re.compile(r"(?:token|password|secret|passwd)\s*=\s*[\"'][^\"']+[\"']", re.I)
     for p in CM.ROOT.rglob("*"):
         if p.is_file() and p.suffix in (".py", ".md", ".txt") and ".venv" not in str(p):
             txt = p.read_text(encoding="utf-8", errors="ignore")
-            if "api_key=" in txt and "AEMET_API_KEY" not in txt and "api_key={aemet_key}" not in txt:
-                secret = True
-    check("no credential literal in tracked files", not secret)
+            low = txt.lower()
+            if "api_key=" in low and "aemet_api_key" not in low and "api_key={aemet_key}" not in low:
+                suspicious.append(f"{p.name}: api_key literal")
+            if p.suffix == ".py" and token_literal.search(txt):
+                suspicious.append(f"{p.name}: credential literal")
+    check("no credential literal in tracked files", not suspicious, "; ".join(suspicious))
 
     n_fail = sum(1 for _, ok, _ in RESULTS if not ok)
     print(f"\n{len(RESULTS) - n_fail}/{len(RESULTS)} checks passed")

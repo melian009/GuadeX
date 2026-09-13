@@ -1,12 +1,20 @@
 """Project river water temperature to 2045 with the calibrated model (Sections 10-11).
 
 Pipeline:
-  1. Fit the Stage-B (all-Spain) elevation-aware Model 2 on the paired table.
+  1. Fit the Stage-B (all-Spain) elevation-aware Model 2 on the paired table,
+     using the same area-free formula as the primary model in 08_models.py.
   2. Bias-correct PNACC tmean per (site, GCM) to the NASA POWER calibration
-     climatology over 1986-2005, so the projection predictor matches the
-     predictor the model was calibrated on.
+     climatology over 1986-2005, so projected *absolute* temperatures match the
+     predictor the model was calibrated on. Note that because the correction is
+     an additive constant per (site, GCM) and the model is linear in Ta, it
+     cancels exactly in the per-model anomalies (future minus own baseline);
+     the reported delta-Tw therefore depends only on the GCM's own warming
+     signal, and the bias correction affects absolute values only.
   3. Apply the model to each GCM/scenario, compute per-model anomalies against
-     that model's own historical run, and report the 11-model ensemble.
+     that model's own historical run, and report the 11-model ensemble. The
+     ensemble spread is reported separately for within-site (GCM) variability
+     and between-site variability; percentiles are not pooled across sites and
+     models into a single distribution.
 """
 from __future__ import annotations
 
@@ -36,7 +44,8 @@ POWER_MIN = pd.Timestamp("1981-01-01")
 
 
 def fit_model() -> tuple:
-    paired = pd.read_csv(CM.PROCESSED / "paired_observations.csv", dtype={"site_id": str})
+    paired = pd.read_csv(CM.PROCESSED / "paired_observations.csv", dtype={"site_id": str},
+                         low_memory=False)
     d = paired.dropna(subset=["tw_obs", "ta_mean_corr", "elevation_m", "month"]).copy()
     d["ta"] = d["ta_mean_corr"]
     d["z"] = d["elevation_m"] / 1000.0
@@ -131,12 +140,44 @@ def main() -> None:
                     "n": int(len(d)), "n_sites": int(d["site_id"].nunique())}, indent=2),
         encoding="utf-8")
 
-    # --- sites to project: Guadalquivir ---
+    # --- sites to project: Guadalquivir (restricted to extracted PNACC sites) ---
     sites = pd.read_csv(CM.PROCESSED / "sites.csv", dtype={"site_id": str})
-    gq = sites[sites["in_guadalquivir_basin"]].dropna(subset=["elevation_m"])
-    print("projecting at", len(gq), "Guadalquivir sites")
+    pnacc = pd.read_parquet(CM.INTERIM / "pnacc_tmean_guadalquivir.parquet")
+    pnacc["date"] = pd.to_datetime(pnacc["date"])
+    pnacc["month"] = pnacc["date"].dt.month
+    pnacc["year"] = pnacc["date"].dt.year
 
-    # POWER 1986-2005 climatology per site
+    # Defence in depth: only project sites for which every *expected* GCM is
+    # present in every experiment. Deriving the reference set from the parquet,
+    # or counting GCMs across all experiments, would not detect a globally
+    # missing GCM or a per-scenario gap while the loops below still iterate the
+    # hard-coded GCMS/SCENARIOS.
+    expected_gcms = set(GCMS)
+    have_gcms = set(pnacc["gcm"].unique())
+    if not expected_gcms.issubset(have_gcms):
+        raise SystemExit(
+            f"PNACC parquet is missing expected GCM(s) "
+            f"{sorted(expected_gcms - have_gcms)}; refusing to project a partial ensemble")
+    exp_expected = ["historical"] + SCENARIOS
+    cell_ok = (pnacc.groupby(["site_id", "experiment"])["gcm"]
+               .agg(set).map(lambda s: expected_gcms.issubset(s)).unstack(fill_value=False))
+    for exp in exp_expected:
+        if exp not in cell_ok.columns:
+            print(f"  WARNING: PNACC parquet has no '{exp}' experiment")
+            cell_ok[exp] = False
+    site_ok = cell_ok[exp_expected].all(axis=1)
+    bad_sites = sorted(cell_ok.index[~site_ok])
+    if bad_sites:
+        print(f"  WARNING: dropping {len(bad_sites)} site(s) without all "
+              f"{len(expected_gcms)} GCMs in every experiment: {bad_sites}")
+    pnacc = pnacc[pnacc["site_id"].isin(cell_ok.index[site_ok])]
+
+    gq = sites[sites["in_guadalquivir_basin"]].dropna(subset=["elevation_m"])
+    gq = gq[gq["site_id"].isin(pnacc["site_id"].unique())]
+    print("projecting at", len(gq), "Guadalquivir sites;",
+          f"elevation {gq['elevation_m'].min():.1f}-{gq['elevation_m'].max():.1f} m")
+
+    # POWER 1986-2005 climatology per projected site
     base_lo, base_hi = BASELINE
     power_clim = {}
     for _, s in gq.iterrows():
@@ -151,13 +192,6 @@ def main() -> None:
                      url="https://power.larc.nasa.gov/api/temporal/daily/point",
                      status="FAILED", error=repr(exc))
     print("POWER baseline climatology sites:", len(power_clim))
-
-    pnacc = pd.read_parquet(CM.INTERIM / "pnacc_tmean_guadalquivir.parquet")
-    pnacc["date"] = pd.to_datetime(pnacc["date"])
-    gq = gq[gq["site_id"].isin(pnacc["site_id"].unique())]
-    print("sites with PNACC extraction:", len(gq))
-    pnacc["month"] = pnacc["date"].dt.month
-    pnacc["year"] = pnacc["date"].dt.year
 
     zmap = dict(zip(gq["site_id"], gq["elevation_m"] / 1000.0))
     rows_future, metrics_rows, hist_rows = [], [], []
@@ -201,21 +235,68 @@ def main() -> None:
                         "tw_winter_mean": mt["mean_winter_c"], "tw_p95": mt["p95_annual_c"],
                         "tw_p05": mt["p05_annual_c"], "tw_amplitude": mt["tw_amplitude"],
                         "delta_tw_mean": mt["mean_annual_c"] - base_mean,
+                        "delta_ta_mean": float(fp["ta_adj"].mean() - hb["ta_adj"].mean()),
                     })
                     # ensemble median daily series across GCMs handled after loop
         # store per-site/scenario daily Tw for ensemble metrics
         # (kept in a separate parquet below)
 
     future = pd.DataFrame(rows_future)
-    # ensemble spread across GCMs per site/scenario/period
-    grp = future.groupby(["site_id", "scenario", "period_start", "period_end"])
-    ens = grp["tw_mean"].agg(
+    keys = ["site_id", "scenario", "period_start", "period_end"]
+    grp = future.groupby(keys)
+    # per-site ensemble statistics (across the 11 GCMs)
+    ens_abs = grp["tw_mean"].agg(
         ensemble_median="median", ensemble_p25=lambda s: s.quantile(0.25),
         ensemble_p75=lambda s: s.quantile(0.75), ensemble_p10=lambda s: s.quantile(0.10),
         ensemble_p90=lambda s: s.quantile(0.90)).reset_index()
-    future = future.merge(ens, on=["site_id", "scenario", "period_start", "period_end"], how="left")
+    ens_delta = grp["delta_tw_mean"].agg(
+        ensemble_delta_median="median",
+        ensemble_delta_p10=lambda s: s.quantile(0.10),
+        ensemble_delta_p90=lambda s: s.quantile(0.90),
+        ensemble_delta_p25=lambda s: s.quantile(0.25),
+        ensemble_delta_p75=lambda s: s.quantile(0.75),
+        n_gcm="size").reset_index()
+    future = (future.merge(ens_abs, on=keys, how="left")
+                     .merge(ens_delta, on=keys, how="left"))
     future.to_csv(CM.TABLES / "water_temp_future_2045.csv", index=False)
     print(f"wrote water_temp_future_2045.csv ({len(future)} rows)")
+
+    # Site-averaged ensemble summary. Within each scenario/period we first take
+    # the GCM distribution at each site, then summarise those per-site
+    # statistics across sites. This keeps GCM (model) spread separate from
+    # between-site spread instead of pooling them into one distribution.
+    site_stats = future.groupby(["scenario", "period_start", "period_end", "site_id"]).agg(
+        gcm_median=("delta_tw_mean", "median"),
+        gcm_p10=("delta_tw_mean", lambda s: s.quantile(0.10)),
+        gcm_p90=("delta_tw_mean", lambda s: s.quantile(0.90))).reset_index()
+    ens_summary = site_stats.groupby(["scenario", "period_start", "period_end"]).agg(
+        gcm_median_across_sites=("gcm_median", "median"),
+        gcm_p10_across_sites=("gcm_p10", "median"),
+        gcm_p90_across_sites=("gcm_p90", "median"),
+        between_site_p10=("gcm_median", lambda s: s.quantile(0.10)),
+        between_site_p90=("gcm_median", lambda s: s.quantile(0.90)),
+        n_sites=("site_id", "nunique")).reset_index()
+    ens_summary.to_csv(CM.TABLES / "water_temp_future_ensemble_summary.csv", index=False)
+    print(f"wrote water_temp_future_ensemble_summary.csv ({len(ens_summary)} rows)")
+
+    # Elevation profile of the projected change. Because the model is linear in
+    # Ta with slope (b_ta + b_ta_z * z), the elevation dependence of the change
+    # is d(delta_Tw)/dz = b_ta_z * delta_Ta: higher reaches are projected to
+    # warm less by that amount per km. This file makes the elevation structure
+    # explicit at every projected site; the summary records the implied
+    # slope so the report need not rely only on the sampled sites.
+    prof = (future.groupby(["scenario", "period_start", "period_end", "site_id"])
+            ["delta_tw_mean"].median().reset_index())
+    prof = prof.merge(gq[["site_id", "elevation_m"]], on="site_id", how="left")
+    prof = prof.sort_values(["scenario", "period_start", "site_id"])
+    prof.to_csv(CM.TABLES / "water_temp_future_elevation_profile.csv", index=False)
+    b_ta = float(model.params.get("ta", np.nan))
+    b_ta_z = float(model.params.get("ta_z", np.nan))
+    mean_dta = (future.groupby(["scenario", "period_start", "period_end"])["delta_ta_mean"]
+                .median().reset_index().rename(columns={"delta_ta_mean": "delta_ta_median_c"}))
+    mean_dta["implied_dtw_dz_per_km_c"] = b_ta_z * mean_dta["delta_ta_median_c"]
+    print("wrote water_temp_future_elevation_profile.csv; "
+          f"implied d(dTw)/dz = b_ta_z*delta_Ta (b_ta_z={b_ta_z:.3f})")
 
     # --- ensemble-median daily series -> thermal metrics ---
     daily_rows = []
@@ -261,10 +342,8 @@ def main() -> None:
     thermal.to_csv(CM.TABLES / "thermal_metrics.csv", index=False)
     print(f"wrote thermal_metrics.csv ({len(thermal)} rows)")
 
-    # historical modelled vs observed (Guadalquivir)
+    # historical modelled water temperature (Guadalquivir)
     hist = pd.concat(hist_rows, ignore_index=True) if hist_rows else pd.DataFrame()
-    obs = d[d["in_guadalquivir_basin"]][["site_id", "obs_date", "tw_obs", "ta_mean_corr", "source"]]
-    obs = obs.rename(columns={"obs_date": "date"})
     if not hist.empty:
         hist.to_csv(CM.INTERIM / "tw_historical_modelled.csv", index=False)
 
@@ -274,7 +353,13 @@ def main() -> None:
                    f"baseline {BASELINE}; anomalies per model vs own historical run")
     summary = {"n_gq_sites": int(len(gq)), "n_gcm": len(GCMS), "scenarios": SCENARIOS,
                "periods": PERIODS, "baseline": BASELINE, "thresholds": THRESHOLDS,
-               "power_baseline_sites": len(power_clim)}
+               "power_baseline_sites": len(power_clim),
+               "projected_site_elevation_range_m": [float(gq["elevation_m"].min()),
+                                                    float(gq["elevation_m"].max())],
+               "model_ta_coef": b_ta, "model_ta_z_coef": b_ta_z,
+               "elevation_profile_slope": json.loads(mean_dta.to_json(orient="records")),
+               "ensemble_summary": json.loads(
+                   ens_summary.to_json(orient="records"))}
     (CM.LOGS / "projection_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
 

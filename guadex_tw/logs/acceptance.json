@@ -25,6 +25,11 @@
     "detail": "992 sites"
   },
   {
+    "item": "elevation cross-check coverage reported honestly",
+    "pass": true,
+    "detail": "Copernicus DEM is single-source for most sites; independent Open-Meteo DEM90 cross-check on 9 sites"
+  },
+  {
     "item": "Waterbase outcome recorded (direct SUCCESS)",
     "pass": true,
     "detail": "27203 obs"
@@ -75,24 +80,49 @@
     "detail": ""
   },
   {
+    "item": "true pooled NSE reported (not only mean-of-station NSE)",
+    "pass": true,
+    "detail": ""
+  },
+  {
     "item": "leave-one-basin-out present",
     "pass": true,
     "detail": ""
   },
   {
-    "item": "elevation interaction tested with LRT (b3)",
+    "item": "elevation interaction tested cluster-robust and by MixedLM LRT",
     "pass": true,
-    "detail": "{'stat': 471.0014681452885, 'p': 1.9401817570701197e-104}"
+    "detail": "cluster Wald={'stat': -6.852381092323441, 'p': 7.263075329040826e-12}; MixedLM LRT={'stat': 34.93995417206315, 'p': 3.4003124016258555e-09}"
+  },
+  {
+    "item": "primary Model 2 is area-free (transferable to Guadalquivir)",
+    "pass": true,
+    "detail": "tw_obs ~ ta + C(month) + z + ta_z"
   },
   {
     "item": "future projections >=3 SSPs, 11 GCMs",
     "pass": true,
-    "detail": "4 SSPs, 11 GCMs, 1056 rows"
+    "detail": "4 SSPs, 11 GCMs, 792 rows"
   },
   {
     "item": "ensemble median/IQR/P10-P90 columns present",
     "pass": true,
     "detail": ""
+  },
+  {
+    "item": "ensemble spread separated from between-site spread",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "item": "PNACC site selection spans the basin elevation gradient",
+    "pass": true,
+    "detail": "selected 0-1127 m; shipped full-coverage projection 0-537 m"
+  },
+  {
+    "item": "projection elevation profile and fitted slope recorded",
+    "pass": true,
+    "detail": "b_ta_z=-0.1629926745080157"
   },
   {
     "item": "thermal_metrics.csv present",

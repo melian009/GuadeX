@@ -37,7 +37,7 @@ def metrics(obs, pred):
 
 def main() -> None:
     d = pd.read_csv(CM.PROCESSED / "paired_observations.csv", parse_dates=["obs_date"],
-                    dtype={"site_id": str})
+                    dtype={"site_id": str}, low_memory=False)
     d = d.dropna(subset=["tw_obs", "ta_mean_corr", "elevation_m", "month"]).copy()
     d["ta"] = d["ta_mean_corr"]
     d["z"] = d["elevation_m"] / 1000.0

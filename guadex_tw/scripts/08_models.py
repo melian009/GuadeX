@@ -1,8 +1,25 @@
 """Fit Tw~Ta models (Section 8) and run the validation protocol (Section 9).
 
 Stage A = Guadalquivir sites; Stage B = all Spanish sites.
+
+Primary model: Model 2 without the basin-area term
+    tw_obs ~ ta + C(month) + z + ta_z
+The basin-area interaction is fitted only as a reported sensitivity, because
+`upstream_basin_area` is ~55% populated nationally and 0% populated for the
+Guadalquivir transfer/projection target; the area-free form is what is
+transferable and what `10_project.py` applies.
+
+Inference: because observations are strongly clustered within sites (MixedLM
+ICC ~0.44 nationally), Model 2 standard errors and p-values are reported
+cluster-robust by site, alongside a MixedLM likelihood-ratio test. The naive
+OLS LRT is retained only for audit.
+
+Validation: both the unweighted mean of per-station NSE (`MEAN_STATION_NSE`) and
+the true pooled NSE over concatenated held-out predictions (`POOLED_HELDOUT`)
+are written. The pooled value is the primary number quoted in REPORT.md.
+
 Outputs: outputs/tables/cv_metrics.csv, models/model_coefficients.json,
-models/model_summary.txt, models/loso_predictions_*.csv.
+models/model_summary.txt, models/loso_predictions.csv.
 """
 from __future__ import annotations
 
@@ -14,6 +31,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
+from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as CM
@@ -50,14 +68,56 @@ def prep(df: pd.DataFrame) -> pd.DataFrame:
     d["z"] = d["elevation_m"] / 1000.0
     d["ta_z"] = d["ta"] * d["z"]
     area = pd.to_numeric(d.get("upstream_basin_area"), errors="coerce")
-    # keep the raw log-area; imputation is done per scope below (upstream_basin_area
-    # is only ~55% populated nationally and absent for Guadalquivir sites).
     d["log_area_raw"] = np.log10(area.where(area > 0))
     d["log_area"] = d["log_area_raw"]
     d["ta_logarea"] = np.nan
     d["month"] = d["month"].astype(int)
     d = d.dropna(subset=["tw_obs", "ta", "z", "month"])
     return d
+
+
+def mean_station_row(rows: list, model_name: str, scope: str, note: str = "") -> dict:
+    """Unweighted mean of per-station NSE (equal station weight). NOT pooled NSE."""
+    sub = [r for r in rows if r["model_name"] == model_name and r["scope"] == scope
+           and np.isfinite(r.get("nse", np.nan))]
+    if not sub:
+        return dict(model_name=model_name, scope=scope, test_station="MEAN_STATION_NSE",
+                    notes=note or "no folds")
+    w = np.array([r["n_test"] for r in sub], float)
+    out = dict(model_name=model_name, scope=scope, test_station="MEAN_STATION_NSE",
+               n_train=int(np.sum([r["n_train"] for r in sub])),
+               n_test=int(np.sum(w)), period_train="", period_test="",
+               notes=f"{note} | unweighted mean of per-station NSE; n_test=summed")
+    for k in ("nse", "rmse_c", "mae_c", "bias_c", "r2"):
+        v = np.array([r[k] for r in sub], float)
+        if k == "nse":
+            out[k] = float(np.nanmean(v))
+        else:
+            out[k] = float(np.nansum(v * w) / np.nansum(np.where(np.isfinite(v), w, 0)))
+    return out
+
+
+def pooled_row_from_preds(preds: pd.DataFrame, model_name: str, scope: str,
+                          note: str = "") -> dict | None:
+    """True pooled NSE over concatenated held-out predictions (primary metric)."""
+    if preds is None or len(preds) == 0:
+        return None
+    p = preds.dropna(subset=["tw_obs", "pred"])
+    if len(p) < 2:
+        return None
+    mt = metrics(p["tw_obs"], p["pred"])
+    return dict(model_name=model_name, scope=scope, test_station="POOLED_HELDOUT",
+                n_train=np.nan, n_test=mt["n"], period_train="", period_test="",
+                notes=f"{note} | pooled over concatenated held-out predictions", **mt)
+
+
+def pooled_from_frames(frames: list, model_name: str, scope: str,
+                       note: str = "") -> dict | None:
+    fs = [f for f in frames if len(f) and f["model_name"].iloc[0] == model_name
+          and f["scope"].iloc[0] == scope]
+    if not fs:
+        return None
+    return pooled_row_from_preds(pd.concat(fs, ignore_index=True), model_name, scope, note)
 
 
 def baselines_loso(df: pd.DataFrame, scope: str) -> tuple[list, list]:
@@ -110,27 +170,9 @@ def loso_ols(df: pd.DataFrame, formula: str, model_name: str, scope: str) -> tup
     return rows, preds
 
 
-def pooled_mean_row(rows: list, model_name: str, scope: str, note: str = "") -> dict:
-    """Aggregate fold metrics into a pooled row (mean across folds, N-weighted)."""
-    sub = [r for r in rows if r["model_name"] == model_name and r["scope"] == scope
-           and "nse" in r and np.isfinite(r.get("nse", np.nan))]
-    if not sub:
-        return dict(model_name=model_name, scope=scope, test_station="POOLED_FOLDS",
-                    notes=note or "no folds")
-    w = np.array([r["n_test"] for r in sub], float)
-    out = dict(model_name=model_name, scope=scope, test_station="POOLED_FOLDS_MEAN",
-               n_train=int(np.sum([r["n_train"] for r in sub])),
-               n_test=int(np.sum(w)),
-               period_train="", period_test="", notes=note or "mean over LOSO folds")
-    for k in ("nse", "rmse_c", "mae_c", "bias_c", "r2"):
-        v = np.array([r[k] for r in sub], float)
-        out[k] = float(np.nansum(v * w) / np.nansum(np.where(np.isfinite(v), w, 0))) if k != "nse" else float(np.nanmean(v))
-    return out
-
-
-def per_station_month_model1(df: pd.DataFrame, scope: str) -> list:
-    """Model 1: per-station per-month OLS, n>=15, else pooled-month fallback."""
-    rows = []
+def per_station_month_model1(df: pd.DataFrame, scope: str) -> tuple[list, list]:
+    """Model 1: per-station per-month OLS, n>=15, else pooled-month fallback (in-sample)."""
+    rows, preds = [], []
     pooled_month = {
         int(mo): smf.ols("tw_obs ~ ta", data=g).fit()
         for mo, g in df.groupby("month") if len(g) >= 15
@@ -140,16 +182,20 @@ def per_station_month_model1(df: pd.DataFrame, scope: str) -> list:
         for mo, mg in sg.groupby("month"):
             if len(mg) >= 15:
                 m = smf.ols("tw_obs ~ ta", data=mg).fit()
-                fitted.append(pd.DataFrame({"tw_obs": mg["tw_obs"], "pred": m.predict(mg),
+                fitted.append(pd.DataFrame({"site_id": sid, "obs_date": mg["obs_date"].values,
+                                            "tw_obs": mg["tw_obs"].values,
+                                            "pred": np.asarray(m.predict(mg), float),
                                             "n": len(mg), "fallback": False}))
             else:
                 pm = pooled_month.get(mo)
-                if pm is not None:
-                    fitted.append(pd.DataFrame({"tw_obs": mg["tw_obs"],
-                                                "pred": pm.predict(mg), "n": len(mg),
-                                                "fallback": True}))
+                if pm is None:
+                    continue
+                fitted.append(pd.DataFrame({"site_id": sid, "obs_date": mg["obs_date"].values,
+                                            "tw_obs": mg["tw_obs"].values,
+                                            "pred": np.asarray(pm.predict(mg), float),
+                                            "n": len(mg), "fallback": True}))
         if fitted:
-            f = pd.concat(fitted)
+            f = pd.concat(fitted, ignore_index=True)
             mt = metrics(f["tw_obs"], f["pred"])
             rows.append(dict(model_name="Model1_per_station_month", scope=scope,
                              test_station=sid, n_train=len(sg), n_test=len(f),
@@ -157,7 +203,9 @@ def per_station_month_model1(df: pd.DataFrame, scope: str) -> list:
                              period_test=f"{sg['year'].min()}-{sg['year'].max()}",
                              notes=f"in-sample; months<15 use pooled fallback "
                                    f"({int(f['fallback'].sum())} obs)", **mt))
-    return rows
+            preds.append(f[["site_id", "obs_date", "tw_obs", "pred"]].assign(
+                model_name="Model1_per_station_month", scope=scope))
+    return rows, preds
 
 
 def blocked_time_split(df: pd.DataFrame, formula: str, model_name: str, scope: str) -> list:
@@ -187,18 +235,11 @@ def blocked_time_split(df: pd.DataFrame, formula: str, model_name: str, scope: s
 
 def main() -> None:
     paired = pd.read_csv(CM.PROCESSED / "paired_observations.csv", parse_dates=["obs_date"],
-                         dtype={"site_id": str})
+                         dtype={"site_id": str}, low_memory=False)
     d = prep(paired)
     print(f"paired rows with Tw+Ta+z: {len(d):,} across {d['site_id'].nunique()} sites")
 
-    area_cov = d["log_area"].notna().mean()
-    print(f"log(upstream_basin_area) coverage: {area_cov:.1%}")
-    use_area = area_cov > 0.5
-
-    scopes = {
-        "Guadalquivir": d[d["in_guadalquivir_basin"]],
-        "Spain": d,
-    }
+    scopes = {"Guadalquivir": d[d["in_guadalquivir_basin"]], "Spain": d}
     cv_rows, pred_frames = [], []
     coefs = {}
     summary_lines = []
@@ -216,64 +257,94 @@ def main() -> None:
         cv_rows += br
         pred_frames += bp
         for nm in ("baseline_Tw=Ta", "baseline_Ta+offset", "baseline_monthly_climatology"):
-            cv_rows.append(pooled_mean_row(br, nm, scope, "LOSO baseline"))
+            cv_rows.append(mean_station_row(br, nm, scope, "LOSO baseline"))
+            pr = pooled_from_frames(pred_frames, nm, scope, "LOSO baseline")
+            if pr:
+                cv_rows.append(pr)
 
         # --- Model 1 per-station/month (in-sample) ---
-        m1 = per_station_month_model1(sdf, scope)
+        m1, m1p = per_station_month_model1(sdf, scope)
         cv_rows += m1
-        m1p = pooled_mean_row(m1, "Model1_per_station_month", scope, "in-sample mean over stations")
-        cv_rows.append(m1p)
+        pred_frames += m1p
+        cv_rows.append(mean_station_row(m1, "Model1_per_station_month", scope,
+                                        "in-sample mean over stations"))
+        pr = pooled_from_frames(pred_frames, "Model1_per_station_month", scope, "in-sample")
+        if pr:
+            cv_rows.append(pr)
 
-        # --- Model 2 core ---
+        # --- Model 2 core (area-free primary) ---
         scope_area_cov = float(sdf["log_area_raw"].notna().mean())
-        scope_use_area = bool(use_area and scope_area_cov > 0.5)
-        # impute log-area within the scope so the interaction can be fit
         med_area = sdf["log_area_raw"].median()
-        sdf["log_area"] = (sdf["log_area_raw"].fillna(med_area) if scope_use_area
-                           else sdf["log_area_raw"].fillna(0.0))
+        sdf["log_area"] = (sdf["log_area_raw"].fillna(med_area)
+                           if scope_area_cov > 0.5 else sdf["log_area_raw"].fillna(0.0))
         sdf["ta_logarea"] = sdf["ta"] * sdf["log_area"]
-        print(f"  basin-area coverage in scope: {scope_area_cov:.1%} "
-              f"(area term {'on' if scope_use_area else 'off'})")
-        term_area = " + ta_logarea" if scope_use_area else ""
-        f_month = f"tw_obs ~ ta + C(month) + z + ta_z{term_area}"
-        f_noz = f"tw_obs ~ ta + C(month){term_area}"
-        f_zonly = f"tw_obs ~ ta + C(month) + z{term_area}"      # reduced for b3 (ta:z)
-        f_not_z = f"tw_obs ~ ta + C(month) + ta_z{term_area}"   # reduced for b2 (z)
-        f_harm = f"tw_obs ~ ta + sin1 + cos1 + sin2 + cos2 + z + ta_z{term_area}"
+        print(f"  basin-area coverage in scope: {scope_area_cov:.1%} (sensitivity only)")
 
-        sdf = sdf.copy()
+        f_month = "tw_obs ~ ta + C(month) + z + ta_z"
+        f_noz = "tw_obs ~ ta + C(month)"
+        f_zonly = "tw_obs ~ ta + C(month) + z"       # reduced for b3 (ta:z)
+        f_not_z = "tw_obs ~ ta + C(month) + ta_z"    # reduced for b2 (z)
+        f_harm = "tw_obs ~ ta + sin1 + cos1 + sin2 + cos2 + z + ta_z"
+
         sdf["sin1"] = np.sin(2 * np.pi * sdf["month"] / 12)
         sdf["cos1"] = np.cos(2 * np.pi * sdf["month"] / 12)
         sdf["sin2"] = np.sin(4 * np.pi * sdf["month"] / 12)
         sdf["cos2"] = np.cos(4 * np.pi * sdf["month"] / 12)
 
         full = smf.ols(f_month, data=sdf).fit()
+        full_rob = smf.ols(f_month, data=sdf).fit(
+            cov_type="cluster", cov_kwds={"groups": sdf["site_id"]})
         harm = smf.ols(f_harm, data=sdf).fit()
         zonly = smf.ols(f_zonly, data=sdf).fit()
         not_z = smf.ols(f_not_z, data=sdf).fit()
-        summary_lines.append(f"\n-- Model2 month-dummies AIC={full.aic:.1f} R2={full.rsquared:.3f}")
+        summary_lines.append(f"\n-- Model2 (area-free) month-dummies AIC={full.aic:.1f} R2={full.rsquared:.3f}")
         summary_lines.append(str(full.summary()))
-        summary_lines.append(f"\n-- Model2 harmonics AIC={harm.aic:.1f} R2={harm.rsquared:.3f}")
-        summary_lines.append(str(harm.summary()))
+        summary_lines.append(f"\n-- Model2 (area-free) harmonics AIC={harm.aic:.1f} R2={harm.rsquared:.3f}")
 
-        # LRT for ta_z and z
         try:
             lr_ta_z = full.compare_lr_test(zonly)
             lr_z = full.compare_lr_test(not_z)
         except Exception as exc:  # noqa: BLE001
             lr_ta_z = lr_z = (np.nan, np.nan, str(exc))
+        t_cluster = float(full_rob.params["ta_z"] / full_rob.bse["ta_z"])
+        p_cluster = float(2 * stats.norm.sf(abs(t_cluster)))
+        t_cluster_z = float(full_rob.params["z"] / full_rob.bse["z"])
+        p_cluster_z = float(2 * stats.norm.sf(abs(t_cluster_z)))
+
+        area_sens = None
+        if scope_area_cov > 0.5:
+            try:
+                am = smf.ols(f_month + " + ta_logarea", data=sdf).fit()
+                area_sens = {
+                    "coverage": scope_area_cov,
+                    "ta_logarea": {"coef": float(am.params.get("ta_logarea", np.nan)),
+                                   "bse": float(am.bse.get("ta_logarea", np.nan)),
+                                   "p": float(am.pvalues.get("ta_logarea", np.nan))},
+                    "ta": float(am.params.get("ta", np.nan)),
+                    "z": float(am.params.get("z", np.nan)),
+                    "ta_z": float(am.params.get("ta_z", np.nan)),
+                }
+            except Exception as exc:  # noqa: BLE001
+                area_sens = {"error": repr(exc)}
+
         coefs[scope] = {
             "formula": f_month,
             "params": {k: float(v) for k, v in full.params.items()},
-            "bse": {k: float(v) for k, v in full.bse.items()},
-            "pvalues": {k: float(v) for k, v in full.pvalues.items()},
+            "bse_ols": {k: float(v) for k, v in full.bse.items()},
+            "pvalues_ols": {k: float(v) for k, v in full.pvalues.items()},
+            "bse_cluster_robust": {k: float(v) for k, v in full_rob.bse.items()},
+            "pvalues_cluster_robust": {k: float(v) for k, v in full_rob.pvalues.items()},
             "aic_month": float(full.aic), "aic_harmonic": float(harm.aic),
             "r2_month": float(full.rsquared), "r2_harmonic": float(harm.rsquared),
-            "lr_test_ta_z": {"stat": float(lr_ta_z[0]), "p": float(lr_ta_z[1])},
-            "lr_test_z": {"stat": float(lr_z[0]), "p": float(lr_z[1])},
+            "lr_test_ta_z_ols": {"stat": float(lr_ta_z[0]), "p": float(lr_ta_z[1])},
+            "lr_test_z_ols": {"stat": float(lr_z[0]), "p": float(lr_z[1])},
+            "wald_test_ta_z_cluster": {"stat": t_cluster, "p": p_cluster},
+            "wald_test_z_cluster": {"stat": t_cluster_z, "p": p_cluster_z},
+            "area_sensitivity": area_sens,
             "resid_sd": float(np.std(full.resid)),
             "n": int(len(sdf)), "n_sites": int(sdf["site_id"].nunique()),
-            "use_area": bool(scope_use_area), "area_coverage": float(scope_area_cov),
+            "primary_model": "area-free",
+            "area_coverage": scope_area_cov,
         }
         best_formula = f_month if full.aic <= harm.aic else f_harm
         best_name = "Model2_month" if full.aic <= harm.aic else "Model2_harmonic"
@@ -283,7 +354,10 @@ def main() -> None:
             r, p = loso_ols(sdf, fml, nm, scope)
             cv_rows += r
             pred_frames += p
-            cv_rows.append(pooled_mean_row(r, nm, scope))
+            cv_rows.append(mean_station_row(r, nm, scope))
+            pr = pooled_from_frames(pred_frames, nm, scope)
+            if pr:
+                cv_rows.append(pr)
 
         # Model 4 mixed effects (full-data fit; fixed-effects-only LOSO approximation)
         try:
@@ -297,7 +371,26 @@ def main() -> None:
             summary_lines.append(f"\n-- Model4 MixedLM converged={mf.converged} "
                                  f"ICC={icc:.3f} resid_var={resid_var:.3f}")
             summary_lines.append(str(mf.summary()))
-            # Population-level (RE=0) predictions for every station from the full fit
+            # MixedLM LRT for ta_z (reduced model without the interaction)
+            lr_mixed = None
+            try:
+                mf0 = smf.mixedlm("tw_obs ~ ta + z + C(month)", sdf,
+                                  groups=sdf["site_id"], re_formula="~ta").fit(
+                    method="lbfgs", maxiter=300)
+                stat = 2 * (mf.llf - mf0.llf)
+                lr_mixed = {"stat": float(stat), "p": float(stats.chi2.sf(max(stat, 0.0), 1))}
+            except Exception as exc:  # noqa: BLE001
+                lr_mixed = {"error": repr(exc)}
+            t_mixed = float(mf.params.get("ta_z", np.nan) / mf.bse.get("ta_z", np.nan))
+            coefs[scope]["mixedlm"] = {
+                "converged": bool(mf.converged), "icc": icc,
+                "resid_var": resid_var, "random_intercept_var": float(re_var),
+                "ta_z": {"coef": float(mf.params.get("ta_z", np.nan)),
+                         "bse": float(mf.bse.get("ta_z", np.nan)), "t": t_mixed},
+                "lr_ta_z": lr_mixed,
+                "fixed_effects": {k: float(v) for k, v in mf.params.items()},
+                "fixed_bse": {k: float(v) for k, v in mf.bse.items()},
+            }
             r, p, r_true = [], [], []
             rng = np.random.default_rng(42)
             true_folds = set(rng.choice(sorted(sdf["site_id"].unique()),
@@ -328,7 +421,7 @@ def main() -> None:
                                        test_station=sid, n_train=len(tr), n_test=len(te),
                                        period_train=f"{tr['year'].min()}-{tr['year'].max()}",
                                        period_test=f"{te['year'].min()}-{te['year'].max()}",
-                                       notes="true LOSO fixed-effects (RE=0); 20 held-out stations",
+                                       notes="true LOSO fixed-effects (RE=0); 20 sampled stations",
                                        **mtt))
                     p.append(pd.DataFrame({"site_id": sid, "obs_date": te["obs_date"].values,
                                            "tw_obs": te["tw_obs"].values,
@@ -336,12 +429,20 @@ def main() -> None:
                                            "model_name": "Model4_mixedlm", "scope": scope}))
             cv_rows += r
             pred_frames += p
-            cv_rows.append(pooled_mean_row(r, "Model4_mixedlm_population", scope,
-                                           "population-level RE=0"))
+            cv_rows.append(mean_station_row(r, "Model4_mixedlm_population", scope,
+                                            "population-level RE=0"))
+            pr = pooled_from_frames(pred_frames, "Model4_mixedlm_population", scope,
+                                    "population-level RE=0")
+            if pr:
+                cv_rows.append(pr)
             if r_true:
                 cv_rows += r_true
-                cv_rows.append(pooled_mean_row(r_true, "Model4_mixedlm", scope,
-                                               "true LOSO (20 held-out stations)"))
+                cv_rows.append(mean_station_row(r_true, "Model4_mixedlm", scope,
+                                                "true LOSO (20 sampled stations)"))
+                pr = pooled_from_frames(pred_frames, "Model4_mixedlm", scope,
+                                        "true LOSO (20 sampled stations)")
+                if pr:
+                    cv_rows.append(pr)
             if scope == "Spain":
                 blup_df = pd.DataFrame({
                     "site_id": list(blups.keys()),
@@ -350,12 +451,6 @@ def main() -> None:
                                       for v in blups.values()],
                 })
                 blup_df.to_csv(CM.MODELS / "mixedlm_blups.csv", index=False)
-            coefs[scope]["mixedlm"] = {
-                "converged": bool(mf.converged), "icc": icc,
-                "resid_var": resid_var, "random_intercept_var": float(re_var),
-                "fixed_effects": {k: float(v) for k, v in mf.params.items()},
-                "fixed_bse": {k: float(v) for k, v in mf.bse.items()},
-            }
         except Exception as exc:  # noqa: BLE001
             summary_lines.append(f"\n-- Model4 MixedLM FAILED: {exc!r}")
             coefs[scope]["mixedlm"] = {"error": repr(exc)}
@@ -374,9 +469,11 @@ def main() -> None:
         coefs[scope]["summer_minus_winter_pred_c"] = {
             "min": float(np.nanmin(amp)), "max": float(np.nanmax(amp)),
             "mean": float(np.nanmean(amp)),
+            "n_sites_below_8c": int(np.sum(np.asarray(amp) < 8.0)),
         }
         summary_lines.append(f"  summer-winter predicted amplitude: "
-                             f"min={np.nanmin(amp):.2f} max={np.nanmax(amp):.2f}")
+                             f"min={np.nanmin(amp):.2f} max={np.nanmax(amp):.2f} "
+                             f"(sites<8C: {int(np.sum(np.asarray(amp) < 8.0))})")
 
     cv = pd.DataFrame(cv_rows)
     cv.to_csv(CM.TABLES / "cv_metrics.csv", index=False)
@@ -387,7 +484,6 @@ def main() -> None:
     (CM.MODELS / "model_summary.txt").write_text("\n".join(summary_lines), encoding="utf-8")
     print("wrote cv_metrics.csv, model_coefficients.json, model_summary.txt, loso_predictions.csv")
 
-    # cadence rule for lag models
     sites = pd.read_csv(CM.PROCESSED / "sites.csv", dtype={"site_id": str})
     elig = sites[sites["median_obs_per_year"] >= CADENCE_RULE]
     lag_note = {
@@ -402,11 +498,7 @@ def main() -> None:
 
 
 def _mixedlm_fixed_predict(model, new: pd.DataFrame) -> np.ndarray:
-    """Predict from a MixedLM using fixed effects only (random effect = 0).
-
-    Built manually from the known fixed-effect parameter names so it does not
-    depend on patsy design-info internals.
-    """
+    """Predict from a MixedLM using fixed effects only (random effect = 0)."""
     params = model.params
     p = np.full(len(new), float(params.get("Intercept", 0.0)))
     p = p + float(params.get("ta", 0.0)) * new["ta"].to_numpy()

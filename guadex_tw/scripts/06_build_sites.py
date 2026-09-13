@@ -59,11 +59,21 @@ def dem_sample(lat: float, lon: float) -> tuple[float, float]:
     return center, med
 
 
+def _sanitize_error(exc: object) -> str:
+    """Error text with any api_key query value redacted.
+
+    requests exceptions embed the full request URL, which for AEMET contains
+    the key; never write that to provenance or stdout.
+    """
+    return re.sub(r"(api_key=)[^&\s'\")]+", r"\1REDACTED", repr(exc))
+
+
 def load_sites() -> pd.DataFrame:
     frames = []
     qc = C.PROCESSED / "water_temp_all_qc.csv"
     if qc.exists():
-        d = pd.read_csv(qc, parse_dates=["obs_date"], dtype={"site_id": str})
+        d = pd.read_csv(qc, parse_dates=["obs_date"], dtype={"site_id": str},
+                        low_memory=False)
         if "site_class_ext" not in d:
             d["site_class_ext"] = np.nan
         g = d.groupby("site_id", as_index=False).agg(
@@ -114,7 +124,8 @@ def main() -> None:
     dailies = []
     p = C.PROCESSED / "water_temp_all_qc.csv"
     if p.exists():
-        dailies.append(pd.read_csv(p, parse_dates=["obs_date"], dtype={"site_id": str}))
+        dailies.append(pd.read_csv(p, parse_dates=["obs_date"], dtype={"site_id": str},
+                                   low_memory=False))
     d = pd.concat(dailies, ignore_index=True)
     by_year = d.groupby(["site_id", d["obs_date"].dt.year]).size()
     med_per_year = by_year.groupby("site_id").median().rename("median_obs_per_year")
@@ -163,6 +174,9 @@ def main() -> None:
     # dual-source reconciliation
     sites["elevation_diff_m"] = sites["elevation_m"] - sites["dem_elevation_m"]
     sites["elevation_discrepancy_flag"] = sites["elevation_diff_m"].abs() > 50
+    # DEM internal consistency: 3x3 median vs centre cell
+    sites["dem_center_diff_m"] = (sites["dem_elevation_m"] - sites["dem_center_m"]).abs()
+    sites["dem_center_discrepancy_flag"] = sites["dem_center_diff_m"] > 50
     sites["elevation_source"] = np.where(
         sites["dem_elevation_m"].notna() & sites["openmeteo_elevation_m"].notna(),
         "Copernicus_DEM_GLO30(median)|OpenMeteo_DEM90(site)",
@@ -234,9 +248,9 @@ def main() -> None:
                      status="SUCCESS", license="AEMET OpenData",
                      notes=f"{len(inv)} stations, used for nearest-station column")
         except Exception as exc:  # noqa: BLE001
-            print(f"AEMET inventory failed: {exc!r}")
+            print(f"AEMET inventory failed: {_sanitize_error(exc)}")
             C.record("AEMET station inventory", url="https://opendata.aemet.es/", status="FAILED",
-                     error=repr(exc), license="AEMET OpenData")
+                     error=_sanitize_error(exc), license="AEMET OpenData")
     else:
         print("AEMET_API_KEY not set; nearest_aemet_* left blank")
         C.record("AEMET station inventory", url="https://opendata.aemet.es/",
@@ -244,6 +258,7 @@ def main() -> None:
                  notes="no-auth path sufficient; AEMET requires a key")
 
     cols = ["site_id", "site_name", "source", "lat", "lon", "elevation_m", "dem_elevation_m",
+            "dem_center_m", "dem_center_diff_m", "dem_center_discrepancy_flag",
             "openmeteo_elevation_m", "elevation_source", "elevation_diff_m",
             "elevation_discrepancy_flag", "basin_name", "in_guadalquivir_basin", "site_class",
             "n_obs_raw", "n_obs_qc", "first_date", "last_date", "median_obs_per_year",
@@ -256,13 +271,20 @@ def main() -> None:
     print(f"wrote {C.PROCESSED / 'sites.csv'} ({len(out)} sites)")
 
     gq = out[out["in_guadalquivir_basin"]]
+    n_dual = int((out["dem_elevation_m"].notna() & out["openmeteo_elevation_m"].notna()).sum())
     summary = {
         "n_sites": int(len(out)),
         "n_sites_guadalquivir": int(len(gq)),
         "elevation_range_all_m": [float(out["elevation_m"].min()), float(out["elevation_m"].max())],
         "elevation_range_guadalquivir_m": [float(gq["elevation_m"].min()), float(gq["elevation_m"].max())],
+        "n_elevation_dual_source": n_dual,
         "n_elevation_discrepancy_gt50m": int(out["elevation_discrepancy_flag"].sum()),
+        "n_dem_center_discrepancy_gt50m": int(out["dem_center_discrepancy_flag"].sum()),
         "n_missing_elevation": int(out["elevation_m"].isna().sum()),
+        "elevation_note": (f"Copernicus DEM GLO-30 3x3 median is the elevation source for all "
+                           f"{int(out['dem_elevation_m'].notna().sum())} sites; an independent "
+                           f"Open-Meteo DEM90 value exists for only {n_dual} sites, so the "
+                           f"dual-source cross-check is limited to those."),
         "site_class_counts": out["site_class"].value_counts().to_dict(),
         "source_counts": out["source"].value_counts().to_dict(),
     }

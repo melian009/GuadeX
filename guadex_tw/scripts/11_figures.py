@@ -43,9 +43,13 @@ def build_historical_table(paired: pd.DataFrame) -> pd.DataFrame:
     m = smf.ols("tw_obs ~ ta + C(month) + z + ta_z", data=d).fit()
     resid_sd = float(np.std(m.resid))
     d["tw_modelled"] = m.predict(d)
-    # 90% prediction interval (mean +- 1.645 * residual sd)
-    d["ci90_low"] = d["tw_modelled"] - 1.645 * resid_sd
-    d["ci90_high"] = d["tw_modelled"] + 1.645 * resid_sd
+    # Observation-specific 90% prediction interval from the OLS fit (leverage
+    # aware). This is conditional on the fixed-effects model and does not add
+    # the between-site random effect; it replaces the previous constant
+    # +/-1.645*resid_sd interval that was identical for every observation.
+    sf = m.get_prediction(d).summary_frame(alpha=0.10)
+    d["ci90_low"] = sf["obs_ci_lower"].values
+    d["ci90_high"] = sf["obs_ci_upper"].values
     out = pd.DataFrame({
         "site_id": d["site_id"], "date": d["obs_date"], "tw_modelled": d["tw_modelled"],
         "tw_obs": d["tw_obs"], "model_name": "Model2_month_elevation",
@@ -53,28 +57,35 @@ def build_historical_table(paired: pd.DataFrame) -> pd.DataFrame:
         "ci90_low": d["ci90_low"], "ci90_high": d["ci90_high"], "source": d["source"],
     })
     out.to_csv(CM.TABLES / "water_temp_historical_sites.csv", index=False)
-    print(f"  water_temp_historical_sites.csv: {len(out)} rows, residual sd={resid_sd:.2f} C")
+    width = float((out["ci90_high"] - out["ci90_low"]).mean())
+    print(f"  water_temp_historical_sites.csv: {len(out)} rows, residual sd={resid_sd:.2f} C, "
+          f"mean 90% PI width={width:.2f} C")
     return d
 
 
 def fig_scatter(d: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(7, 5))
-    for sid, g in d.groupby("site_id"):
-        if len(g) < 12:
-            continue
-        ax.scatter(g["ta"], g["tw_obs"], s=10, alpha=0.5, label=f"{sid} (n={len(g)})")
+    # single-series scatter: a per-site legend previously produced ~600 entries
+    # and covered the whole plot, so line labels are annotated inline instead.
+    ax.scatter(d["ta"], d["tw_obs"], s=8, alpha=0.25, color="steelblue")
     xs = np.linspace(d["ta"].min(), d["ta"].max(), 50)
     pooled = smf.ols("tw_obs ~ ta", data=d).fit()
-    ax.plot(xs, pooled.params["Intercept"] + pooled.params["ta"] * xs, "k-", lw=2,
-            label=f"pooled fit (n={len(d)})")
-    ax.plot(xs, xs, "r--", lw=1, label="Tw = Ta")
+    yfit = pooled.params["Intercept"] + pooled.params["ta"] * xs
+    ax.plot(xs, yfit, "k-", lw=2)
+    ax.plot(xs, xs, "r--", lw=1.2)
+    i_fit = int(0.72 * len(xs))
+    ax.annotate(f"pooled OLS (slope={pooled.params['ta']:.2f})",
+                (xs[i_fit], yfit[i_fit]), textcoords="offset points", xytext=(4, 6),
+                fontsize=8, color="k")
+    i_id = int(0.10 * len(xs))
+    ax.annotate("Tw = Ta", (xs[i_id], xs[i_id]), textcoords="offset points",
+                xytext=(4, 6), fontsize=8, color="r")
     ax.set_xlabel("Air temperature (deg C, NASA POWER, lapse-corrected)")
     ax.set_ylabel("Observed water temperature (deg C)")
     ax.set_title(f"Tw vs Ta, Spanish rivers (N={len(d)} obs, {d['site_id'].nunique()} sites)")
-    ax.legend(fontsize=7, ncol=2)
     save(fig, "fig01_tw_vs_ta_scatter.png",
-         f"Tw vs Ta coloured by site; pooled OLS line. N={len(d)} observations, "
-         f"{d['site_id'].nunique()} sites. Aerated/canal sites not filtered.")
+         f"Tw vs Ta for all sites (single series); pooled OLS and 1:1 lines labelled inline. "
+         f"N={len(d)} observations, {d['site_id'].nunique()} sites. Aerated/canal sites not filtered.")
 
 
 def fig_residuals(d: pd.DataFrame) -> None:
@@ -102,7 +113,9 @@ def fig_residuals(d: pd.DataFrame) -> None:
 
 
 def fig_loso(preds: pd.DataFrame) -> None:
-    p = preds[preds["model_name"] == "Model2_month"]
+    # restrict to Stage-B (all-Spain) folds: the Guadalquivir folds are a subset
+    # of Spain, so pooling both scopes would double-count them.
+    p = preds[(preds["model_name"] == "Model2_month") & (preds["scope"] == "Spain")]
     p = p.dropna(subset=["tw_obs", "pred"])
     if p.empty:
         return
@@ -175,8 +188,9 @@ def fig_future_monthly(daily: pd.DataFrame) -> None:
     f = f[(f["date"].dt.year >= 2036) & (f["date"].dt.year <= 2055)]
     if f.empty:
         return
-    baseline = pd.read_parquet(CM.INTERIM / "tw_future_ensemble_daily.parquet")
-    # monthly ensemble spread per scenario (pool sites/dates)
+    # monthly ensemble spread per scenario; the median series is across GCMs at
+    # each site-date, and the shading is the interquartile range across
+    # site-days (sites x years), not a GCM-only spread.
     f["month"] = f["date"].dt.month
     fig, ax = plt.subplots(figsize=(9, 5))
     for scen, g in f.groupby("scenario"):
@@ -186,11 +200,12 @@ def fig_future_monthly(daily: pd.DataFrame) -> None:
         ax.fill_between(q.index, q[0.25], q[0.75], alpha=0.2)
     ax.set_xlabel("Month")
     ax.set_ylabel("Modelled Tw (deg C, ensemble median across GCMs)")
-    ax.set_title(f"2036-2055 monthly Tw by scenario (shaded IQR); N sites={f['site_id'].nunique()}")
+    ax.set_title(f"2036-2055 monthly Tw by scenario (shaded IQR across site-days); "
+                 f"N sites={f['site_id'].nunique()}")
     ax.legend()
     save(fig, "fig06_future_monthly_ensemble.png",
          f"Monthly ensemble-median Tw for 2036-2055 by SSP; shading is the interquartile "
-         f"range across sites. N={f['site_id'].nunique()} sites x 20 years.")
+         f"range across site-days (sites x years). N={f['site_id'].nunique()} sites x 20 years.")
 
 
 def fig_future_delta(future: pd.DataFrame) -> None:
@@ -249,7 +264,7 @@ def fig_elevation_response(d: pd.DataFrame) -> None:
 
 def main() -> None:
     paired = pd.read_csv(CM.PROCESSED / "paired_observations.csv", parse_dates=["obs_date"],
-                         dtype={"site_id": str})
+                         dtype={"site_id": str}, low_memory=False)
     sites = pd.read_csv(CM.PROCESSED / "sites.csv", dtype={"site_id": str})
     preds = pd.read_csv(CM.MODELS / "loso_predictions.csv", parse_dates=["obs_date"],
                         dtype={"site_id": str}) if (CM.MODELS / "loso_predictions.csv").exists() else pd.DataFrame()

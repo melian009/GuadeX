@@ -1,5 +1,5 @@
 {
-  "n_gq_sites": 8,
+  "n_gq_sites": 6,
   "n_gcm": 11,
   "scenarios": [
     "ssp126",
@@ -33,5 +33,231 @@
     ],
     "cold_c": 10
   },
-  "power_baseline_sites": 46
+  "power_baseline_sites": 6,
+  "projected_site_elevation_range_m": [
+    0.5,
+    537.3150024414062
+  ],
+  "model_ta_coef": 0.5097248376892677,
+  "model_ta_z_coef": -0.1629926745080157,
+  "elevation_profile_slope": [
+    {
+      "scenario": "ssp126",
+      "period_start": 2021,
+      "period_end": 2040,
+      "delta_ta_median_c": 1.0915910474,
+      "implied_dtw_dz_per_km_c": -0.1779213443
+    },
+    {
+      "scenario": "ssp126",
+      "period_start": 2036,
+      "period_end": 2055,
+      "delta_ta_median_c": 1.4900021227,
+      "implied_dtw_dz_per_km_c": -0.242859431
+    },
+    {
+      "scenario": "ssp126",
+      "period_start": 2041,
+      "period_end": 2070,
+      "delta_ta_median_c": 1.556637539,
+      "implied_dtw_dz_per_km_c": -0.2537205157
+    },
+    {
+      "scenario": "ssp245",
+      "period_start": 2021,
+      "period_end": 2040,
+      "delta_ta_median_c": 1.1337714232,
+      "implied_dtw_dz_per_km_c": -0.1847964366
+    },
+    {
+      "scenario": "ssp245",
+      "period_start": 2036,
+      "period_end": 2055,
+      "delta_ta_median_c": 1.7189962374,
+      "implied_dtw_dz_per_km_c": -0.2801837942
+    },
+    {
+      "scenario": "ssp245",
+      "period_start": 2041,
+      "period_end": 2070,
+      "delta_ta_median_c": 1.9143673406,
+      "implied_dtw_dz_per_km_c": -0.3120278528
+    },
+    {
+      "scenario": "ssp370",
+      "period_start": 2021,
+      "period_end": 2040,
+      "delta_ta_median_c": 1.1499619861,
+      "implied_dtw_dz_per_km_c": -0.1874353797
+    },
+    {
+      "scenario": "ssp370",
+      "period_start": 2036,
+      "period_end": 2055,
+      "delta_ta_median_c": 1.7314405136,
+      "implied_dtw_dz_per_km_c": -0.2822121201
+    },
+    {
+      "scenario": "ssp370",
+      "period_start": 2041,
+      "period_end": 2070,
+      "delta_ta_median_c": 2.2116354862,
+      "implied_dtw_dz_per_km_c": -0.3604803829
+    },
+    {
+      "scenario": "ssp585",
+      "period_start": 2021,
+      "period_end": 2040,
+      "delta_ta_median_c": 1.3110356447,
+      "implied_dtw_dz_per_km_c": -0.2136892061
+    },
+    {
+      "scenario": "ssp585",
+      "period_start": 2036,
+      "period_end": 2055,
+      "delta_ta_median_c": 2.0288641066,
+      "implied_dtw_dz_per_km_c": -0.3306899869
+    },
+    {
+      "scenario": "ssp585",
+      "period_start": 2041,
+      "period_end": 2070,
+      "delta_ta_median_c": 2.5794714329,
+      "implied_dtw_dz_per_km_c": -0.4204349477
+    }
+  ],
+  "ensemble_summary": [
+    {
+      "scenario": "ssp126",
+      "period_start": 2021,
+      "period_end": 2040,
+      "gcm_median_across_sites": 0.4936909615,
+      "gcm_p10_across_sites": 0.3398817213,
+      "gcm_p90_across_sites": 0.8176449935,
+      "between_site_p10": 0.4728902217,
+      "between_site_p90": 0.5292263265,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp126",
+      "period_start": 2036,
+      "period_end": 2055,
+      "gcm_median_across_sites": 0.7118843247,
+      "gcm_p10_across_sites": 0.5111146675,
+      "gcm_p90_across_sites": 1.0736747783,
+      "between_site_p10": 0.6876758201,
+      "between_site_p90": 0.7381585665,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp126",
+      "period_start": 2041,
+      "period_end": 2070,
+      "gcm_median_across_sites": 0.7076276742,
+      "gcm_p10_across_sites": 0.5370485031,
+      "gcm_p90_across_sites": 1.1402501138,
+      "between_site_p10": 0.6699755251,
+      "between_site_p90": 0.7572955245,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp245",
+      "period_start": 2021,
+      "period_end": 2040,
+      "gcm_median_across_sites": 0.5221167639,
+      "gcm_p10_across_sites": 0.381074473,
+      "gcm_p90_across_sites": 0.8499637759,
+      "between_site_p10": 0.4991845915,
+      "between_site_p90": 0.5649464648,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp245",
+      "period_start": 2036,
+      "period_end": 2055,
+      "gcm_median_across_sites": 0.79946414,
+      "gcm_p10_across_sites": 0.5629163515,
+      "gcm_p90_across_sites": 1.2662974021,
+      "between_site_p10": 0.7674355096,
+      "between_site_p90": 0.8126990695,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp245",
+      "period_start": 2041,
+      "period_end": 2070,
+      "gcm_median_across_sites": 0.9241785308,
+      "gcm_p10_across_sites": 0.7130264772,
+      "gcm_p90_across_sites": 1.4247078593,
+      "between_site_p10": 0.8821685147,
+      "between_site_p90": 0.9445031205,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp370",
+      "period_start": 2021,
+      "period_end": 2040,
+      "gcm_median_across_sites": 0.552111148,
+      "gcm_p10_across_sites": 0.4298634993,
+      "gcm_p90_across_sites": 0.8254942489,
+      "between_site_p10": 0.5390186667,
+      "between_site_p90": 0.5709888929,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp370",
+      "period_start": 2036,
+      "period_end": 2055,
+      "gcm_median_across_sites": 0.8283982582,
+      "gcm_p10_across_sites": 0.6559096094,
+      "gcm_p90_across_sites": 1.1993497713,
+      "between_site_p10": 0.7960062947,
+      "between_site_p90": 0.8423038953,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp370",
+      "period_start": 2041,
+      "period_end": 2070,
+      "gcm_median_across_sites": 1.0537821296,
+      "gcm_p10_across_sites": 0.7940546181,
+      "gcm_p90_across_sites": 1.4229723748,
+      "between_site_p10": 1.0306248175,
+      "between_site_p90": 1.0956395625,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp585",
+      "period_start": 2021,
+      "period_end": 2040,
+      "gcm_median_across_sites": 0.5972710235,
+      "gcm_p10_across_sites": 0.4519372906,
+      "gcm_p90_across_sites": 0.8879828629,
+      "between_site_p10": 0.5518474767,
+      "between_site_p90": 0.6383853012,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp585",
+      "period_start": 2036,
+      "period_end": 2055,
+      "gcm_median_across_sites": 0.9401084894,
+      "gcm_p10_across_sites": 0.7083856884,
+      "gcm_p90_across_sites": 1.2889740947,
+      "between_site_p10": 0.9069069825,
+      "between_site_p90": 0.9639498619,
+      "n_sites": 6
+    },
+    {
+      "scenario": "ssp585",
+      "period_start": 2041,
+      "period_end": 2070,
+      "gcm_median_across_sites": 1.2341857815,
+      "gcm_p10_across_sites": 0.9047038131,
+      "gcm_p90_across_sites": 1.5891386016,
+      "between_site_p10": 1.2063692187,
+      "between_site_p90": 1.2679581383,
+      "n_sites": 6
+    }
+  ]
 }
