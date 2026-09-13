@@ -21,7 +21,10 @@ const _GUADEX_ROOT = isfile(joinpath(@__DIR__, "parameters.jl")) ? (@__DIR__) : 
 include(joinpath(_GUADEX_ROOT, "parameters.jl"))
 using .SimulationParameters
 const GUADEX_PARAMS = SimulationParameters.load()
-SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obstacles", "subcatchments", "scenarios", "run_sensitivity")
+SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obstacles", "species", "subcatchments", "scenarios", "run_sensitivity")
+
+const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
+const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
 
 const DAYS_PER_YEAR = Int(GUADEX_PARAMS["general"]["days_per_year"])
 const SIMULATION_YEARS = Int(GUADEX_PARAMS["run_sensitivity"]["simulation_years"])
@@ -179,7 +182,7 @@ function run_single_simulation(data_base, upstream_cost, exploitation_dict, pass
 
     sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:1.0:t_span[2], callback=positivity_cb)
 
-    return sol, exploitation_vector, passability_vector
+    return sol, exploitation_vector, passability_vector, modified_dams
 end
 
 # =============================================================================
@@ -218,7 +221,7 @@ for uc in upstream_costs
             run_dir = joinpath(base_output_dir, "upstream_$(uc)", exp_name, pass_name)
             mkpath(run_dir)
 
-            sol, exp_vec, pass_vec = run_single_simulation(
+            sol, exp_vec, pass_vec, modified_dams = run_single_simulation(
                 data_base, uc, exp_dict, pass_dict
             )
 
@@ -253,6 +256,30 @@ for uc in upstream_costs
 
             fig_combined = plot_combined_analysis(sol, data_base.site_df, data_base.sites, data_base.species, data_base.distance_matrix)
             save_figure(fig_combined, joinpath(run_dir, "combined_analysis.png"))
+
+            export_run_outputs(joinpath(run_dir, "export");
+                sol_t = sol.t,
+                sol_u = sol.u,
+                sites = data_base.sites,
+                species = data_base.species,
+                site_df = data_base.site_df,
+                crosswalk_path = joinpath(_GUADEX_ROOT, "data", "site_waterbody_crosswalk.csv"),
+                native_species = NATIVE_SPECIES,
+                invasive_species = INVASIVE_SPECIES,
+                days_per_year = DAYS_PER_YEAR,
+                temperature_baseline = data_base.params.temperatures,
+                warming = nothing,
+                dams = modified_dams,
+                distance_matrix = data_base.distance_matrix,
+                habitat_suitability = data_base.params.habitat_suitability,
+                upstream_cost = uc,
+                run_metadata = Dict(
+                    "script" => "scripts/run_sensitivity.jl",
+                    "upstream_cost" => uc,
+                    "exploitation_scenario" => exp_name,
+                    "passability_scenario" => pass_name,
+                    "simulation_years" => SIMULATION_YEARS,
+                    "obstacle_mode" => string(OBSTACLE_MODE)))
 
             println("  Saved to: $run_dir")
         end

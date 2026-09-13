@@ -137,3 +137,29 @@ temperature_increases = [0.0, 4.0, 8.0, 12.0]
 upstream_costs = [0.01, 0.5]
 passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
 report_years = [1, 2, 3]
+
+# ---------------------------------------------------------------------------
+# Climate-driven runs (run_climate_scenarios.jl).
+#
+# The simulation starts at the current year and integrates daily to `end_year`
+# (BP horizon 2045), with a year-by-year warming trajectory interpolated from
+# the guadex_tw water-temperature projections, for every GCM x SSP.  States are
+# saved monthly (30 days) to keep outputs small while retaining annual and
+# seasonal metrics.
+# ---------------------------------------------------------------------------
+
+[run_climate_scenarios]
+start_year = 2026
+end_year = 2045
+# 365/12 = 30.4167 days, so monthly snapshots land exactly on year boundaries.
+save_interval_days = 30.4167
+elevation_scaling = false
+presence_threshold = 0.1
+upstream_cost = 0.05
+temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
+scenarios = ["ssp126", "ssp245", "ssp370", "ssp585"]
+gcms = [
+    "ACCESS-CM2", "CMCC-CM2-SR5", "CNRM-ESM2-1", "EC-Earth3-Veg", "IITM-ESM",
+    "KACE-1-0-G", "MIROC6", "MPI-ESM1-2-HR", "MRI-ESM2-0", "NorESM2-MM",
+    "UKESM1-0-LL",
+]

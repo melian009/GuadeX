@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "data": "node scripts/build-data.mjs",
+    "crosswalk": "node scripts/export-crosswalk.mjs",
     "smoke": "node scripts/smoke-test.mjs",
     "inspect": "node scripts/inspect-data.mjs"
   },

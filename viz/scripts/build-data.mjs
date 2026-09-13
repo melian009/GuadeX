@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { mkdir, writeFile, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import shapefile from 'shapefile'
+import { fixText, readFeatures } from './gis-utils.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -49,15 +49,6 @@ const TOLERANCE = {
 /* ------------------------------------------------------------------ */
 
 /** shapefile text is stored as UTF-8 bytes decoded as latin1 -> repair it. */
-function fixText(value) {
-  if (typeof value !== 'string') return value
-  if (!/[ÃÂ]/.test(value)) return value
-  try {
-    return Buffer.from(value, 'latin1').toString('utf8')
-  } catch {
-    return value
-  }
-}
 
 function cleanProps(props) {
   const out = {}
@@ -73,18 +64,6 @@ function cleanProps(props) {
     }
   }
   return out
-}
-
-/** Read a shapefile fully as GeoJSON features (streaming, lower memory). */
-async function readFeatures(path) {
-  const source = await shapefile.open(path)
-  const features = []
-  for (;;) {
-    const { done, value } = await source.read()
-    if (done) break
-    if (value) features.push(value)
-  }
-  return features
 }
 
 /** Iterative Douglas-Peucker for an open polyline of [x,y] points. */

@@ -19,6 +19,16 @@ export build_stream_graph, get_graph_statistics, find_upstream_sites, find_downs
 export plot_catchment_network
 export metacommunity_ode!, MetacommunityParams, precompute_dispersal_matrix
 
+# Export time-varying temperature schedule model
+export TemperatureSchedule, ScheduledMetacommunityParams
+export metacommunity_ode_scheduled!, temperature_delta
+
+# Export four-level reporting / viewer output functions
+export load_site_level_crosswalk, site_level_vectors, species_indices
+export compute_site_metrics, aggregate_metrics, site_connectivity_metrics
+export export_run_outputs, write_viewer_outputs
+export load_temperature_projections, basin_warming_curve, warming_matrix
+
 # Export data preparation functions
 export prepare_ode_data, save_ode_data
 export load_species_characteristics, load_site_data, load_species_density_data
@@ -43,6 +53,7 @@ include("graph_construction.jl")
 include("visualize_graph.jl")
 include("ode_model.jl")
 include("data_preparation.jl")
+include("outputs.jl")
 include("visualization.jl")
 
 end # module Guadex

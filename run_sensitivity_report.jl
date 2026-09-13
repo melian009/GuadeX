@@ -163,7 +163,7 @@ function run_single_simulation(data_base, temp_increase, upstream_cost, passabil
 
     sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:1.0:t_span[2], callback=positivity_cb)
 
-    return sol, passability_vector
+    return sol, passability_vector, modified_dams
 end
 
 # =============================================================================
@@ -205,7 +205,7 @@ for dt in temperature_increases
             run_dir = joinpath(base_output_dir, "dT_$(dt)C", "uc_$(uc)", pass_name)
             mkpath(run_dir)
 
-            sol, pass_vec = run_single_simulation(
+            sol, pass_vec, modified_dams = run_single_simulation(
                 data_base, dt, uc, pass_dict
             )
 
@@ -251,6 +251,30 @@ for dt in temperature_increases
             plot_richness_timeseries_grid(sol, data_base.species, data_base.sites, data_base.site_df,
                 native_idx, invasive_idx, data_base.params.n_sites, data_base.params.n_species,
                 joinpath(run_dir, "richness_timeseries_grid.png"); days_per_year=DAYS_PER_YEAR)
+
+            export_run_outputs(joinpath(run_dir, "export");
+                sol_t = sol.t,
+                sol_u = sol.u,
+                sites = data_base.sites,
+                species = data_base.species,
+                site_df = data_base.site_df,
+                crosswalk_path = joinpath(_GUADEX_ROOT, "data", "site_waterbody_crosswalk.csv"),
+                native_species = NATIVE_SPECIES,
+                invasive_species = INVASIVE_SPECIES,
+                days_per_year = DAYS_PER_YEAR,
+                temperature_baseline = data_base.params.temperatures .+ dt,
+                warming = nothing,
+                dams = modified_dams,
+                distance_matrix = data_base.distance_matrix,
+                habitat_suitability = data_base.params.habitat_suitability,
+                upstream_cost = uc,
+                run_metadata = Dict(
+                    "script" => "run_sensitivity_report.jl",
+                    "temperature_increase" => dt,
+                    "upstream_cost" => uc,
+                    "passability_scenario" => pass_name,
+                    "simulation_years" => SIMULATION_YEARS,
+                    "obstacle_mode" => string(OBSTACLE_MODE)))
 
             println("  Saved to: $run_dir")
         end

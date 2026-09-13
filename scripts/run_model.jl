@@ -13,7 +13,10 @@ const _GUADEX_ROOT = isfile(joinpath(@__DIR__, "parameters.jl")) ? (@__DIR__) : 
 include(joinpath(_GUADEX_ROOT, "parameters.jl"))
 using .SimulationParameters
 const GUADEX_PARAMS = SimulationParameters.load()
-SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obstacles", "subcatchments", "scenarios", "run_model")
+SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obstacles", "species", "subcatchments", "scenarios", "run_model")
+
+const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
+const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
 
 const UPSTREAM_COST = Float64(GUADEX_PARAMS["run_model"]["upstream_cost"])
 
@@ -353,3 +356,33 @@ jldsave(output_jld2;
     obstacle_total_count = nrow(data.obstacle_mapping_diagnostics)
 )
 println("Simulation output saved.")
+
+# --- Four-level reporting tables + 3-D viewer exports ---
+println("\nExporting four-level outputs and viewer files...")
+export_dir = joinpath(output_dir, "export")
+export_result = export_run_outputs(export_dir;
+    sol_t = sol.t,
+    sol_u = sol.u,
+    sites = data_with_management.sites,
+    species = data_with_management.species,
+    site_df = data_with_management.site_df,
+    crosswalk_path = joinpath(_GUADEX_ROOT, "data", "site_waterbody_crosswalk.csv"),
+    native_species = NATIVE_SPECIES,
+    invasive_species = INVASIVE_SPECIES,
+    days_per_year = DAYS_PER_YEAR,
+    temperature_baseline = data_with_management.params.temperatures,
+    dams = modified_dams,
+    distance_matrix = data_with_management.distance_matrix,
+    habitat_suitability = data_with_management.params.habitat_suitability,
+    upstream_cost = UPSTREAM_COST,
+    run_metadata = Dict(
+        "script" => "scripts/run_model.jl",
+        "simulation_years" => SIMULATION_YEARS,
+        "upstream_cost" => UPSTREAM_COST,
+        "exploitation_scenario" => string(GUADEX_PARAMS["run_model"]["exploitation_scenario"]),
+        "passability_scenario" => string(GUADEX_PARAMS["run_model"]["passability_scenario"]),
+        "obstacle_mode" => string(OBSTACLE_MODE),
+        "cedex_var_file" => CEDEX_VAR_FILE,
+        "cedex_uts_file" => CEDEX_UTS_FILE,
+        "obstacles_file" => OBSTACLES_FILE))
+println("Four-level outputs written to: $(export_result.output_dir)")

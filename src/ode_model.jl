@@ -48,71 +48,129 @@ function gaussian_thermal_filter(temp, opt, sigma)
 end
 
 """
-    metacommunity_ode!(du, u, p::MetacommunityParams, t)
+    _metacommunity_ode!(du, u, p::MetacommunityParams, delta_at, t)
 
-Optimized ODE system for fish metacommunity dynamics with logistic growth.
-u is a matrix or flattened vector where u[i, s] is the population of species s at site i.
-
-The model includes:
-- Local logistic growth with carrying capacity K_i for total biomass at site i
-- Environmental filtering (thermal niche and habitat suitability)
-- Interspecific interactions (competition, predation)
-- Species-specific dispersal between sites
-
-The base dispersal matrix uses median species dispersal rates (5 km/year / 365).
-Species-specific scaling factors (dispersal_scaling) adjust per-species to achieve
-the correct relative dispersal rates based on literature values.
+Shared RHS for the metacommunity model.  `delta_at(i, t)` returns the
+temperature anomaly (°C) applied to site `i` at time `t`; the static model
+passes a constant-zero function and the climate model passes the interpolated
+schedule.  Site temperatures and per-site total biomass are computed once per
+site per RHS call rather than once per species.
 """
-function metacommunity_ode!(du, u, p::MetacommunityParams, t)
+function _metacommunity_ode!(du, u, p::MetacommunityParams, delta_at, t)
     U = reshape(u, p.n_sites, p.n_species)
     dU = reshape(du, p.n_sites, p.n_species)
 
-    for s in 1:p.n_species
-        opt = p.thermal_optima[s]
-        sigma = p.thermal_sigmas[s]
+    for i in 1:p.n_sites
+        temp_i = p.temperatures[i] + delta_at(i, t)
+        total_biomass_i = 0.0
+        for j in 1:p.n_species
+            total_biomass_i += max(U[i, j], 0.0)
+        end
+        k_i = max(p.carrying_capacity[i], 1e-6)
+        logistic_term = clamp(1.0 - total_biomass_i / k_i, -1.0, 2.0)
 
-        for i in 1:p.n_sites
+        for s in 1:p.n_species
             N_is = max(U[i, s], 0.0)
-
-            total_biomass_i = 0.0
-            for j in 1:p.n_species
-                total_biomass_i += max(U[i, j], 0.0)
-            end
-
-            env_filter = gaussian_thermal_filter(p.temperatures[i], opt, sigma) * p.habitat_suitability[i]
+            env_filter = gaussian_thermal_filter(temp_i, p.thermal_optima[s], p.thermal_sigmas[s]) * p.habitat_suitability[i]
             r_eff = p.intrinsic_growth_rates[i, s] * env_filter
 
             interaction_term = 0.0
             for j in 1:p.n_species
                 interaction_term += p.interaction_matrix[s, j] * max(U[i, j], 0.0)
             end
-            interaction_term /= max(p.carrying_capacity[i], 1e-6)
-
-            logistic_term = clamp(1.0 - total_biomass_i / max(p.carrying_capacity[i], 1e-6), -1.0, 2.0)
+            interaction_term /= k_i
 
             dU[i, s] = N_is * (r_eff * logistic_term + interaction_term)
         end
     end
 
+    # Dispersal.  `emigration` (column sums) is time-invariant and the
+    # immigration buffer is reused across species to avoid per-species
+    # allocations in the hot loop.
+    immigration = zeros(Float64, p.n_sites)
+    emigration = vec(sum(p.dispersal_matrix, dims=1))
     for s in 1:p.n_species
         species_pop = @view U[:, s]
         dispersal_scale = p.dispersal_scaling[s]
 
-        immigration = p.dispersal_matrix * species_pop
+        mul!(immigration, p.dispersal_matrix, species_pop)
 
         for i in 1:p.n_sites
-            emigration_rate = 0.0
-            col_start = p.dispersal_matrix.colptr[i]
-            col_end = p.dispersal_matrix.colptr[i+1] - 1
-            for idx in col_start:col_end
-                emigration_rate += p.dispersal_matrix.nzval[idx]
-            end
-
-            dU[i, s] += dispersal_scale * (immigration[i] - emigration_rate * max(U[i, s], 0.0))
+            dU[i, s] += dispersal_scale * (immigration[i] - emigration[i] * max(U[i, s], 0.0))
         end
     end
 
     return nothing
+end
+
+struct _ZeroDelta end
+(::_ZeroDelta)(::Int, ::Real) = 0.0
+
+"""
+    metacommunity_ode!(du, u, p::MetacommunityParams, t)
+
+Backwards-compatible static-temperature entry point.  The site temperatures in
+`p.temperatures` are used unchanged.
+"""
+metacommunity_ode!(du, u, p::MetacommunityParams, t) =
+    _metacommunity_ode!(du, u, p, _ZeroDelta(), t)
+
+"""
+    TemperatureSchedule
+
+Year-by-year site temperature anomalies relative to the baseline
+`MetacommunityParams.temperatures`.  `deltas[i, k]` is the anomaly (°C) for site
+`i` at simulation-year node `k`; nodes are one simulation year (365 days) apart
+and are linearly interpolated in time.
+"""
+struct TemperatureSchedule{T<:Real, M<:AbstractMatrix{T}}
+    deltas::M
+    days_per_year::T
+end
+
+TemperatureSchedule(deltas::AbstractMatrix, days_per_year::Real=365.0) =
+    TemperatureSchedule(Float64.(deltas), Float64(days_per_year))
+
+"""
+    temperature_delta(schedule, i, t)
+
+Interpolated temperature anomaly for site `i` at time `t` (days).
+"""
+@inline function temperature_delta(schedule::TemperatureSchedule, i::Int, t::Real)
+    x = t / schedule.days_per_year
+    n_nodes = size(schedule.deltas, 2)
+    node = floor(Int, x) + 1
+    node >= n_nodes && return @inbounds schedule.deltas[i, n_nodes]
+    frac = x - (node - 1)
+    return @inbounds schedule.deltas[i, node] * (1 - frac) + schedule.deltas[i, node + 1] * frac
+end
+
+"""
+    ScheduledMetacommunityParams
+
+Wraps static [`MetacommunityParams`](@ref) with a [`TemperatureSchedule`](@ref)
+so the ODE can be solved under a year-by-year warming trajectory.
+"""
+struct ScheduledMetacommunityParams{P<:MetacommunityParams,S<:TemperatureSchedule}
+    params::P
+    schedule::S
+end
+
+struct _ScheduleDelta{S<:TemperatureSchedule}
+    schedule::S
+end
+
+@inline (d::_ScheduleDelta)(i::Int, t::Real) = temperature_delta(d.schedule, i, t)
+
+"""
+    metacommunity_ode_scheduled!(du, u, p::ScheduledMetacommunityParams, t)
+
+RHS of the metacommunity model with a time-varying (yearly interpolated)
+temperature anomaly added to each site's baseline temperature.  Delegates to the
+shared [`_metacommunity_ode!`](@ref) so the core model is defined once.
+"""
+function metacommunity_ode_scheduled!(du, u, p::ScheduledMetacommunityParams, t)
+    return _metacommunity_ode!(du, u, p.params, _ScheduleDelta(p.schedule), t)
 end
 
 """

@@ -427,3 +427,44 @@ end
         end
     end
 end
+
+# =============================================================================
+# 6. Time-varying temperature schedule
+# =============================================================================
+@testset "scheduled metacommunity ODE" begin
+    n_sites, n_species = 2, 2
+    distances = [0.0 1000.0; 1000.0 0.0]
+    elevations = [10.0, 50.0]
+    D_daily = 10.0 / 365.0
+    dispersal = Guadex.precompute_dispersal_matrix(
+        n_sites, distances, elevations, 0.01, ones(2, 2), D_daily
+    )
+    p = Guadex.MetacommunityParams(
+        n_sites, n_species,
+        [-0.1 0.0; 0.0 -0.1],
+        dispersal,
+        [1.0, 1.0],
+        [0.01 0.01; 0.01 0.01],
+        [20.0, 20.0], [1.0, 1.0],
+        [20.0, 20.0], [5.0, 5.0],
+        [50.0, 50.0]
+    )
+
+    u0 = [10.0 5.0; 5.0 10.0]
+
+    # Zero anomalies must reproduce the static model exactly.
+    zero_schedule = Guadex.TemperatureSchedule(zeros(2, 3), 365.0)
+    scheduled = Guadex.ScheduledMetacommunityParams(p, zero_schedule)
+    du_base = zeros(2, 2)
+    du_zero = zeros(2, 2)
+    Guadex.metacommunity_ode!(du_base, u0, p, 0.0)
+    Guadex.metacommunity_ode_scheduled!(du_zero, u0, scheduled, 0.0)
+    @test du_base ≈ du_zero
+
+    # A warming anomaly away from the thermal optimum reduces growth.
+    warm_schedule = Guadex.TemperatureSchedule([5.0 5.0 5.0; 5.0 5.0 5.0], 365.0)
+    warm = Guadex.ScheduledMetacommunityParams(p, warm_schedule)
+    du_warm = zeros(2, 2)
+    Guadex.metacommunity_ode_scheduled!(du_warm, u0, warm, 0.0)
+    @test du_warm[1, 1] < du_base[1, 1]
+end

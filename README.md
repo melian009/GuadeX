@@ -75,6 +75,24 @@ The final deliverable is a **spatially-explicit modeling tool** with a user-frie
 *   **Reproducible Research:** A **Jupyter notebook** will be created to make all research steps easily reproducible.
 
 
+### Simulation entry points, four-level outputs and viewer
+
+Run settings live in `parameters.toml`. The maintained entry scripts are:
+
+| entry point | purpose |
+| :--- | :--- |
+| `scripts/run_model.jl` | single management scenario |
+| `scripts/run_sensitivity.jl` | upstream-cost x exploitation x passability sweep |
+| `run_sensitivity_report.jl` | temperature x upstream-cost x passability sweep with report figures |
+| `run_alt_interactions.jl` | alternative interaction matrices |
+| `run_climate_scenarios.jl` | current year -> 2045 for every GCM x SSP in the guadex_tw projections |
+
+Every run writes four reporting levels — sampling point (`CODIGO`), sub-basin
+(`CODIGO_S`), water body (`ID_masa`) and whole basin (`ES050`) — plus files in the
+`viz/` 3-D viewer format. See **[docs/climate_scenarios.md](docs/climate_scenarios.md)**
+for the level definitions, temperature-scenario construction, output layout and
+limitations. `scripts/export_run_outputs.jl` re-exports an existing JLD2 result.
+
 ### Core Team:
 *   Dr. Carlos Fernandez Delgado (Universidad de Córdoba, Spain)
 *   Dr. Lucía Galvez Bravo (Liverpool John Moores University, UK)

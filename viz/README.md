@@ -158,6 +158,22 @@ Two **clearly labelled synthetic demo files** ship so the pipeline can be tested
 (`public/data/results.demo-timeseries.json`, `results.demo-metrics.json`). They are
 generated from exotic richness, elevation and a hash of the site code — replace them.
 
+### GuadeX simulation outputs
+
+The Julia pipeline writes viewer-ready files for every run (see
+`docs/climate_scenarios.md`). A run's `export/viewer/` directory contains:
+
+* `guadex_results_timeseries.csv` — all metrics at every year, keyed by `CODIGO`
+  (the explorer detects the `step` column and builds one time series per metric);
+* `guadex_results_native_extinction_risk.json` — canonical single-variable time
+  series (`{name, unit, steps, data}`), directly loadable through `?results=`;
+* `guadex_results_metrics.json` — per-site metrics at the final year;
+* `level_<level>_<metric>_timeseries.json` — the same shape aggregated to
+  sub-basin, water body or the whole basin (for a future level selector).
+
+To publish a run, copy its viewer files into `public/data/` and deep-link, e.g.
+`?results=./data/guadex_results_native_extinction_risk.json&metric=native_extinction_risk`.
+
 ---
 
 ## Data pipeline
