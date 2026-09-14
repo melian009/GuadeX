@@ -113,3 +113,28 @@ end
     unknown = Guadex.run_level_stats(gcm1, :basin, :not_a_metric)
     @test all(isnan, unknown.mean)
 end
+
+@testset "climate diagnostics data readers" begin
+    root = mktempdir()
+    _write_run(root, "ssp126", "GCM1", [2026, 2045], [2.0, 4.0])
+    _write_run(root, "ssp126", "GCM2", [2026, 2045], [2.0, 6.0])
+    CSV.write(joinpath(root, "runs_index.csv"), DataFrame(
+        scenario=["ssp126", "ssp126"],
+        gcm=["GCM1", "GCM2"],
+        end_year=[2045, 2045],
+    ))
+
+    series = Guadex.read_climate_basin_series(root)
+    @test length(series) == 2
+    @test all(s -> s.scenario == "ssp126", series)
+    gcm1 = only([s for s in series if s.gcm == "GCM1"])
+    @test gcm1.years == [2026, 2045]
+    @test gcm1.native_richness == [2.0, 4.0]
+    @test gcm1.total_biomass == [20.0, 40.0]
+    # Columns absent from the synthetic table read as NaN rather than failing.
+    @test all(isnan, gcm1.delta_temperature_c)
+    @test all(isnan, gcm1.invasive_richness)
+
+    # An empty tree yields no series instead of an error.
+    @test isempty(Guadex.read_climate_basin_series(mktempdir()))
+end

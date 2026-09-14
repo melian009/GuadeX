@@ -175,6 +175,25 @@ The shipping ensemble yields 65 PNGs: 44 `per_run` (4 SSPs x 11 GCMs), 16
 `ensemble` (4 SSPs x 4 levels), 4 `comparison` and 1 final-year summary. Files
 are written at ~200 dpi (`px_per_unit = 2`).
 
+### Diagnostic figures
+
+`src/climate_diagnostics.jl` adds three explanatory figures (again from the
+exported CSVs only) that answer *why* the ensemble behaves as it does:
+
+```bash
+julia --project=. scripts/plot_climate_diagnostics.jl [results_root] [figures_dir]
+```
+
+| path | content |
+| :--- | :--- |
+| `diagnostics/forcing_and_response.png` | warming forcing vs richness/biomass response, final-year warming-response scatter, extinction-risk trajectory |
+| `diagnostics/thermal_niches.png` | native species thermal optima vs the site-temperature distribution and the end-of-horizon warming |
+| `diagnostics/community_filling.png` | initial vs final per-site native-richness distribution and the site-by-site change |
+
+They are generated automatically by `run_climate_scenarios.jl` when
+`make_figures = true`. See
+`docs/climate_scenarios_results_report.md` for their interpretation.
+
 Run discovery and completeness detection mirror `runs_index.csv`: a run whose
 year range does not cover the reference horizon (for example the 2-year smoke
 run `GUADEX_CLIMATE_END_YEAR=2027`) is flagged `[INCOMPLETE]` in its per-run
@@ -224,8 +243,9 @@ include them).
   four-level aggregation, the temperature schedule, the warming curve and the
   end-to-end file export.
 * `test/test_climate_figures.jl` covers run discovery, incomplete-run detection,
-  per-run level statistics and across-GCM ensemble quantiles from synthetic CSVs
-  (no figures are rendered in tests).
+  per-run level statistics, across-GCM ensemble quantiles and the diagnostic
+  `read_climate_basin_series` reader from synthetic CSVs (no figures are
+  rendered in tests).
 * `test/test_ode.jl` checks that the scheduled ODE reproduces the static model
   when the anomalies are zero and responds correctly to warming.
 * `GUADEX_CONFIG_ONLY=1` on any entry script validates the configuration without

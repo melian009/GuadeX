@@ -290,6 +290,16 @@ if MAKE_FIGURES
     catch err
         @warn "climate figure generation failed" exception=err
     end
+    println("\nGenerating climate diagnostic figures...")
+    try
+        plot_climate_diagnostics(base_output_dir;
+            figures_dir=joinpath(base_output_dir, "figures"),
+            species_chars_file=joinpath(_GUADEX_ROOT, "data", "ABIOTIC",
+                "caracteristicas_peces_Guadalquivir_03-04-2018.csv"),
+            native_codes=NATIVE_SPECIES)
+    catch err
+        @warn "climate diagnostic figure generation failed" exception=err
+    end
 else
     println("\nSkipping figures (GUADEX_CLIMATE_PLOT=0).")
 end

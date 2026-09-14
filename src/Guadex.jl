@@ -35,6 +35,11 @@ export plot_ensemble_level_figure, plot_across_scenarios_figure, plot_final_year
 export discover_climate_runs, load_climate_run, run_level_stats, ensemble_level_stats
 export climate_metric_column
 
+# Export climate diagnostic figures and their data readers
+export ClimateBasinSeries, read_climate_basin_series
+export plot_climate_forcing_response, plot_climate_thermal_niches
+export plot_climate_community_filling, plot_climate_diagnostics
+
 # Export data preparation functions
 export prepare_ode_data, save_ode_data
 export load_species_characteristics, load_site_data, load_species_density_data
@@ -62,5 +67,6 @@ include("data_preparation.jl")
 include("outputs.jl")
 include("visualization.jl")
 include("climate_figures.jl")
+include("climate_diagnostics.jl")
 
 end # module Guadex
