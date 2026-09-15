@@ -3,9 +3,20 @@
 **Pipeline root:** `guadex_tw/` · **Reproduce with:** `python run_all.py`
 **Status:** all deliverables produced from real downloads. Every number below carries its N.
 
----
+----------------------------------------
 
-## Bottom line (plain language)
+## Missing Water temperature data
+
+## Online Guadalquivir data 
+** Historical data https://www.chguadalquivir.es/saih/DatosHistoricos_Avan.aspx
+** BUT not temperature data 
+
+## Link to the switch 
+** https://drive.switch.ch/public.php/dav/files/rNd3V73S2ca6MkT/?accept=zip
+** BUT not temperature data
+
+
+## Bottom line (plain language) -- Calibration WTM from ATData
 
 We calibrated a daily river water-temperature model from air temperature using **40,277
 quality-controlled water-temperature observations at 980 Spanish monitoring sites** (46 of them in
