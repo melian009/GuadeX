@@ -468,3 +468,41 @@ end
     Guadex.metacommunity_ode_scheduled!(du_warm, u0, warm, 0.0)
     @test du_warm[1, 1] < du_base[1, 1]
 end
+
+# =============================================================================
+# 7. Heat-stress mortality (WP3)
+# =============================================================================
+@testset "heat-stress mortality" begin
+    dispersal = sparse([1], [1], [0.0], 1, 1)
+    make_params(T; k=0.0, upper=28.0) = Guadex.MetacommunityParams(
+        1, 1, [0.0;;], dispersal, [1.0], [0.1;;],
+        [T], [1.0], [20.0], [5.0], [100.0],
+        [4.0], [upper], k)
+
+    # The backwards-compatible constructor has no limits and no stress.
+    default_params = Guadex.MetacommunityParams(
+        1, 1, [0.0;;], dispersal, [1.0], [0.1;;],
+        [30.0], [1.0], [20.0], [5.0], [100.0])
+    @test default_params.heat_stress_rate == 0.0
+    @test default_params.thermal_upper_limits == [Inf]
+
+    u0 = [10.0;;]
+    du_none = zeros(1, 1)
+    du_heat = zeros(1, 1)
+
+    # Below the empirical upper limit the term is exactly zero.
+    Guadex.metacommunity_ode!(du_none, u0, make_params(25.0), 0.0)
+    Guadex.metacommunity_ode!(du_heat, u0, make_params(25.0; k=0.01), 0.0)
+    @test du_heat[1] ≈ du_none[1]
+
+    # Above the limit the loss turns positive growth into a decline.
+    Guadex.metacommunity_ode!(du_none, u0, make_params(30.0), 0.0)
+    Guadex.metacommunity_ode!(du_heat, u0, make_params(30.0; k=0.01), 0.0)
+    @test du_none[1] > 0.0
+    @test du_heat[1] < 0.0
+
+    # Monotone in the exceedance.
+    du_hot = zeros(1, 1)
+    Guadex.metacommunity_ode!(du_hot, u0, make_params(32.0; k=0.01), 0.0)
+    @test du_hot[1] < du_heat[1]
+end

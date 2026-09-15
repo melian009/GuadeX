@@ -46,6 +46,7 @@ const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE
 
 const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
 const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
+const MIGRATORY_SPECIES = String.(get(GUADEX_PARAMS["species"], "migratory", String[]))
 const UPSTREAM_COST = Float64(get(GUADEX_PARAMS["run_climate_scenarios"], "upstream_cost", 0.05))
 
 # --- Climate run settings ---
@@ -66,8 +67,49 @@ const FORCE_RERUN = lowercase(get(ENV, "GUADEX_CLIMATE_FORCE", "0")) in ("1", "t
 const MAKE_FIGURES = lowercase(get(ENV, "GUADEX_CLIMATE_PLOT",
     string(_climate_setting("make_figures", true)))) in ("1", "true", "yes")
 
-const CLIMATE_SCENARIOS = String.(get(GUADEX_PARAMS["run_climate_scenarios"], "scenarios",
-    ["ssp126", "ssp245", "ssp370", "ssp585"]))
+# --- WP1-WP5 settings ---
+const FORCING_MODE = lowercase(get(ENV, "GUADEX_CLIMATE_FORCING_MODE",
+    string(_climate_setting("forcing_mode", "annual_mean"))))
+const DAILY_FORCING_FILE = get(ENV, "GUADEX_CLIMATE_DAILY_FILE",
+    string(_climate_setting("daily_forcing_file", "")))
+const BASELINE_PERIOD_START = parse(Int, get(ENV, "GUADEX_CLIMATE_BASELINE_START",
+    string(_climate_setting("baseline_period_start", 1986))))
+const BASELINE_PERIOD_END = parse(Int, get(ENV, "GUADEX_CLIMATE_BASELINE_END",
+    string(_climate_setting("baseline_period_end", 2005))))
+const SPIN_UP_ENABLED = lowercase(get(ENV, "GUADEX_CLIMATE_SPIN_UP",
+    string(_climate_setting("spin_up", false)))) in ("1", "true", "yes")
+const SPIN_UP_MAX_YEARS = parse(Int, get(ENV, "GUADEX_CLIMATE_SPIN_UP_YEARS",
+    string(_climate_setting("spin_up_max_years", 50))))
+const SPIN_UP_TOL = parse(Float64, get(ENV, "GUADEX_CLIMATE_SPIN_UP_TOL",
+    string(_climate_setting("spin_up_tol", 1.0e-6))))
+const K_SCALING = parse(Float64, get(ENV, "GUADEX_CLIMATE_K_SCALING",
+    string(_climate_setting("carrying_capacity_scaling", 1.0))))
+const OPTIMA_FRACTION = parse(Float64, get(ENV, "GUADEX_CLIMATE_OPTIMA_FRACTION",
+    string(_climate_setting("thermal_optima_fraction", 0.5))))
+const QUASI_EXTINCTION_Q = parse(Float64, get(ENV, "GUADEX_CLIMATE_QE_Q",
+    string(_climate_setting("quasi_extinction_q", 0.1))))
+const QUASI_EXTINCTION_PERSISTENCE = parse(Int, get(ENV, "GUADEX_CLIMATE_QE_PERSISTENCE",
+    string(_climate_setting("quasi_extinction_persistence", 3))))
+
+const STRESS_PARAMS = get(GUADEX_PARAMS, "temperature_stress", Dict{String,Any}())
+const HEAT_STRESS_ENABLED = lowercase(get(ENV, "GUADEX_CLIMATE_HEAT_STRESS",
+    string(get(STRESS_PARAMS, "enabled", false)))) in ("1", "true", "yes")
+const HEAT_STRESS_K = parse(Float64, get(ENV, "GUADEX_CLIMATE_HEAT_STRESS_K",
+    string(get(STRESS_PARAMS, "k", 0.0))))
+const HEAT_STRESS_CALIBRATE = lowercase(get(ENV, "GUADEX_CLIMATE_HEAT_STRESS_CALIBRATE",
+    string(get(STRESS_PARAMS, "calibrate", false)))) in ("1", "true", "yes")
+const HEAT_STRESS_MAX_LOSS = parse(Float64, get(ENV, "GUADEX_CLIMATE_HEAT_STRESS_MAX_LOSS",
+    string(get(STRESS_PARAMS, "max_annual_loss", 0.05))))
+
+const CONTROL_RUN = lowercase(get(ENV, "GUADEX_CLIMATE_CONTROL",
+    string(_climate_setting("control_run", false)))) in ("1", "true", "yes")
+const CLIMATE_SCENARIOS = begin
+    scenarios = String.(get(GUADEX_PARAMS["run_climate_scenarios"], "scenarios",
+        ["ssp126", "ssp245", "ssp370", "ssp585"]))
+    # A no-warming control (baseline climatology over the horizon) is reported
+    # alongside the ensemble so scenario effects can be measured against it (WP4).
+    CONTROL_RUN && !("control" in scenarios) ? vcat(scenarios, ["control"]) : scenarios
+end
 const DEFAULT_GCMS = ["ACCESS-CM2", "CMCC-CM2-SR5", "CNRM-ESM2-1", "EC-Earth3-Veg",
     "IITM-ESM", "KACE-1-0-G", "MIROC6", "MPI-ESM1-2-HR", "MRI-ESM2-0",
     "NorESM2-MM", "UKESM1-0-LL"]
@@ -88,6 +130,11 @@ if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
     println("  gcms: $(length(CLIMATE_GCMS))")
     println("  years: $START_YEAR-$END_YEAR (daily step, $(SAVE_INTERVAL_DAYS)-day saves)")
     println("  projections: $PROJECTION_FILE")
+    println("  forcing mode: $FORCING_MODE")
+    println("  heat stress: enabled=$HEAT_STRESS_ENABLED k=$HEAT_STRESS_K " *
+            "calibrate=$HEAT_STRESS_CALIBRATE")
+    println("  spin-up: $SPIN_UP_ENABLED (max $(SPIN_UP_MAX_YEARS) yr)")
+    println("  carrying-capacity scaling: $(K_SCALING)x; optimum fraction: $OPTIMA_FRACTION")
     exit(0)
 end
 
@@ -101,6 +148,9 @@ println("  scenarios: $(join(CLIMATE_SCENARIOS, ", "))")
 println("  GCMs:      $(length(CLIMATE_GCMS))")
 println("  save:      every $(SAVE_INTERVAL_DAYS) days (monthly by default)")
 println("  elevation scaling: $ELEVATION_SCALING")
+println("  forcing:   $FORCING_MODE")
+println("  heat stress: $HEAT_STRESS_ENABLED (k=$(HEAT_STRESS_K))")
+println("  spin-up:   $SPIN_UP_ENABLED; K scaling: $(K_SCALING)x")
 println("="^70)
 
 projections = load_temperature_projections(PROJECTION_FILE)
@@ -128,6 +178,74 @@ u0 = Matrix(density_df_filtered[:, density_cols])
 replace!(u0, NaN => 0.0)
 u0 = max.(u0, 0.0)
 u0_flat = vec(u0)
+
+# ---------------------------------------------------------------------------
+# WP3/WP4: thermal optimum sweep, heat-stress slope, K scaling, daily forcing
+# and the baseline spin-up.
+# ---------------------------------------------------------------------------
+params = data_base.params
+
+if OPTIMA_FRACTION != 0.5
+    optima = optimum_sweep_optima(data_base.species_chars_df, data_base.species;
+        fraction=OPTIMA_FRACTION)
+    params = set_thermal_optima(params, optima)
+    println("WP3 optimum sweep: fraction=$OPTIMA_FRACTION -> $optima")
+end
+
+if K_SCALING != 1.0
+    params = scale_carrying_capacity(params, K_SCALING)
+    println("WP4 carrying-capacity scaling: $(K_SCALING)x")
+end
+
+# WP1: per-site daily forcing, loaded only in the daily mode.  A separate
+# "historical" series provides the 1986-2005 baseline when present.
+daily_forcing = nothing
+baseline_temps = nothing
+baseline_dates = nothing
+if FORCING_MODE == "daily"
+    isempty(DAILY_FORCING_FILE) && error("forcing_mode = daily requires daily_forcing_file")
+    daily_forcing = load_daily_temperature_forcing(DAILY_FORCING_FILE)
+    if "historical" in Set(String.(daily_forcing.scenario))
+        baseline_dates, baseline_temps = daily_forcing_matrix(daily_forcing, data_base.sites;
+            scenario="historical")
+        println("WP1 baseline series: $(length(baseline_dates)) days from 'historical'")
+    else
+        @warn "daily forcing has no 'historical' scenario; baseline will be taken from the " *
+              "scenario series window $BASELINE_PERIOD_START-$BASELINE_PERIOD_END"
+    end
+end
+
+# WP3: baseline-viability calibration of the shared heat-stress slope.
+k_heat = HEAT_STRESS_ENABLED ? HEAT_STRESS_K : 0.0
+if HEAT_STRESS_ENABLED && HEAT_STRESS_CALIBRATE
+    if baseline_temps === nothing
+        @warn "heat-stress calibration needs a daily baseline series; using k=$HEAT_STRESS_K"
+    else
+        energies = Float64[]
+        for s in 1:params.n_species, i in 1:params.n_sites
+            push!(energies, exceedance_energy(@view(baseline_temps[i, :]),
+                params.thermal_upper_limits[s]))
+        end
+        k_heat = calibrate_heat_stress_rate(energies; max_annual_loss=HEAT_STRESS_MAX_LOSS)
+        println("WP3 heat-stress calibration: k=$k_heat " *
+                "(max annual loss $(HEAT_STRESS_MAX_LOSS))")
+    end
+end
+params = set_heat_stress_rate(params, k_heat)
+println("Heat-stress mortality: $(k_heat > 0 ? "k=$k_heat" : "disabled")")
+data_base = merge(data_base, (params=params,))
+
+# WP4: spin up to the baseline equilibrium once and reuse for every scenario.
+baseline_species_density = nothing
+if SPIN_UP_ENABLED
+    println("WP4 spin-up under baseline forcing (max $(SPIN_UP_MAX_YEARS) yr, tol=$SPIN_UP_TOL)...")
+    spin = spin_up(params; initial_state=u0_flat,
+        days_per_year=Float64(DAYS_PER_YEAR), max_years=SPIN_UP_MAX_YEARS, tol=SPIN_UP_TOL)
+    u0_flat = spin.state
+    baseline_species_density = reshape(u0_flat, n_sites, params.n_species)
+    println("  spin-up: years=$(spin.years), converged=$(spin.converged), " *
+            "last relative change=$(spin.last_relative_change)")
+end
 
 saveat = unique(vcat(collect(0.0:SAVE_INTERVAL_DAYS:T_END), T_END))
 
@@ -170,9 +288,13 @@ run_number = 0
 total_runs = length(CLIMATE_SCENARIOS) * length(CLIMATE_GCMS)
 
 for scenario in CLIMATE_SCENARIOS
-    scenario in available_scenarios || (@warn "scenario $scenario absent from projections; skipping"; continue)
-    for gcm in CLIMATE_GCMS
-        gcm in available_gcms || (@warn "GCM $gcm absent from projections; skipping"; continue)
+    is_control = scenario == "control"
+    is_control || (scenario in available_scenarios ||
+        (@warn "scenario $scenario absent from projections; skipping"; continue))
+    scenario_gcms = is_control ? ["baseline"] : CLIMATE_GCMS
+    for gcm in scenario_gcms
+        is_control || (gcm in available_gcms ||
+            (@warn "GCM $gcm absent from projections; skipping"; continue))
         global run_number += 1
         if MAX_RUNS > 0 && run_number > MAX_RUNS
             println("[cap] GUADEX_CLIMATE_MAX_RUNS=$MAX_RUNS reached; stopping after $MAX_RUNS run(s)")
@@ -180,7 +302,9 @@ for scenario in CLIMATE_SCENARIOS
         end
 
         run_dir = joinpath(base_output_dir, safe_component(scenario), safe_component(gcm))
-        curve_years, curve = basin_warming_curve(projections, scenario, gcm, START_YEAR, END_YEAR)
+        curve_years, curve = is_control ?
+            (collect(START_YEAR:END_YEAR), zeros(Float64, SIMULATION_YEARS)) :
+            basin_warming_curve(projections, scenario, gcm, START_YEAR, END_YEAR)
 
         # Resume support: a completed run is skipped unless explicitly forced,
         # and its summary row is preserved in the incremental run index.
@@ -203,8 +327,32 @@ for scenario in CLIMATE_SCENARIOS
 
         warming = warming_matrix(n_sites, curve_years, curve;
             elevations=data_base.elevations, elevation_scaling=ELEVATION_SCALING)
+        forcing_temps = nothing
+        forcing_dates = nothing
 
-        schedule = TemperatureSchedule(warming, Float64(DAYS_PER_YEAR))
+        schedule = if FORCING_MODE == "daily" && !is_control
+            forcing_dates, forcing_temps = daily_forcing_matrix(daily_forcing, data_base.sites;
+                scenario=scenario)
+            sched, _ = daily_temperature_schedule(forcing_temps;
+                dates=forcing_dates,
+                baseline_temps=baseline_temps, baseline_dates=baseline_dates,
+                baseline_start=BASELINE_PERIOD_START, baseline_end=BASELINE_PERIOD_END)
+            years_out, warming_out = annual_mean_deltas_by_year(sched, forcing_dates)
+            columns = [findfirst(==(y), years_out) for y in YEAR_LABELS]
+            any(isnothing, columns) &&
+                error("daily forcing ($scenario) does not cover every year in $START_YEAR-$END_YEAR")
+            warming = warming_out[:, [something(c) for c in columns]]
+            sched
+        elseif is_control && FORCING_MODE == "daily" && baseline_temps !== nothing
+            # No-warming control under the baseline daily climatology.
+            forcing_dates, forcing_temps = baseline_dates, baseline_temps
+            sched = baseline_climatology_schedule(baseline_temps, baseline_dates,
+                SIMULATION_YEARS; days_per_year=Float64(DAYS_PER_YEAR))
+            warming = annual_mean_deltas(sched; days_per_year=Float64(DAYS_PER_YEAR))
+            sched
+        else
+            annual_mean_schedule(warming; days_per_year=Float64(DAYS_PER_YEAR))
+        end
         scheduled_params = ScheduledMetacommunityParams(data_base.params, schedule)
 
         prob = ODEProblem(metacommunity_ode_scheduled!, u0_flat, (0.0, T_END), scheduled_params)
@@ -221,6 +369,12 @@ for scenario in CLIMATE_SCENARIOS
             habitat_suitability=data_base.params.habitat_suitability,
             save_interval_days=SAVE_INTERVAL_DAYS,
             elevation_scaling=ELEVATION_SCALING,
+            forcing_mode=FORCING_MODE,
+            heat_stress_k=k_heat,
+            thermal_upper_limits=data_base.params.thermal_upper_limits,
+            spin_up=SPIN_UP_ENABLED,
+            carrying_capacity_scaling=K_SCALING,
+            thermal_optima_fraction=OPTIMA_FRACTION,
             upstream_cost=UPSTREAM_COST,
             cedex_var_file=CEDEX_VAR_FILE,
             cedex_uts_file=CEDEX_UTS_FILE,
@@ -234,6 +388,7 @@ for scenario in CLIMATE_SCENARIOS
             sites=data_base.sites, species=data_base.species, site_df=data_base.site_df,
             crosswalk_path=joinpath(_GUADEX_ROOT, "data", "site_waterbody_crosswalk.csv"),
             native_species=NATIVE_SPECIES, invasive_species=INVASIVE_SPECIES,
+            migratory_species=MIGRATORY_SPECIES,
             days_per_year=DAYS_PER_YEAR, threshold=PRESENCE_THRESHOLD,
             report_year_offsets=YEAR_OFFSETS, report_year_labels=YEAR_LABELS,
             temperature_baseline=data_base.params.temperatures,
@@ -242,12 +397,24 @@ for scenario in CLIMATE_SCENARIOS
             habitat_suitability=data_base.params.habitat_suitability,
             upstream_cost=UPSTREAM_COST,
             require_crosswalk=true,
+            baseline_species_density=baseline_species_density,
+            quasi_extinction_q=QUASI_EXTINCTION_Q,
+            quasi_extinction_persistence=QUASI_EXTINCTION_PERSISTENCE,
+            species_upper_limits=data_base.params.thermal_upper_limits,
+            daily_forcing=forcing_temps === nothing ? nothing :
+                (temps=forcing_temps, dates=forcing_dates),
             run_metadata=Dict(
                 "script" => "run_climate_scenarios.jl",
                 "scenario" => scenario,
                 "gcm" => gcm,
                 "start_year" => START_YEAR,
                 "end_year" => END_YEAR,
+                "forcing_mode" => FORCING_MODE,
+                "heat_stress_k" => k_heat,
+                "spin_up" => SPIN_UP_ENABLED,
+                "carrying_capacity_scaling" => K_SCALING,
+                "thermal_optima_fraction" => OPTIMA_FRACTION,
+                "baseline_period" => "$BASELINE_PERIOD_START-$BASELINE_PERIOD_END",
                 "elevation_scaling" => ELEVATION_SCALING,
                 "save_interval_days" => SAVE_INTERVAL_DAYS,
                 "warming_end_degc" => curve[end],

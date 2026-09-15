@@ -78,9 +78,13 @@ end
 """
     parse_temperature_range_and_sigma(temp_str::AbstractString)
 
-Parse temperature range string like "8 to 30" and return both the thermal optimum
-(midpoint) and thermal breadth (sigma). Sigma is derived from the temperature range
-using the approximation sigma ≈ range / 6.
+Parse temperature range string like "8 to 30" and return the thermal optimum
+(midpoint), thermal breadth (sigma) and the empirical lower/upper limits.  Sigma
+is derived from the temperature range using the approximation sigma ≈ range / 6.
+
+The returned `lower`/`upper` bounds are the *empirical* limits from the trait
+table (WP3) and are used for the heat-stress term; when the input is a single
+value or unparseable, they widen to ±Inf so no stress is applied.
 
 Input file is "data/ABIOTIC/caracteristicas_peces_Guadalquivir_03-04-2018.csv"
 """
@@ -90,7 +94,8 @@ function parse_temperature_range_and_sigma(temp_str::AbstractString)
     default_sigma = 3.0
 
     if isempty(temp_str) || temp_str == ""
-        return (optimum=default_optimum, sigma=default_sigma)
+        return (optimum=default_optimum, sigma=default_sigma,
+            lower=-Inf, upper=Inf)
     end
 
     # Handle "X to Y" format
@@ -105,9 +110,10 @@ function parse_temperature_range_and_sigma(temp_str::AbstractString)
                 # This ensures ~95% of the thermal niche falls within ±2σ
                 sigma = thermal_range / 6.0
                 optimum = (t_min + t_max) / 2.0
-                return (optimum=optimum, sigma=sigma)
+                return (optimum=optimum, sigma=sigma, lower=t_min, upper=t_max)
             catch
-                return (optimum=default_optimum, sigma=default_sigma)
+                return (optimum=default_optimum, sigma=default_sigma,
+                    lower=-Inf, upper=Inf)
             end
         end
     end
@@ -115,9 +121,10 @@ function parse_temperature_range_and_sigma(temp_str::AbstractString)
     # Try to parse as single number - no range info, use default sigma
     try
         optimum = parse(Float64, temp_str)
-        return (optimum=optimum, sigma=default_sigma)
+        return (optimum=optimum, sigma=default_sigma, lower=-Inf, upper=Inf)
     catch
-        return (optimum=default_optimum, sigma=default_sigma)
+        return (optimum=default_optimum, sigma=default_sigma,
+            lower=-Inf, upper=Inf)
     end
 end
 
@@ -166,10 +173,13 @@ function load_species_characteristics(file::String)
     # Read the semicolon-delimited file
     df = CSV.read(file, DataFrame; delim=';')
 
-    # Parse temperature ranges to get thermal optima and sigma (thermal breadth)
+    # Parse temperature ranges to get thermal optima, sigma (thermal breadth)
+    # and the empirical lower/upper limits used by the heat-stress term.
     thermal_params = parse_temperature_range_and_sigma.(string.(df.TEMPERATURE_C))
     df.thermal_optimum = [p.optimum for p in thermal_params]
     df.thermal_sigma = [p.sigma for p in thermal_params]
+    df.thermal_lower = [p.lower for p in thermal_params]
+    df.thermal_upper = [p.upper for p in thermal_params]
 
     df.elevation_optimum = parse_elevation.(string.(df.ELEVATION_m))
 
@@ -1335,7 +1345,10 @@ function prepare_ode_data(;
     obstacle_mode::Symbol = :legacy,
     obstacle_matching_tolerance::Float64 = 2000.0,
     obstacle_passability::Float64 = 0.1,
-    obstacle_downstream_passability::Float64 = 0.5
+    obstacle_downstream_passability::Float64 = 0.5,
+    heat_stress_rate::Float64 = 0.0,
+    carrying_capacity_scaling::Float64 = 1.0,
+    thermal_optima_override::Union{Nothing,AbstractVector} = nothing
 )
     println("="^60)
     println("Preparing data for ODE metacommunity model")
@@ -1370,10 +1383,16 @@ function prepare_ode_data(;
     # Get thermal parameters for our species
     thermal_optima = Float64[]
     thermal_sigmas = Float64[]
+    thermal_lower_limits = Float64[]
+    thermal_upper_limits = Float64[]
 
-    # Use thermal optimum and sigma (thermal breadth) from species characteristics
-    # Sigma is derived from the temperature range in the data (sigma ≈ range/6)
-    sp_lookup = Dict(lowercase(r.SP) => (opt=r.thermal_optimum, sig=r.thermal_sigma) for r in eachrow(species_chars_df))
+    # Use thermal optimum, sigma (thermal breadth) and empirical limits from
+    # species characteristics.  Sigma is derived from the temperature range in
+    # the data (sigma ≈ range/6); the limits are the observed range bounds (WP3).
+    sp_lookup = Dict(lowercase(r.SP) => (opt=r.thermal_optimum, sig=r.thermal_sigma,
+        lower=hasproperty(r, :thermal_lower) ? r.thermal_lower : -Inf,
+        upper=hasproperty(r, :thermal_upper) ? r.thermal_upper : Inf)
+        for r in eachrow(species_chars_df))
 
     for sp in species_codes
         key = lowercase(sp)
@@ -1381,13 +1400,24 @@ function prepare_ode_data(;
         if vals !== nothing
             push!(thermal_optima, vals.opt)
             push!(thermal_sigmas, vals.sig)
+            push!(thermal_lower_limits, vals.lower)
+            push!(thermal_upper_limits, vals.upper)
         else
             push!(thermal_optima, 15.0)
             push!(thermal_sigmas, 3.0)
+            push!(thermal_lower_limits, -Inf)
+            push!(thermal_upper_limits, Inf)
         end
+    end
+    if thermal_optima_override !== nothing
+        length(thermal_optima_override) == n_species ||
+            error("thermal_optima_override has $(length(thermal_optima_override)) entries, expected $n_species")
+        thermal_optima = Float64.(thermal_optima_override)
+        println("Thermal optima overridden (WP3 optimum sweep): $thermal_optima")
     end
     println("Thermal optima: $thermal_optima")
     println("Thermal sigmas: $thermal_sigmas")
+    println("Thermal limits (lower/upper): $thermal_lower_limits / $thermal_upper_limits")
 
     # 4. Load interaction matrix
     println("\n[4/12] Loading interaction matrix...")
@@ -1452,6 +1482,11 @@ function prepare_ode_data(;
     # 11. Build carrying capacities from observed density data
     println("\n[11/12] Building carrying capacities...")
     carrying_capacity = build_carrying_capacity(density_df, site_df, sites, species_codes)
+    if carrying_capacity_scaling != 1.0
+        carrying_capacity = carrying_capacity .* carrying_capacity_scaling
+        println("Carrying capacity scaled by $(carrying_capacity_scaling) (WP4 sensitivity): " *
+                "range $(minimum(carrying_capacity)) - $(maximum(carrying_capacity))")
+    end
 
     # 12. Precompute dispersal matrix (using species-specific dispersal coefficients)
     println("\n[12/12] Precomputing dispersal matrix...")
@@ -1481,8 +1516,13 @@ function prepare_ode_data(;
         habitat_suitability,
         thermal_optima,
         thermal_sigmas,
-        carrying_capacity
+        carrying_capacity,
+        thermal_lower_limits,
+        thermal_upper_limits,
+        heat_stress_rate
     )
+    heat_stress_rate > 0 &&
+        println("Heat-stress mortality enabled: k=$(heat_stress_rate) 1/day/degC^2")
 
     return (
         params = params,

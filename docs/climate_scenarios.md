@@ -237,16 +237,144 @@ include them).
 5. **Monthly saves** are used for reporting. The integration itself remains
    daily; set `save_interval_days` lower if higher temporal resolution is needed.
 
+## Modelling-improvement features (WP0-WP6)
+
+The features below implement the modelling-improvement plan
+(`.kilo/plans/model-improvement-plan.md`). Every one is opt-in and the defaults
+reproduce the previous behaviour, so old runs remain reproducible.
+
+### WP0 — species classification
+
+`parameters.toml` classifies `ST` (Salmo trutta) as **native** and adds a third
+`migratory` group (`AA`, `AAL`, `LR`, `MC`). ST is the cold-water keystone whose
+empirical optimum (12 °C, range 4-20 °C) is below current basin temperatures, so
+it is the native species through which warming can appear as a decline. The
+native richness metric therefore counts 10 species; migratory species are neither
+native nor invasive and are reported separately.
+
+### WP1 — per-site daily water temperature
+
+`guadex_tw/scripts/13_project_guadex_sites.py` projects the calibrated spatial Tw
+model at every GuadeX site coordinate (read from `data/ConnectivityUTM.csv`) for
+all 11 GCMs × 4 SSPs and writes the ensemble-median daily series
+`guadex_tw/outputs/tables/water_temp_daily_guadex_sites.csv`
+(`site_id, scenario, date, tw_ensemble_median`). It performs the same remote
+PNACC HDF5 subsetting as script 09 with its own resumable cache, and includes the
+`historical` experiment used as the 1986-2005 baseline. The Julia loader is
+`load_daily_temperature_forcing` / `daily_forcing_matrix`.
+
+### WP2 — daily vs annual-mean forcing
+
+`[run_climate_scenarios] forcing_mode` selects:
+
+* `"annual_mean"` (default) — the historical annual-node warming curve;
+* `"daily"` — per-site daily forcing from WP1, with anomalies taken against the
+  fixed `baseline_period_start`..`baseline_period_end` window instead of anchoring
+  zero at the start year.
+
+`daily_temperature_schedule`, `baseline_climatology_schedule`,
+`annual_mean_deltas` and `annual_mean_deltas_by_year` in
+`src/temperature_forcing.jl` build the schedules; `TemperatureSchedule` already
+interpolates arbitrary node spacing, so a daily schedule is just
+`days_per_year = 1`. The export still reports annual-mean anomalies, and a daily
+schedule with zero anomaly reproduces the static model exactly (unit-tested).
+
+### WP3 — heat-stress mortality
+
+The ODE gains a per-capita loss active only above each species' empirical upper
+thermal limit:
+
+```
+m_heat,s(t) = k · max(0, T_i(t) − T_upper,s)²      # 1/day
+dU[i,s] = N_is·(r_eff·logistic + interaction) − N_is·m_heat + dispersal
+```
+
+`T_upper,s` is the trait-table upper bound (parsed by
+`parse_temperature_range_and_sigma`), and `k` is a **single shared slope**, not 24
+parameters. Configure it in `[temperature_stress]`:
+
+```toml
+[temperature_stress]
+enabled = false        # default: heat stress off (pre-WP3 model)
+k = 0.0                # 1/day/degC^2
+calibrate = false      # derive k from the baseline exceedance energy
+max_annual_loss = 0.05 # baseline-viability constraint used by `calibrate`
+limits_source = "trait_table"
+```
+
+`calibrate_heat_stress_rate` sets `k` so the worst baseline species/site keeps at
+least `1 - max_annual_loss` annual survival. The thermal optimum (E5) is swept
+separately with `thermal_optima_fraction` (0 = cold edge, 0.5 = midpoint,
+1 = warm edge) via `optimum_sweep_optima`; this is not a fit. Narrowing σ is out
+of scope.
+
+### WP4 — equilibrium start and rebased metrics
+
+`[run_climate_scenarios] spin_up` integrates to steady state under baseline
+forcing (zeros, no seasons) before any scenario and reuses the state for every
+run; `spin_up_max_years` / `spin_up_tol` control the stop criterion (the default
+50-year cap is reported as `converged = false` if it is hit).
+`carrying_capacity_scaling` (1×, 3×, 10×) is the K sensitivity. When spin-up is
+on, `native_richness_relative`, `native_extinction_risk` and the new biomass
+ratios are rebased on the spun-up state rather than the t = 0 snapshot, which was
+not an equilibrium.
+
+### WP5 — abundance, occupancy and quasi-extinction
+
+`compute_species_metrics` writes `levels/species_timeseries.csv` (per site ×
+species density, presence, relative density, quasi-extinction flag and
+time-to-quasi-extinction), and `quasi_extinction_summary` writes
+`levels/quasi_extinction_summary.csv`. A species is **quasi-extinct** at a site
+when its density is below `max(presence_threshold, q · baseline_density)` for
+`quasi_extinction_persistence` consecutive annual snapshots (`q =
+quasi_extinction_q`, default 0.1). Site metrics add `native_occupancy`,
+`invasive_occupancy`, `total_occupancy`, `native_biomass_relative`,
+`total_biomass_relative`, `native_quasi_extinct` and
+`native_quasi_extinct_fraction`. When daily forcing is available,
+`levels/exposure_sites.csv` reports days above each species' upper limit and the
+annual squared exceedance energy (`exposure_table`).
+
+### WP6 — staged experiments
+
+`run_climate_experiments.jl` runs the staged design (E0 spin-up realism, E1
+seasonality, E2 heat stress, E3 K sensitivity, E4 optimum sweep) and writes one
+case per directory plus `results/climate_experiments/stage_index.csv`; E5 (the
+44-run ensemble plus control) is delegated to `run_climate_scenarios.jl` with the
+daily/heat-stress/spin-up flags. Settings live in
+`[run_climate_experiments]`; `GUADEX_EXPERIMENTS_STAGES=E0,E2` selects stages.
+
+### New environment overrides
+
+| variable | meaning |
+| :--- | :--- |
+| `GUADEX_CLIMATE_FORCING_MODE` | `annual_mean` (default) or `daily` |
+| `GUADEX_CLIMATE_DAILY_FILE` | per-site daily forcing CSV (WP1) |
+| `GUADEX_CLIMATE_BASELINE_START` / `_END` | daily anomaly baseline window |
+| `GUADEX_CLIMATE_SPIN_UP` | `1` to start from the spun-up equilibrium |
+| `GUADEX_CLIMATE_SPIN_UP_YEARS` / `_TOL` | spin-up stop criterion |
+| `GUADEX_CLIMATE_K_SCALING` | carrying-capacity multiplier |
+| `GUADEX_CLIMATE_OPTIMA_FRACTION` | thermal-optimum sweep position |
+| `GUADEX_CLIMATE_HEAT_STRESS` | `1` to enable WP3 |
+| `GUADEX_CLIMATE_HEAT_STRESS_K` | shared slope `k` |
+| `GUADEX_CLIMATE_HEAT_STRESS_CALIBRATE` | calibrate `k` from baseline forcing |
+| `GUADEX_CLIMATE_QE_Q` / `_PERSISTENCE` | quasi-extinction definition |
+| `GUADEX_CLIMATE_CONTROL` | `1` adds a no-warming control run (`control`/`baseline`) |
+
 ## Validation
 
 * `test/test_outputs.jl` covers the crosswalk mapping, per-site metrics,
-  four-level aggregation, the temperature schedule, the warming curve and the
-  end-to-end file export.
+  four-level aggregation, the temperature schedule, the warming curve, the
+  end-to-end file export, and the WP5 species/quasi-extinction metrics.
+* `test/test_temperature_forcing.jl` covers the empirical limits, the optimum
+  sweep, heat-stress calibration, exposure diagnostics, the daily/annual-mean
+  schedule builders, the WP1 loaders and the WP4 spin-up/K helpers.
+* `test/test_ode.jl` checks that the scheduled ODE reproduces the static model
+  when the anomalies are zero, responds correctly to warming, and that the
+  heat-stress term is zero below the upper limit and monotone above it.
+* `test/test_parameters.jl` checks the WP0 classification.
 * `test/test_climate_figures.jl` covers run discovery, incomplete-run detection,
   per-run level statistics, across-GCM ensemble quantiles and the diagnostic
   `read_climate_basin_series` reader from synthetic CSVs (no figures are
   rendered in tests).
-* `test/test_ode.jl` checks that the scheduled ODE reproduces the static model
-  when the anomalies are zero and responds correctly to warming.
 * `GUADEX_CONFIG_ONLY=1` on any entry script validates the configuration without
   loading data.

@@ -12,6 +12,18 @@ thermal optima, so warming slightly *increases* richness instead of reducing it.
 No implementation bug produces this; the pattern follows directly from the
 model's structure and initial conditions.
 
+> **Update (modelling-improvement plan).** The runs reviewed here were produced
+> by the pre-plan model: annual-mean forcing anchored at 2026, no mortality
+> term, `K = 10x` observed, and a native list that omitted the cold-water
+> keystone `ST`. The reasons above are now addressable, and opt-in by design:
+> WP0 adds `ST` to the native metric, WP1/WP2 deliver per-site daily
+> seasonality against a fixed baseline, WP3 adds heat-stress mortality above the
+> empirical limits, WP4 starts from a spun-up equilibrium and rebases the loss
+> metrics, and WP5 adds abundance/occupancy/quasi-extinction and exposure
+> diagnostics. See `docs/climate_scenarios.md` ("Modelling-improvement features")
+> and the staged driver `run_climate_experiments.jl`. The default settings still
+> reproduce the runs analysed below.
+
 ---
 
 ## 1. What the outputs show

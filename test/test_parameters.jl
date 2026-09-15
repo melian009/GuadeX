@@ -22,8 +22,18 @@ using .SimulationParameters
     @test length(subcatchments) == 77
     @test all(isfinite, subcatchments)
 
-    @test length(params["species"]["native"]) == 9
-    @test length(params["species"]["invasive"]) == 10
+    # WP0: ST (cold-water keystone) is native; AA/AAL/LR/MC are migratory and
+    # deliberately excluded from both native and invasive richness.
+    native = String.(params["species"]["native"])
+    invasive = String.(params["species"]["invasive"])
+    migratory = String.(get(params["species"], "migratory", String[]))
+    @test length(native) == 10
+    @test "ST" in native
+    @test length(invasive) == 10
+    @test sort(migratory) == ["AA", "AAL", "LR", "MC"]
+    @test isempty(intersect(native, invasive))
+    @test isempty(intersect(native, migratory))
+    @test isempty(intersect(invasive, migratory))
 
     # Every scenario name referenced by an entry script must exist in the
     # scenario library (so typos fail loudly during configuration smoke tests).

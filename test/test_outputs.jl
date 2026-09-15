@@ -245,3 +245,60 @@ end
 
     @test nrow(result.site_metrics) == 6
 end
+
+# =============================================================================
+# 8. Species-level abundance, occupancy and quasi-extinction (WP5)
+# =============================================================================
+@testset "compute_species_metrics and quasi-extinction" begin
+    dates = 2026:2030
+    times = collect(0.0:365.0:1460.0)
+    states = [vec([d;;]) for d in [10.0, 10.0, 0.5, 0.5, 0.5]]
+
+    sp = Guadex.compute_species_metrics(times, states, ["s1"], ["ST"];
+        year_offsets=[0, 1, 2, 3, 4], year_labels=dates,
+        baseline_species_density=[10.0;;],
+        quasi_extinction_q=0.1, quasi_extinction_persistence=3)
+
+    @test nrow(sp) == 5
+    @test sp[sp.year .== 2028, :quasi_extinct] == [false]
+    @test sp[sp.year .== 2030, :quasi_extinct] == [true]
+    @test sp[1, :baseline_density] == 10.0
+    @test sp[1, :relative_density] == 1.0
+    @test sp[1, :time_to_quasi_extinction] == 2030
+
+    summary = Guadex.quasi_extinction_summary(sp)
+    row = summary[1, :]
+    @test row.species == "ST"
+    # Occupancy (presence threshold 0.1) stays 1: that is exactly why WP5 adds
+    # the stricter quasi-extinction metric on top of it.
+    @test row.occupancy_final == 1.0
+    @test row.quasi_extinct_fraction == 1.0
+    @test row.median_time_to_quasi_extinction == 2030.0
+    @test row.relative_biomass_change ≈ 0.5 / 10.0 - 1.0
+end
+
+@testset "compute_site_metrics rebased on spun-up baseline" begin
+    species = ["ST", "GH"]
+    levels = (
+        subcatchment=["1.1"], water_body=["ES050MSPF001"],
+        water_body_name=["Body A"], zone=["0001"], subzone=["1"], basin=["ES050"],
+    )
+    times = collect(0.0:365.0:730.0)
+    states = [vec([10.0 5.0]), vec([0.5 5.0]), vec([0.5 5.0])]
+    baseline = [10.0 5.0]
+
+    df = Guadex.compute_site_metrics(times, states, ["s1"], levels, species, ["ST"], ["GH"];
+        year_offsets=[0, 1, 2], year_labels=[2026, 2027, 2028],
+        baseline_species_density=baseline, quasi_extinction_q=0.1,
+        quasi_extinction_persistence=2)
+
+    r = df[(df.year .== 2027) .& (df.CODIGO .== "s1"), :][1, :]
+    @test r.native_biomass_relative ≈ 0.05
+    @test r.native_occupancy ≈ 1.0
+    @test r.invasive_occupancy ≈ 1.0
+    @test r.native_quasi_extinct == 0
+
+    r2 = df[(df.year .== 2028) .& (df.CODIGO .== "s1"), :][1, :]
+    @test r2.native_quasi_extinct == 1
+    @test r2.native_quasi_extinct_fraction ≈ 1.0
+end

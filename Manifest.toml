@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "99f7a4e4c81eecc1d6ad9d345c8025a1348ac042"
+project_hash = "dfb992dc1dd05bf1516ac96db4c1de58a4b7df00"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -1104,7 +1104,7 @@ uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
 [[deps.Guadex]]
-deps = ["CSV", "CairoMakie", "Colors", "DataFrames", "DataFramesMeta", "DifferentialEquations", "GeoMakie", "GraphMakie", "Graphs", "LinearAlgebra", "Makie", "NetworkLayout", "SparseArrays", "Statistics", "Test"]
+deps = ["CSV", "CairoMakie", "Colors", "DataFrames", "DataFramesMeta", "Dates", "DifferentialEquations", "GeoMakie", "GraphMakie", "Graphs", "JLD2", "LinearAlgebra", "Makie", "NetworkLayout", "SparseArrays", "Statistics", "TOML", "Test"]
 path = "."
 uuid = "86c0592c-86ce-4542-b0d3-1fd816d89ac3"
 version = "0.1.0"

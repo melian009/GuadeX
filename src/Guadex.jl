@@ -23,9 +23,22 @@ export metacommunity_ode!, MetacommunityParams, precompute_dispersal_matrix
 export TemperatureSchedule, ScheduledMetacommunityParams
 export metacommunity_ode_scheduled!, temperature_delta
 
+# Export daily/seasonal forcing, optimum sweep and heat-stress calibration (WP1-WP3)
+export load_daily_temperature_forcing, daily_forcing_matrix
+export daily_temperature_schedule, annual_mean_schedule, annual_mean_deltas
+export annual_mean_deltas_by_year, baseline_climatology_schedule
+export optimum_sweep_optima, exceedance_energy, calibrate_heat_stress_rate
+export exposure_days, exposure_table
+
+# Export equilibrium spin-up and K sensitivity (WP4)
+export spin_up, scale_carrying_capacity, set_thermal_optima, set_heat_stress_rate
+export with_temperature_baseline, site_totals
+
 # Export four-level reporting / viewer output functions
 export load_site_level_crosswalk, site_level_vectors, species_indices
-export compute_site_metrics, aggregate_metrics, site_connectivity_metrics
+export compute_site_metrics, compute_species_metrics, quasi_extinction_flags
+export quasi_extinction_summary, time_to_quasi_extinction
+export aggregate_metrics, site_connectivity_metrics
 export export_run_outputs, write_viewer_outputs
 export load_temperature_projections, basin_warming_curve, warming_matrix
 
@@ -63,6 +76,8 @@ export plot_richness_timeseries_grid
 include("graph_construction.jl")
 include("visualize_graph.jl")
 include("ode_model.jl")
+include("temperature_forcing.jl")
+include("spin_up.jl")
 include("data_preparation.jl")
 include("outputs.jl")
 include("visualization.jl")

@@ -57,11 +57,19 @@ downstream_passability = 0.5
 
 # ---------------------------------------------------------------------------
 # Species groups used to classify simulation outputs.
+#
+# `native` includes ST (Salmo trutta), the cold-water keystone whose empirical
+# thermal optimum (12 C, range 4-20 C) lies *below* current basin temperatures:
+# it is the native species through which warming can appear as a decline.
+# `migratory` holds the diadromous / estuarine species (AA, AAL, LR, MC) that are
+# neither native-resident nor invasive; they are reported separately and are not
+# part of the native richness metric.
 # ---------------------------------------------------------------------------
 
 [species]
-native = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO"]
+native = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO", "ST"]
 invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
+migratory = ["AA", "AAL", "LR", "MC"]
 
 # ---------------------------------------------------------------------------
 # Modelled subcatchments.  Exploitation and passability scenarios apply one
@@ -165,3 +173,74 @@ gcms = [
     "KACE-1-0-G", "MIROC6", "MPI-ESM1-2-HR", "MRI-ESM2-0", "NorESM2-MM",
     "UKESM1-0-LL",
 ]
+
+# --- WP2: forcing mode -----------------------------------------------------
+# "annual_mean" reproduces the historical annual-node warming curve (default);
+# "daily" uses a per-site daily water-temperature forcing file (WP1).
+forcing_mode = "annual_mean"
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites.csv"
+# Baseline period for daily anomalies (PNACC convention).
+baseline_period_start = 1986
+baseline_period_end = 2005
+# Add a no-warming control run (baseline climatology over the horizon) so
+# scenario effects can be reported relative to it (WP4).
+control_run = false
+
+# --- WP4: spun-up initial conditions / carrying-capacity sensitivity --------
+spin_up = false
+spin_up_max_years = 50
+spin_up_tol = 1.0e-6
+carrying_capacity_scaling = 1.0
+# WP3 optimum sweep: 0.0 = cold edge, 0.5 = midpoint (default), 1.0 = warm edge.
+thermal_optima_fraction = 0.5
+
+# --- WP5: quasi-extinction --------------------------------------------------
+quasi_extinction_q = 0.1
+quasi_extinction_persistence = 3
+
+# [temperature_stress] below controls WP3: when `enabled = false` the ODE is the
+# pre-WP3 model regardless of `k`.
+
+# ---------------------------------------------------------------------------
+# WP3 heat-stress mortality.  `k` is the single shared slope (1/day/degC^2);
+# `enabled = false` disables the term (and preserves the old model).  When
+# `calibrate = true` the run script derives `k` from the baseline exceedance
+# energy so that the worst observed baseline species/site loses at most
+# `max_annual_loss` per year.
+# ---------------------------------------------------------------------------
+
+[temperature_stress]
+enabled = false
+k = 0.0
+calibrate = false
+max_annual_loss = 0.05
+limits_source = "trait_table"
+
+# ---------------------------------------------------------------------------
+# Staged experiment driver (run_climate_experiments.jl, WP6).
+#
+# Stages, cheapest first; each stage gates the next:
+#   E0 spinup     - spun-up state vs observed (realism check)
+#   E1 seasonality- baseline annual-mean vs daily forcing
+#   E2 heat       - heat-stress on/off
+#   E3 k          - carrying-capacity sensitivity {1x, 3x, 10x}
+#   E4 optimum    - thermal-optimum sweep across the empirical range
+#   E5 ensemble   - full GCM x SSP run (delegated to run_climate_scenarios.jl)
+# ---------------------------------------------------------------------------
+
+[run_climate_experiments]
+stages = ["E0", "E1", "E2", "E3", "E4"]
+start_year = 2026
+end_year = 2045
+scenario = "ssp585"
+gcms = ["ACCESS-CM2", "CMCC-CM2-SR5", "CNRM-ESM2-1", "EC-Earth3-Veg", "IITM-ESM",
+    "KACE-1-0-G", "MIROC6", "MPI-ESM1-2-HR", "MRI-ESM2-0", "NorESM2-MM",
+    "UKESM1-0-LL"]
+# E3 carrying-capacity multipliers and E4 optimum positions within the range.
+k_scaling_grid = [1.0, 3.0, 10.0]
+optimum_fractions = [0.0, 0.25, 0.5, 0.75, 1.0]
+spin_up_max_years = 50
+spin_up_tol = 1.0e-6
+output_dir = "results/climate_experiments"
+temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites.csv"

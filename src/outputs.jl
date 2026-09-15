@@ -249,6 +249,38 @@ function _report_offsets(times::AbstractVector, days_per_year::Real)
 end
 
 """
+    quasi_extinction_flags(density_series; threshold, baseline_density, q=0.1, persistence=3)
+
+Boolean flags for one site × species series: `true` from the moment the density
+has been below `max(presence_threshold, q · baseline_density)` for `persistence`
+consecutive annual snapshots.  `baseline_density` is the spun-up (or t = 0)
+reference density used to define a collapse relative to the species' own local
+abundance, so the 0.1 presence threshold does not hide sub-threshold declines
+(WP5).
+"""
+function quasi_extinction_flags(density_series::AbstractVector;
+        threshold::Real, baseline_density::Real, q::Real=0.1, persistence::Int=3)
+    cutoff = max(Float64(threshold), q * Float64(baseline_density))
+    flags = falses(length(density_series))
+    run = 0
+    for (k, d) in enumerate(density_series)
+        run = (isfinite(d) && d < cutoff) ? run + 1 : 0
+        flags[k] = run >= persistence
+    end
+    return flags
+end
+
+"""
+    time_to_quasi_extinction(flags; year_labels)
+
+First year label at which a quasi-extinction flag turns true, or `missing`.
+"""
+function time_to_quasi_extinction(flags::AbstractVector{Bool}; year_labels::AbstractVector)
+    idx = findfirst(flags)
+    return idx === nothing ? missing : Int(year_labels[idx])
+end
+
+"""
     site_connectivity_metrics(sites, dams, distance_matrix)
 
 Per-site connectivity summary derived from the effective passability matrix:
@@ -313,7 +345,10 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
         warming::Union{Nothing,AbstractMatrix}=nothing,
         connectivity::Union{Nothing,NamedTuple}=nothing,
         habitat_suitability::Union{Nothing,AbstractVector}=nothing,
-        upstream_cost::Union{Nothing,Real}=nothing)
+        upstream_cost::Union{Nothing,Real}=nothing,
+        baseline_species_density::Union{Nothing,AbstractMatrix}=nothing,
+        quasi_extinction_q::Real=0.1,
+        quasi_extinction_persistence::Int=3)
 
     n_sites = length(levels.subcatchment)
     n_species = length(species)
@@ -325,9 +360,31 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
     native_idx = species_indices(species, native_codes)
     invasive_idx = species_indices(species, invasive_codes)
 
-    baseline_idx = _snapshot_index(times, 0.0)
-    baseline = reshape(states[baseline_idx], n_sites, n_species)
+    # The reference state is the spun-up equilibrium when supplied (WP4),
+    # otherwise the t = 0 snapshot.  It defines relative abundance and the
+    # quasi-extinction collapse threshold.
+    if baseline_species_density === nothing
+        baseline_idx = _snapshot_index(times, 0.0)
+        baseline = reshape(states[baseline_idx], n_sites, n_species)
+    else
+        size(baseline_species_density) == (n_sites, n_species) ||
+            error("baseline_species_density must be n_sites × n_species")
+        baseline = Float64.(baseline_species_density)
+    end
     native_baseline = [sum(baseline[i, native_idx] .> threshold) for i in 1:n_sites]
+    native_biomass_baseline = [sum(baseline[i, native_idx]) for i in 1:n_sites]
+    total_biomass_baseline = [sum(baseline[i, :]) for i in 1:n_sites]
+
+    # Annual snapshot matrices, used for the quasi-extinction run-length flags.
+    snapshot_mats = [reshape(states[_snapshot_index(times, Float64(offset) * days_per_year)],
+        n_sites, n_species) for offset in offsets]
+    quasi = falses(n_sites, n_species, length(offsets))
+    for i in 1:n_sites, s in 1:n_species
+        series = [snapshot_mats[k][i, s] for k in 1:length(offsets)]
+        quasi[i, s, :] .= quasi_extinction_flags(series;
+            threshold=threshold, baseline_density=baseline[i, s],
+            q=quasi_extinction_q, persistence=quasi_extinction_persistence)
+    end
 
     barrier_count = connectivity === nothing ? nothing : connectivity.barrier_links_in
     barrier_count_out = connectivity === nothing ? nothing : connectivity.barrier_links_out
@@ -349,6 +406,18 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
             invasive_biomass = sum(mat[i, invasive_idx])
             total_biomass = sum(mat[i, :])
             relative = native_baseline[i] > 0 ? native_rich / native_baseline[i] : 1.0
+            native_occupancy = isempty(native_idx) ? NaN :
+                count(>(threshold), mat[i, native_idx]) / length(native_idx)
+            invasive_occupancy = isempty(invasive_idx) ? NaN :
+                count(>(threshold), mat[i, invasive_idx]) / length(invasive_idx)
+            total_occupancy = n_species == 0 ? NaN : count(>(threshold), mat[i, :]) / n_species
+            native_biomass_relative = native_biomass_baseline[i] > 0 ?
+                native_biomass / native_biomass_baseline[i] : 1.0
+            total_biomass_relative = total_biomass_baseline[i] > 0 ?
+                total_biomass / total_biomass_baseline[i] : 1.0
+            native_quasi_extinct = isempty(native_idx) ? 0 : count(quasi[i, native_idx, k])
+            native_quasi_extinct_fraction = isempty(native_idx) ? NaN :
+                native_quasi_extinct / length(native_idx)
             temp_base = temperature_baseline === nothing ? NaN : Float64(temperature_baseline[i])
             # A missing warming matrix means "no projected change", so report
             # the baseline temperature rather than an unknown (NaN) value.
@@ -372,6 +441,13 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
                 total_biomass=total_biomass,
                 native_richness_relative=relative,
                 native_extinction_risk=max(0.0, 1.0 - relative),
+                native_biomass_relative=native_biomass_relative,
+                total_biomass_relative=total_biomass_relative,
+                native_occupancy=native_occupancy,
+                invasive_occupancy=invasive_occupancy,
+                total_occupancy=total_occupancy,
+                native_quasi_extinct=native_quasi_extinct,
+                native_quasi_extinct_fraction=native_quasi_extinct_fraction,
                 temperature_c=temp_proj,
                 delta_temperature_c=delta,
                 habitat_suitability=habitat,
@@ -383,6 +459,108 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
                 upstream_cost=upstream_cost === nothing ? NaN : Float64(upstream_cost),
             )
         end
+    end
+    return DataFrame(rows)
+end
+
+"""
+    compute_species_metrics(times, states, sites, species; days_per_year, threshold,
+        year_offsets, year_labels, baseline_species_density, q, persistence)
+
+Per site × species annual table (WP5): density, thresholded presence, relative
+abundance against the spun-up baseline, the quasi-extinction flag and the
+time-to-quasi-extinction for each site/species.  `export_run_outputs` writes this
+as `levels/species_timeseries.csv`.
+"""
+function compute_species_metrics(times::AbstractVector, states::AbstractVector,
+        sites::AbstractVector, species::AbstractVector;
+        days_per_year::Real=365.0, threshold::Real=0.1,
+        year_offsets::Union{Nothing,AbstractVector}=nothing,
+        year_labels::Union{Nothing,AbstractVector}=nothing,
+        baseline_species_density::Union{Nothing,AbstractMatrix}=nothing,
+        quasi_extinction_q::Real=0.1, quasi_extinction_persistence::Int=3)
+    n_sites = length(sites)
+    n_species = length(species)
+    offsets = year_offsets === nothing ? _report_offsets(times, days_per_year) : collect(year_offsets)
+    labels = year_labels === nothing ? offsets : collect(year_labels)
+    length(labels) == length(offsets) ||
+        error("year_labels and year_offsets must have the same length")
+
+    if baseline_species_density === nothing
+        baseline = reshape(states[_snapshot_index(times, 0.0)], n_sites, n_species)
+    else
+        size(baseline_species_density) == (n_sites, n_species) ||
+            error("baseline_species_density must be n_sites × n_species")
+        baseline = Float64.(baseline_species_density)
+    end
+
+    snapshot_mats = [reshape(states[_snapshot_index(times, Float64(offset) * days_per_year)],
+        n_sites, n_species) for offset in offsets]
+
+    qe = falses(n_sites, n_species, length(offsets))
+    time_to_qe = Matrix{Union{Missing,Int}}(missing, n_sites, n_species)
+    for i in 1:n_sites, s in 1:n_species
+        series = [snapshot_mats[k][i, s] for k in 1:length(offsets)]
+        flags = quasi_extinction_flags(series; threshold=threshold,
+            baseline_density=baseline[i, s], q=quasi_extinction_q,
+            persistence=quasi_extinction_persistence)
+        qe[i, s, :] .= flags
+        time_to_qe[i, s] = time_to_quasi_extinction(flags; year_labels=labels)
+    end
+
+    rows = NamedTuple[]
+    for (k, label) in enumerate(labels)
+        mat = snapshot_mats[k]
+        for (i, site) in enumerate(sites), (s, sp) in enumerate(species)
+            density = mat[i, s]
+            base = baseline[i, s]
+            push!(rows, (
+                year=Int(label),
+                CODIGO=string(site),
+                species=string(sp),
+                density=density,
+                baseline_density=base,
+                relative_density=base > 0 ? density / base : NaN,
+                present=density > threshold,
+                quasi_extinct=qe[i, s, k],
+                time_to_quasi_extinction=time_to_qe[i, s],
+            ))
+        end
+    end
+    return DataFrame(rows)
+end
+
+"""
+    quasi_extinction_summary(species_metrics)
+
+One row per species: final-year occupancy and quasi-extinct site fraction,
+biomass change against the baseline, and the median time to quasi-extinction
+(over sites that reached it).
+"""
+function quasi_extinction_summary(species_metrics::DataFrame)
+    nrow(species_metrics) == 0 && return DataFrame()
+    years = sort(unique(species_metrics.year))
+    final_year = years[end]
+    rows = NamedTuple[]
+    for (sp, sub) in pairs(groupby(species_metrics, :species))
+        final_rows = sub[sub.year .== final_year, :]
+        base = sub[sub.year .== years[1], :]
+        times = Float64[Float64(t) for t in unique(sub.time_to_quasi_extinction) if !ismissing(t)]
+        times = filter(isfinite, times)
+        base_biomass = sum(base.baseline_density)
+        final_biomass = sum(final_rows.density)
+        push!(rows, (
+            species=string(first(sub.species)),
+            n_sites=nrow(final_rows),
+            baseline_biomass=base_biomass,
+            final_biomass=final_biomass,
+            relative_biomass_change=base_biomass > 0 ? final_biomass / base_biomass - 1.0 : NaN,
+            occupancy_final=nrow(final_rows) == 0 ? NaN :
+                count(final_rows.present) / nrow(final_rows),
+            quasi_extinct_fraction=nrow(final_rows) == 0 ? NaN :
+                count(final_rows.quasi_extinct) / nrow(final_rows),
+            median_time_to_quasi_extinction=isempty(times) ? missing : median(times),
+        ))
     end
     return DataFrame(rows)
 end
@@ -479,6 +657,12 @@ const VIEWER_METRICS = [
     (:native_biomass, "Native biomass", "density"),
     (:invasive_biomass, "Invasive biomass", "density"),
     (:total_biomass, "Total biomass", "density"),
+    (:native_biomass_relative, "Native biomass (relative to baseline)", "fraction"),
+    (:total_biomass_relative, "Total biomass (relative to baseline)", "fraction"),
+    (:native_occupancy, "Native occupancy", "fraction"),
+    (:invasive_occupancy, "Invasive occupancy", "fraction"),
+    (:total_occupancy, "Total occupancy", "fraction"),
+    (:native_quasi_extinct_fraction, "Native quasi-extinct fraction", "fraction"),
     (:temperature_c, "Projected water temperature", "degC"),
     (:delta_temperature_c, "Water-temperature change", "degC"),
 ]
@@ -725,7 +909,13 @@ function export_run_outputs(output_dir::AbstractString;
         run_metadata::AbstractDict=Dict{String,Any}(),
         primary_metric::Symbol=:native_extinction_risk,
         viewer_name::AbstractString="GuadeX simulation output",
-        require_crosswalk::Bool=false)
+        require_crosswalk::Bool=false,
+        migratory_species::AbstractVector=String[],
+        baseline_species_density::Union{Nothing,AbstractMatrix}=nothing,
+        quasi_extinction_q::Real=0.1,
+        quasi_extinction_persistence::Int=3,
+        species_upper_limits::Union{Nothing,AbstractVector}=nothing,
+        daily_forcing::Union{Nothing,NamedTuple}=nothing)
 
     crosswalk = load_site_level_crosswalk(crosswalk_path)
     levels = site_level_vectors(sites, site_df, crosswalk)
@@ -750,10 +940,34 @@ function export_run_outputs(output_dir::AbstractString;
         warming=warming,
         connectivity=connectivity,
         habitat_suitability=habitat_suitability,
-        upstream_cost=upstream_cost)
+        upstream_cost=upstream_cost,
+        baseline_species_density=baseline_species_density,
+        quasi_extinction_q=quasi_extinction_q,
+        quasi_extinction_persistence=quasi_extinction_persistence)
 
     mkpath(output_dir)
     level_tables = _write_level_tables(site_metrics, joinpath(output_dir, "levels"))
+
+    # WP5: per-species abundance / occupancy / quasi-extinction table.
+    species_metrics = compute_species_metrics(sol_t, sol_u, sites, species;
+        days_per_year=days_per_year,
+        threshold=threshold,
+        year_offsets=report_year_offsets,
+        year_labels=report_year_labels,
+        baseline_species_density=baseline_species_density,
+        quasi_extinction_q=quasi_extinction_q,
+        quasi_extinction_persistence=quasi_extinction_persistence)
+    CSV.write(joinpath(output_dir, "levels", "species_timeseries.csv"), species_metrics)
+    quasi_summary = quasi_extinction_summary(species_metrics)
+    CSV.write(joinpath(output_dir, "levels", "quasi_extinction_summary.csv"), quasi_summary)
+
+    # WP5: exposure diagnostics (days above each species' empirical upper limit).
+    exposure = nothing
+    if daily_forcing !== nothing && species_upper_limits !== nothing
+        exposure = exposure_table(sites, species, daily_forcing.temps, daily_forcing.dates;
+            upper_limits=species_upper_limits)
+        CSV.write(joinpath(output_dir, "levels", "exposure_sites.csv"), exposure)
+    end
 
     write_viewer_outputs(site_metrics, joinpath(output_dir, "viewer");
         name=viewer_name, primary_metric=primary_metric, level_tables=level_tables)
@@ -767,19 +981,30 @@ function export_run_outputs(output_dir::AbstractString;
     metadata["levels"] = ["sampling_point", "subcatchment", "water_body", "basin"]
     metadata["crosswalk_file"] = crosswalk_path
     metadata["crosswalk_water_bodies"] = assigned_water_bodies
-    metadata["outputs"] = [
+    metadata["migratory_species"] = String.(migratory_species)
+    metadata["quasi_extinction_q"] = Float64(quasi_extinction_q)
+    metadata["quasi_extinction_persistence"] = quasi_extinction_persistence
+    metadata["baseline_reference"] = baseline_species_density === nothing ? "t0" : "supplied"
+    outputs = [
         "levels/level_sampling_point.csv",
         "levels/level_subcatchment.csv",
         "levels/level_water_body.csv",
         "levels/level_basin.csv",
+        "levels/species_timeseries.csv",
+        "levels/quasi_extinction_summary.csv",
         "viewer/guadex_results_timeseries.csv",
         "viewer/guadex_results_metrics.json",
         "viewer/guadex_results_$(primary_metric).json",
     ]
+    exposure === nothing || push!(outputs, "levels/exposure_sites.csv")
+    metadata["outputs"] = outputs
     _write_value_json(joinpath(output_dir, "run_metadata.json"), metadata)
 
     return (
         site_metrics=site_metrics,
+        species_metrics=species_metrics,
+        quasi_extinction_summary=quasi_summary,
+        exposure=exposure,
         level_tables=level_tables,
         levels=levels,
         output_dir=output_dir,

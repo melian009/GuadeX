@@ -22,14 +22,32 @@ The local component combines logistic growth (constrained by carrying capacity) 
 
 The local dynamics are expressed as:
 
-$$\frac{dN_{i,s}}{dt} = N_{i,s} \left( r_{i,s}^{eff} \cdot \underbrace{\left(1 - \frac{\sum_j N_{i,j}}{K_i}\right)}_{\text{Logistic Term}} + \underbrace{\frac{\sum_j \alpha_{sj} N_{i,j}}{K_i}}_{\text{Interaction Term}} \right)$$
+$$\frac{dN_{i,s}}{dt} = N_{i,s} \left( r_{i,s}^{eff} \cdot \underbrace{\left(1 - \frac{\sum_j N_{i,j}}{K_i}\right)}_{\text{Logistic Term}} + \underbrace{\frac{\sum_j \alpha_{sj} N_{i,j}}{K_i}}_{\text{Interaction Term}} - \underbrace{m^{heat}_{i,s}(t)}_{\text{Heat stress (WP3)}} \right)$$
 
 where:
 - $r_{i,s}^{eff}$ is the effective intrinsic growth rate.
 - $K_i$ is the site-specific carrying capacity for total biomass.
 - $\alpha_{sj}$ is the interaction coefficient representing the effect of species $j$ on species $s$ (asymmetric interaction matrix).
+- $m^{heat}_{i,s}(t) \ge 0$ is the per-capita heat-stress loss (zero by default).
 
 The logistic term $(1 - \sum_j N_{i,j}/K_i)$ ensures that population growth slows as total biomass approaches the carrying capacity, implementing density-dependent regulation at each site.
+
+### 2.1b. Heat-stress mortality (WP3)
+
+Without a mortality term, warming can only rescale abundance and extinction is
+structurally impossible on short horizons. The improvement plan therefore adds a
+per-capita loss that is active **only above each species' empirical upper thermal
+limit** $T^{up}_s$ (taken from the trait table, not assumed):
+
+$$m^{heat}_{i,s}(t) = k \cdot \max\!\left(0,\; T_i(t) - T^{up}_s\right)^2$$
+
+$k$ is a **single shared slope** (1/day/°C²), so the empirical limits, not a
+species-specific fit, do most of the work; the default `k = 0` disables the term
+and reproduces the pre-WP3 model. Above the limit the quadratic exceedance is the
+standard acute-thermal-stress form. `k` can be calibrated so that the modelled
+baseline exceedance at any species/site costs at most `max_annual_loss` in annual
+survival (`calibrate_heat_stress_rate`). The empirical lower limit $T^{lo}_s$ is
+parsed and stored but no cold-stress term is applied.
 
 ### 2.2. Environmental Filtering
 
@@ -61,6 +79,20 @@ The parameter $\sigma_s$ (thermal breadth) controls the shape of the thermal nic
 
 #### Habitat Suitability
 - $h_i$ is the habitat suitability index at site $i$, derived from the Trophic State Index (IET). Higher IET values indicate lower suitability, and $h_i$ is normalized to range from 0.1 to 1.0.
+
+#### Time-varying forcing (WP2)
+In climate runs the constant $T_i$ is replaced by
+
+$$T_i(t) = T_i + \Delta_i(t),$$
+
+where $\Delta_i(t)$ is a site-specific anomaly interpolated from a
+`TemperatureSchedule`. Two modes are available: the historical **annual-mean**
+mode (one node per simulation year, anomalies anchored at the start year) and a
+**daily** mode built from per-site daily water-temperature projections (WP1),
+with anomalies taken against a fixed baseline period (1986-2005). A daily
+schedule with zero anomaly reproduces the static model exactly; seasonality is
+what lets the annual integration represent the summer thermal bottleneck that
+Mediterranean fish populations experience.
 
 ## 3. Species-Specific Dispersal (3D Dendritic Dispersal)
 

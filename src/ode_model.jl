@@ -15,6 +15,16 @@ Structure to hold parameters for the fish metacommunity ODE model.
 - `thermal_optima::AbstractVector`: Optimal temperature for each species.
 - `thermal_sigmas::AbstractVector`: Thermal tolerance (sigma) for each species.
 - `carrying_capacity::AbstractVector`: Site-specific carrying capacity K_i for total biomass at each site.
+- `thermal_lower_limits::AbstractVector`: Empirical lower thermal limit per species
+  (WP3); informational, no cold-stress term is applied.
+- `thermal_upper_limits::AbstractVector`: Empirical upper thermal limit per species
+  (WP3), above which the quadratic heat-stress loss is active.
+- `heat_stress_rate::Real`: Shared heat-stress slope `k` (1/day/°C²). Zero
+  disables the term entirely and reproduces the pre-WP3 model.
+
+The 11-argument constructor (without the thermal limits and `k`) is retained for
+backwards compatibility and fills `-Inf`/`+Inf` limits and `k = 0`, so existing
+runs are unchanged.
 """
 struct MetacommunityParams{T<:Real, M<:AbstractMatrix{T}, V<:AbstractVector{T}, S<:AbstractMatrix{T}}
     n_sites::Int
@@ -28,6 +38,30 @@ struct MetacommunityParams{T<:Real, M<:AbstractMatrix{T}, V<:AbstractVector{T}, 
     thermal_optima::V
     thermal_sigmas::V
     carrying_capacity::V
+    thermal_lower_limits::V
+    thermal_upper_limits::V
+    heat_stress_rate::T
+end
+
+"""
+    MetacommunityParams(n_sites, n_species, interaction_matrix, dispersal_matrix,
+                        dispersal_scaling, intrinsic_growth_rates, temperatures,
+                        habitat_suitability, thermal_optima, thermal_sigmas,
+                        carrying_capacity)
+
+Backwards-compatible constructor: no empirical thermal limits and no heat-stress
+mortality (`k = 0`), reproducing the model before WP3.
+"""
+function MetacommunityParams(n_sites::Int, n_species::Int, interaction_matrix,
+        dispersal_matrix, dispersal_scaling, intrinsic_growth_rates, temperatures,
+        habitat_suitability, thermal_optima, thermal_sigmas, carrying_capacity)
+    T = float(promote_type(eltype(temperatures), eltype(thermal_optima),
+        eltype(thermal_sigmas), eltype(dispersal_scaling), eltype(carrying_capacity)))
+    vecT(x) = convert(Vector{T}, collect(T, x))
+    return MetacommunityParams(n_sites, n_species, interaction_matrix, dispersal_matrix,
+        vecT(dispersal_scaling), intrinsic_growth_rates, vecT(temperatures),
+        vecT(habitat_suitability), vecT(thermal_optima), vecT(thermal_sigmas),
+        vecT(carrying_capacity), fill(T(-Inf), n_species), fill(T(Inf), n_species), zero(T))
 end
 
 const ANNUAL_DISPERSAL_RATES = Dict{String, Float64}(
@@ -80,7 +114,18 @@ function _metacommunity_ode!(du, u, p::MetacommunityParams, delta_at, t)
             end
             interaction_term /= k_i
 
-            dU[i, s] = N_is * (r_eff * logistic_term + interaction_term)
+            # WP3: per-capita heat-stress loss, active only above the species'
+            # empirical upper thermal limit.  Generic types are promoted so the
+            # term is a no-op (0.0) for T<:Float32 etc.
+            heat_stress = zero(temp_i)
+            if p.heat_stress_rate > 0
+                exceedance = temp_i - p.thermal_upper_limits[s]
+                if exceedance > 0
+                    heat_stress = p.heat_stress_rate * exceedance * exceedance
+                end
+            end
+
+            dU[i, s] = N_is * (r_eff * logistic_term + interaction_term - heat_stress)
         end
     end
 
