@@ -82,9 +82,98 @@ function daily_forcing_matrix(df::DataFrame, sites::AbstractVector;
     for row in eachrow(sub)
         i = get(site_index, string(row.site_id), nothing)
         i === nothing && continue
-        temps[i, date_index[row.date]] = Float64(row[value_col])
+        temps[i, date_index[row.date]] = _to_float(row[value_col])
     end
     return dates, temps
+end
+
+"""
+    is_wide_daily_forcing(df)
+
+True when a daily forcing table is in the compact wide layout produced by
+`guadex_tw/scripts/13_project_guadex_sites.py`: `date, scenario, <site columns>`
+instead of the long `site_id, scenario, date, tw_ensemble_median` layout.
+"""
+is_wide_daily_forcing(df::DataFrame) =
+    !hasproperty(df, :site_id) && hasproperty(df, :scenario) && hasproperty(df, :date)
+
+"""
+    load_daily_forcing_any(path)
+
+Load a daily temperature forcing table in either the long layout
+([`load_daily_temperature_forcing`](@ref)) or the wide layout
+([`load_wide_daily_forcing`](@ref)).
+"""
+function load_daily_forcing_any(path::AbstractString)
+    isfile(path) || error("daily temperature forcing file not found: $path")
+    df = CSV.read(path, DataFrame)
+    if hasproperty(df, :site_id)
+        missing_columns = setdiff(DAILY_FORCING_REQUIRED_COLUMNS, names(df))
+        isempty(missing_columns) ||
+            error("daily forcing file $path is missing columns: $(join(missing_columns, ", "))")
+        value_columns = [c for c in ("tw_ensemble_median", "tw", "tw_mean") if c in names(df)]
+        isempty(value_columns) &&
+            error("daily forcing file $path has no temperature value column")
+    end
+    if !(eltype(df[!, :date]) <: Date)
+        df[!, :date] = Date.(string.(df[!, :date]))
+    end
+    return df
+end
+
+"""
+    wide_forcing_matrix(df, sites; scenario)
+
+Pivot one scenario of a wide daily forcing table into an `n_sites × n_days`
+matrix aligned with `sites`, plus the sorted dates.  Site columns are matched by
+their string label (e.g. `1.1.2`).
+"""
+function wide_forcing_matrix(df::DataFrame, sites::AbstractVector;
+        scenario::AbstractString)
+    sub = filter(row -> string(row.scenario) == scenario, df)
+    isempty(sub) && error("wide daily forcing has no rows for scenario=$scenario")
+    dates = Date.(sub[!, :date])
+    temps = Matrix{Float64}(undef, length(sites), length(dates))
+    for (i, site) in enumerate(sites)
+        col = Symbol(string(site))
+        hasproperty(sub, col) || error("wide daily forcing has no column for site '$(string(site))'")
+        temps[i, :] = [_to_float(v) for v in sub[!, col]]
+    end
+    return dates, temps
+end
+
+# Missing/empty cells in a forcing CSV become `missing`; NaN is used internally.
+_to_float(v) = v === missing ? NaN : Float64(v)
+
+"""
+    wide_baseline_means(df, sites; baseline_scenario="historical",
+                        baseline_start, baseline_end)
+
+Per-site baseline mean Tw from a wide forcing table (used when only the scalar
+baseline, not the full historical daily series, is needed).
+"""
+function wide_baseline_means(df::DataFrame, sites::AbstractVector;
+        baseline_scenario::AbstractString="historical")
+    dates, temps = wide_forcing_matrix(df, sites; scenario=baseline_scenario)
+    return [_finite_mean(@view temps[i, :]) for i in 1:length(sites)]
+end
+
+"""
+    _finite_mean(values)
+
+Mean of the finite entries of `values` (`NaN` when none are finite).  Used
+instead of `skipmissing`, which does not skip `NaN` floats.
+"""
+function _finite_mean(values)
+    total = 0.0
+    n = 0
+    for v in values
+        if isfinite(v)
+            total += v
+            n += 1
+        end
+    end
+    return n == 0 ? NaN : total / n
 end
 
 # =============================================================================
@@ -113,13 +202,13 @@ function daily_temperature_schedule(temps::AbstractMatrix;
         mask = [baseline_start <= year(d) <= baseline_end for d in dates]
         any(mask) || error("no days in baseline window $baseline_start-$baseline_end; " *
                            "supply baseline_temps/baseline_dates for a separate baseline series")
-        baseline_means = [mean(skipmissing(@view temps[i, mask])) for i in 1:size(temps, 1)]
+        baseline_means = [_finite_mean(@view temps[i, mask]) for i in 1:size(temps, 1)]
     else
         size(baseline_temps, 1) == size(temps, 1) ||
             error("baseline_temps and temps must have the same number of sites")
         mask = [baseline_start <= year(d) <= baseline_end for d in baseline_dates]
         any(mask) || error("no days in baseline window $baseline_start-$baseline_end")
-        baseline_means = [mean(skipmissing(@view baseline_temps[i, mask])) for i in 1:size(temps, 1)]
+        baseline_means = [_finite_mean(@view baseline_temps[i, mask]) for i in 1:size(temps, 1)]
     end
     deltas = temps .- reshape(baseline_means, :, 1)
     schedule = TemperatureSchedule(deltas, 1.0)

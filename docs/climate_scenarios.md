@@ -255,13 +255,25 @@ native nor invasive and are reported separately.
 ### WP1 — per-site daily water temperature
 
 `guadex_tw/scripts/13_project_guadex_sites.py` projects the calibrated spatial Tw
-model at every GuadeX site coordinate (read from `data/ConnectivityUTM.csv`) for
-all 11 GCMs × 4 SSPs and writes the ensemble-median daily series
-`guadex_tw/outputs/tables/water_temp_daily_guadex_sites.csv`
-(`site_id, scenario, date, tw_ensemble_median`). It performs the same remote
-PNACC HDF5 subsetting as script 09 with its own resumable cache, and includes the
-`historical` experiment used as the 1986-2005 baseline. The Julia loader is
-`load_daily_temperature_forcing` / `daily_forcing_matrix`.
+model at every GuadeX site coordinate (read from `data/ConnectivityUTM.csv`,
+ETRS89/UTM 30N) for all 11 GCMs × 4 SSPs. It reads the Guadalquivir bounding box
+of each 2 GB PNACC file remotely once per (GCM, experiment) — ~50× cheaper than
+one read per site — caches the per-(GCM, experiment) arrays as `.npy`, and fills
+short NaN gaps. It writes:
+
+* `water_temp_daily_guadex_sites_wide.csv` — `date, scenario, <site columns>`,
+  ensemble median across GCMs, for `historical` (1986-2005) and each SSP
+  (2026-2045). This is what the runner reads.
+* `water_temp_daily_guadex_sites_wide_<scenario>_<gcm>.csv` (with `--per-gcm`) —
+  the same layout per GCM, so the ODE ensemble carries the GCM spread instead of
+  the ensemble median.
+* `water_temp_baseline_guadex_sites.csv` — per-site 1986-2005 baseline mean.
+* `water_temp_daily_guadex_sites.parquet` (with `--long`) — the long
+  `site_id, scenario, date, tw_ensemble_median` archival product.
+
+The Julia loaders auto-detect the layout: `load_daily_forcing_any` /
+`is_wide_daily_forcing` / `wide_forcing_matrix` for the wide format,
+`load_daily_temperature_forcing` / `daily_forcing_matrix` for the long format.
 
 ### WP2 — daily vs annual-mean forcing
 
@@ -271,6 +283,11 @@ PNACC HDF5 subsetting as script 09 with its own resumable cache, and includes th
 * `"daily"` — per-site daily forcing from WP1, with anomalies taken against the
   fixed `baseline_period_start`..`baseline_period_end` window instead of anchoring
   zero at the start year.
+
+Set `daily_forcing_per_gcm = true` to read the per-GCM files
+(`<base>_<scenario>_<gcm>.csv`) so each GCM run is differenced against its own
+historical baseline; otherwise all GCMs in a scenario share the ensemble-median
+forcing and produce identical trajectories.
 
 `daily_temperature_schedule`, `baseline_climatology_schedule`,
 `annual_mean_deltas` and `annual_mean_deltas_by_year` in
@@ -311,9 +328,12 @@ of scope.
 ### WP4 — equilibrium start and rebased metrics
 
 `[run_climate_scenarios] spin_up` integrates to steady state under baseline
-forcing (zeros, no seasons) before any scenario and reuses the state for every
-run; `spin_up_max_years` / `spin_up_tol` control the stop criterion (the default
-50-year cap is reported as `converged = false` if it is hit).
+forcing before any scenario and reuses the state for every run;
+`spin_up_max_years` / `spin_up_tol` control the stop criterion (the default
+50-year cap is reported as `converged = false` if it is hit). In daily mode the
+spin-up uses the **seasonal** baseline climatology (`spin_up(...; schedule=...)`),
+because the annual-mean and seasonal equilibria differ substantially (the E1
+gate: end biomass 759 vs 678) and only the seasonal one matches the runs.
 `carrying_capacity_scaling` (1×, 3×, 10×) is the K sensitivity. When spin-up is
 on, `native_richness_relative`, `native_extinction_risk` and the new biomass
 ratios are rebased on the spun-up state rather than the t = 0 snapshot, which was
@@ -359,6 +379,8 @@ daily/heat-stress/spin-up flags. Settings live in
 | `GUADEX_CLIMATE_HEAT_STRESS_CALIBRATE` | calibrate `k` from baseline forcing |
 | `GUADEX_CLIMATE_QE_Q` / `_PERSISTENCE` | quasi-extinction definition |
 | `GUADEX_CLIMATE_CONTROL` | `1` adds a no-warming control run (`control`/`baseline`) |
+| `GUADEX_CLIMATE_OUTPUT_DIR` | results root (default `results/climate_scenarios`) |
+| `GUADEX_CLIMATE_DAILY_PER_GCM` | `1` uses the per-GCM daily files |
 
 ## Validation
 

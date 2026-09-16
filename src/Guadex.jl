@@ -25,6 +25,7 @@ export metacommunity_ode_scheduled!, temperature_delta
 
 # Export daily/seasonal forcing, optimum sweep and heat-stress calibration (WP1-WP3)
 export load_daily_temperature_forcing, daily_forcing_matrix
+export load_daily_forcing_any, is_wide_daily_forcing, wide_forcing_matrix, wide_baseline_means
 export daily_temperature_schedule, annual_mean_schedule, annual_mean_deltas
 export annual_mean_deltas_by_year, baseline_climatology_schedule
 export optimum_sweep_optima, exceedance_energy, calibrate_heat_stress_rate

@@ -72,6 +72,16 @@ const FORCING_MODE = lowercase(get(ENV, "GUADEX_CLIMATE_FORCING_MODE",
     string(_climate_setting("forcing_mode", "annual_mean"))))
 const DAILY_FORCING_FILE = get(ENV, "GUADEX_CLIMATE_DAILY_FILE",
     string(_climate_setting("daily_forcing_file", "")))
+const DAILY_FORCING_PER_GCM = lowercase(get(ENV, "GUADEX_CLIMATE_DAILY_PER_GCM",
+    string(_climate_setting("daily_forcing_per_gcm", false)))) in ("1", "true", "yes")
+
+# The per-GCM wide files written by guadex_tw/scripts/13_project_guadex_sites.py
+# are named `<base>_<scenario>_<gcm>.csv`; they carry the GCM spread that the
+# ensemble-median product deliberately removes.
+function per_gcm_forcing_path(base::AbstractString, scenario::AbstractString, gcm::AbstractString)
+    root, ext = splitext(base)
+    return string(root, "_", scenario, "_", gcm, ext)
+end
 const BASELINE_PERIOD_START = parse(Int, get(ENV, "GUADEX_CLIMATE_BASELINE_START",
     string(_climate_setting("baseline_period_start", 1986))))
 const BASELINE_PERIOD_END = parse(Int, get(ENV, "GUADEX_CLIMATE_BASELINE_END",
@@ -202,11 +212,16 @@ end
 daily_forcing = nothing
 baseline_temps = nothing
 baseline_dates = nothing
+forcing_matrix(df, sites; scenario) = is_wide_daily_forcing(df) ?
+    wide_forcing_matrix(df, sites; scenario=scenario) :
+    daily_forcing_matrix(df, sites; scenario=scenario)
+
 if FORCING_MODE == "daily"
     isempty(DAILY_FORCING_FILE) && error("forcing_mode = daily requires daily_forcing_file")
-    daily_forcing = load_daily_temperature_forcing(DAILY_FORCING_FILE)
+    daily_forcing = load_daily_forcing_any(DAILY_FORCING_FILE)
+    println("WP1 forcing layout: $(is_wide_daily_forcing(daily_forcing) ? "wide" : "long")")
     if "historical" in Set(String.(daily_forcing.scenario))
-        baseline_dates, baseline_temps = daily_forcing_matrix(daily_forcing, data_base.sites;
+        baseline_dates, baseline_temps = forcing_matrix(daily_forcing, data_base.sites;
             scenario="historical")
         println("WP1 baseline series: $(length(baseline_dates)) days from 'historical'")
     else
@@ -238,8 +253,16 @@ data_base = merge(data_base, (params=params,))
 # WP4: spin up to the baseline equilibrium once and reuse for every scenario.
 baseline_species_density = nothing
 if SPIN_UP_ENABLED
-    println("WP4 spin-up under baseline forcing (max $(SPIN_UP_MAX_YEARS) yr, tol=$SPIN_UP_TOL)...")
-    spin = spin_up(params; initial_state=u0_flat,
+    spin_schedule = nothing
+    if FORCING_MODE == "daily" && baseline_temps !== nothing
+        # Spin up under the seasonal baseline climatology, not the annual mean:
+        # the two equilibria differ and only the seasonal one matches the runs.
+        spin_schedule = baseline_climatology_schedule(baseline_temps, baseline_dates, 1;
+            days_per_year=Float64(DAYS_PER_YEAR))
+    end
+    println("WP4 spin-up under $(spin_schedule === nothing ? "annual-mean" : "seasonal") " *
+            "baseline forcing (max $(SPIN_UP_MAX_YEARS) yr, tol=$SPIN_UP_TOL)...")
+    spin = spin_up(params; initial_state=u0_flat, schedule=spin_schedule,
         days_per_year=Float64(DAYS_PER_YEAR), max_years=SPIN_UP_MAX_YEARS, tol=SPIN_UP_TOL)
     u0_flat = spin.state
     baseline_species_density = reshape(u0_flat, n_sites, params.n_species)
@@ -255,7 +278,11 @@ end
 function positivity_affect!(integrator)
     integrator.u .= max.(integrator.u, 0.0)
 end
-positivity_cb = DiscreteCallback(positivity_condition, positivity_affect!; save_positions=(false, true))
+# Clamp negatives but do NOT save a state on every trigger: under daily forcing
+# and heat stress the callback fires many thousands of times, and
+# `save_positions=(false, true)` would store a ~1.8 GB solution per run.  The
+# monthly `saveat` grid already provides the reporting snapshots.
+positivity_cb = DiscreteCallback(positivity_condition, positivity_affect!; save_positions=(false, false))
 
 # Restrict path components to a safe character set so projection labels can
 # never escape the results directory.
@@ -275,7 +302,9 @@ function basin_row_from_csv(path, year)
     return (r.mean_native_richness, r.mean_native_extinction_risk, r.mean_total_biomass)
 end
 
-base_output_dir = joinpath("results", "climate_scenarios")
+const CLIMATE_OUTPUT_DIR = get(ENV, "GUADEX_CLIMATE_OUTPUT_DIR",
+    string(_climate_setting("output_dir", joinpath("results", "climate_scenarios"))))
+base_output_dir = CLIMATE_OUTPUT_DIR
 mkpath(base_output_dir)
 index_path = joinpath(base_output_dir, "runs_index.csv")
 index_df = isfile(index_path) ? CSV.read(index_path, DataFrame) : DataFrame(
@@ -331,11 +360,24 @@ for scenario in CLIMATE_SCENARIOS
         forcing_dates = nothing
 
         schedule = if FORCING_MODE == "daily" && !is_control
-            forcing_dates, forcing_temps = daily_forcing_matrix(daily_forcing, data_base.sites;
+            src = daily_forcing
+            if DAILY_FORCING_PER_GCM
+                path = per_gcm_forcing_path(DAILY_FORCING_FILE, scenario, gcm)
+                isfile(path) || error("per-GCM daily forcing not found: $path")
+                src = load_daily_forcing_any(path)
+            end
+            forcing_dates, forcing_temps = forcing_matrix(src, data_base.sites;
                 scenario=scenario)
+            # Prefer the baseline from the same source so per-GCM runs difference
+            # against their own historical period (removing GCM bias).
+            if "historical" in Set(String.(src.scenario))
+                bdates, btemps = forcing_matrix(src, data_base.sites; scenario="historical")
+            else
+                bdates, btemps = baseline_dates, baseline_temps
+            end
             sched, _ = daily_temperature_schedule(forcing_temps;
                 dates=forcing_dates,
-                baseline_temps=baseline_temps, baseline_dates=baseline_dates,
+                baseline_temps=btemps, baseline_dates=bdates,
                 baseline_start=BASELINE_PERIOD_START, baseline_end=BASELINE_PERIOD_END)
             years_out, warming_out = annual_mean_deltas_by_year(sched, forcing_dates)
             columns = [findfirst(==(y), years_out) for y in YEAR_LABELS]

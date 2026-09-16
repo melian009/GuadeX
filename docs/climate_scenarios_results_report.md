@@ -214,3 +214,72 @@ The diagnostics are also generated automatically at the end of
    extinction threshold, otherwise richness cannot decline under warming.
 4. Decide whether to start at (or near) carrying capacity so the reported trend
    is a climate response rather than a colonisation transient.
+
+---
+
+## 6. Re-run under the modelling-improvement plan (WP0-WP6)
+
+The recommendations above were implemented and the ensemble re-run. The original
+runs under `results/climate_scenarios` are untouched; the improved ensemble and
+the staged gates live under `results/climate_scenarios_improved` and
+`results/climate_experiments`.
+
+**Configuration**
+
+| setting | value |
+| :--- | :--- |
+| forcing | per-site **daily** water temperature (WP1), per-GCM |
+| baseline | 1986-2005 anomalies |
+| horizon | 2026-2045, 11 GCMs x 4 SSPs + no-warming control (45 runs) |
+| heat stress | on, `k = 3.78e-5` calibrated to the baseline-viability constraint (max 5 %/yr) |
+| start | spun up 50 yr under the **seasonal** baseline climatology (WP4) |
+| species | WP0 classification (ST native; AA/AAL/LR/MC migratory) |
+
+Outputs: `runs_index.csv`, the four-level CSVs, `levels/species_timeseries.csv`,
+`levels/quasi_extinction_summary.csv`, `levels/exposure_sites.csv` per run, plus
+70 scenario figures and 3 diagnostics.
+
+**What the staged gates showed**
+
+| gate | result |
+| :--- | :--- |
+| E0 spin-up realism | median spun-up/observed biomass = 9.7 (matches the 10x K convention); 50-yr relative change still 0.15, so the state is not a true equilibrium |
+| E1 seasonality | switching annual-mean -> daily baseline lowers end basin biomass 759 -> 678 (-11 %); seasonality is first-order, not a refinement |
+| E2 heat stress | under **annual-mean** forcing heat stress is exactly inert (annual means never exceed the empirical limits); under **daily** forcing it lowers end biomass 674.8 -> 673.3 and flips ST from +13 % to -3 % relative biomass |
+| E3 K sensitivity | K x {1, 3, 10} scales absolute biomass (673/1832/5488) and raises richness (2.99 -> 3.27); extinction risk is stable (0.0122/0.0114/0.0120) |
+| E4 optimum sweep | moving the optimum across the empirical range dominates everything: end biomass 633 (cold edge) -> 673 (midpoint) -> 313 (warm edge); richness 3.00 -> 2.84. E5 is confirmed as the largest single uncertainty |
+
+**Ensemble response (warmest ssp585 run, +1.31 degC by 2045, vs control)**
+
+- The basin means move only slightly and not monotonically with warming:
+  richness 2.988 -> 2.990, extinction-risk metric 0.0122 -> 0.0122, biomass
+  677 -> 673.
+- The **cold-water keystone ST** is the exception: relative biomass +13.4 % in
+  the control vs -2.7 % in the warm run (a 16-point swing), and it is by far the
+  most exposed species (up to 162 days/yr above its 20 degC upper limit,
+  exceedance energy 3977). Other cold/mesothermal species move the same way
+  (GL -0.42 -> -0.53, LR -0.29 -> -0.38); warm-adapted natives (AH, SA, PW, LS,
+  IL, CP, IO) are essentially unchanged. The direction is exactly the one the
+  improvement plan predicted.
+- **Quasi-extinction does not yet separate scenarios** (fraction differences
+  ~0). The quasi-extinction threshold is relative to the spun-up state, and the
+  spun-up state is not a true equilibrium (E0 change 0.15/yr), so the drift
+  swamps the warming signal. Relative biomass is the usable population metric at
+  this horizon; a converged spin-up (or the 2070 horizon) is needed before
+  quasi-extinction can be read as a climate response.
+- As in the original analysis, the warm-adapted native group still drives the
+  aggregate richness signal, so the basin richness metric remains
+  uninformative; the cold-specialist response is only visible in
+  species-level abundance and exposure.
+
+**Remaining work**
+
+- Converge the spin-up (longer horizon, or a damping/solver change) so
+  quasi-extinction is measured from a stationary baseline; the 50-year cap hits
+  first.
+- Add the WP5 cold-specialist occupancy and exposure panels to the diagnostic
+  figures (the data exist in `levels/species_timeseries.csv` and
+  `levels/exposure_sites.csv`; the current figures do not plot them).
+- Per-GCM daily forcing is now exported
+  (`water_temp_daily_guadex_sites_wide_<ssp>_<gcm>.csv`); extend to 2070 if the
+  longer horizon is adopted.

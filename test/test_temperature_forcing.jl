@@ -95,6 +95,19 @@ end
 
     @test_throws Exception Guadex.load_daily_temperature_forcing(
         joinpath(mktempdir(), "missing.csv"))
+
+    # Wide layout (WP1 primary product for the ODE).
+    wide = DataFrame(
+        date=[Date(2026, 1, 1), Date(2026, 1, 2)],
+        scenario=fill("ssp126", 2),
+        a=[10.0, 11.0], b=[12.0, 13.0],
+    )
+    @test Guadex.is_wide_daily_forcing(wide)
+    @test !Guadex.is_wide_daily_forcing(df)
+    wdates, wtemps = Guadex.wide_forcing_matrix(wide, ["a", "b"]; scenario="ssp126")
+    @test wdates == [Date(2026, 1, 1), Date(2026, 1, 2)]
+    @test wtemps == [10.0 11.0; 12.0 13.0]
+    @test Guadex.wide_baseline_means(wide, ["a", "b"]; baseline_scenario="ssp126") ≈ [10.5, 12.5]
 end
 
 # =============================================================================

@@ -171,25 +171,31 @@ baseline_params = data_base.params
 
 """Spin up `params` under baseline forcing and return (result, n_sites × n_species state)."""
 function spin_for(params)
-    s = spin_up(params; initial_state=u0_flat, days_per_year=Float64(DAYS_PER_YEAR),
+    sched = baseline_temps === nothing ? nothing :
+        baseline_climatology_schedule(baseline_temps, baseline_dates, 1;
+            days_per_year=Float64(DAYS_PER_YEAR))
+    s = spin_up(params; initial_state=u0_flat, schedule=sched,
+        days_per_year=Float64(DAYS_PER_YEAR),
         max_years=SPIN_UP_MAX_YEARS, tol=SPIN_UP_TOL)
     return s, reshape(s.state, n_sites, n_species)
 end
 
-spin, baseline_species_density = spin_for(baseline_params)
-u0_spun = spin.state
-
-# Optional daily baseline climatology (WP1 product).
+# Optional daily baseline climatology (WP1 product), loaded before the spin-up
+# so the equilibrium is computed under the same seasonal forcing as the runs.
 baseline_dates = nothing
 baseline_temps = nothing
 if isfile(DAILY_FORCING_FILE)
-    daily = load_daily_temperature_forcing(DAILY_FORCING_FILE)
+    daily = load_daily_forcing_any(DAILY_FORCING_FILE)
     if "historical" in Set(String.(daily.scenario))
-        baseline_dates, baseline_temps = daily_forcing_matrix(daily, data_base.sites;
-            scenario="historical")
+        baseline_dates, baseline_temps = is_wide_daily_forcing(daily) ?
+            wide_forcing_matrix(daily, data_base.sites; scenario="historical") :
+            daily_forcing_matrix(daily, data_base.sites; scenario="historical")
         println("daily baseline available: $(length(baseline_dates)) days")
     end
 end
+
+spin, baseline_species_density = spin_for(baseline_params)
+u0_spun = spin.state
 
 # Heat-stress slope: calibrate from the baseline if requested and possible.
 heat_k = HEAT_STRESS_K
@@ -213,6 +219,37 @@ function experiment_schedule(scenario, gcm; zero=false)
     years, curve = basin_warming_curve(projections, scenario, gcm, START_YEAR, END_YEAR)
     warming = warming_matrix(n_sites, years, curve; elevations=data_base.elevations)
     return annual_mean_schedule(warming; days_per_year=Float64(DAYS_PER_YEAR)), warming
+end
+
+const BASELINE_START = 1986
+const BASELINE_END = 2005
+
+"""
+    experiment_daily_schedule(scenario, gcm)
+
+Per-site daily schedule from the WP1 forcing (per-GCM file when present, else the
+ensemble-median file).  Used by E2-E4: heat stress acts only when daily
+temperatures exceed the empirical upper limits, which annual means never reach.
+Returns `(schedule, annual_mean_warming, forcing_temps, forcing_dates)`.
+"""
+function experiment_daily_schedule(scenario, gcm)
+    path = DAILY_FORCING_FILE
+    if isfile(DAILY_FORCING_FILE)
+        root, ext = splitext(DAILY_FORCING_FILE)
+        candidate = string(root, "_", scenario, "_", gcm, ext)
+        isfile(candidate) && (path = candidate)
+    end
+    daily = load_daily_forcing_any(path)
+    m(df, sc) = is_wide_daily_forcing(df) ?
+        wide_forcing_matrix(df, data_base.sites; scenario=sc) :
+        daily_forcing_matrix(df, data_base.sites; scenario=sc)
+    fdates, ftemps = m(daily, scenario)
+    bdates, btemps = m(daily, "historical")
+    sched, _ = daily_temperature_schedule(ftemps; dates=fdates,
+        baseline_temps=btemps, baseline_dates=bdates,
+        baseline_start=BASELINE_START, baseline_end=BASELINE_END)
+    warming = annual_mean_deltas(sched; days_per_year=Float64(DAYS_PER_YEAR))
+    return sched, warming, ftemps, fdates
 end
 
 # ---------------------------------------------------------------------------
@@ -289,17 +326,18 @@ end
 # ---------------------------------------------------------------------------
 if "E2" in STAGES
     gcm = first(EXPERIMENT_GCMS)
-    schedule, warming = experiment_schedule(EXPERIMENT_SCENARIO, gcm)
+    schedule, warming, ftemps, fdates = experiment_daily_schedule(EXPERIMENT_SCENARIO, gcm)
     for (name, k) in (("heat_off", 0.0), ("heat_on", heat_k))
         params = set_heat_stress_rate(baseline_params, k)
         _, baseline_density = spin_for(params)
         dir = solve_case(; stage="E2", case_name=name, params=params,
             schedule=schedule, u0=vec(baseline_density), warming=warming,
+            forcing_temps=ftemps, forcing_dates=fdates,
             baseline_species_density=baseline_density,
-            metadata=Dict("forcing_mode" => "annual_mean", "heat_stress_k" => k,
+            metadata=Dict("forcing_mode" => "daily", "heat_stress_k" => k,
                 "k_scaling" => 1.0, "optimum_fraction" => 0.5))
         record_case(stage="E2", case_name=name, scenario=EXPERIMENT_SCENARIO,
-            gcm=gcm, forcing_mode="annual_mean", k=k, k_scaling=1.0,
+            gcm=gcm, forcing_mode="daily", k=k, k_scaling=1.0,
             fraction=0.5, run_dir=dir)
     end
 end
@@ -309,7 +347,7 @@ end
 # ---------------------------------------------------------------------------
 if "E3" in STAGES
     gcm = first(EXPERIMENT_GCMS)
-    schedule, warming = experiment_schedule(EXPERIMENT_SCENARIO, gcm)
+    schedule, warming, ftemps, fdates = experiment_daily_schedule(EXPERIMENT_SCENARIO, gcm)
     for scaling in K_SCALING_GRID
         name = "K_$(scaling)x"
         params = scale_carrying_capacity(set_heat_stress_rate(baseline_params, heat_k), scaling)
@@ -318,11 +356,12 @@ if "E3" in STAGES
         _, baseline_density = spin_for(params)
         dir = solve_case(; stage="E3", case_name=name, params=params,
             schedule=schedule, u0=vec(baseline_density), warming=warming,
+            forcing_temps=ftemps, forcing_dates=fdates,
             baseline_species_density=baseline_density,
-            metadata=Dict("forcing_mode" => "annual_mean", "heat_stress_k" => heat_k,
+            metadata=Dict("forcing_mode" => "daily", "heat_stress_k" => heat_k,
                 "k_scaling" => scaling, "optimum_fraction" => 0.5))
         record_case(stage="E3", case_name=name, scenario=EXPERIMENT_SCENARIO,
-            gcm=gcm, forcing_mode="annual_mean", k=heat_k, k_scaling=scaling,
+            gcm=gcm, forcing_mode="daily", k=heat_k, k_scaling=scaling,
             fraction=0.5, run_dir=dir)
     end
 end
@@ -332,7 +371,7 @@ end
 # ---------------------------------------------------------------------------
 if "E4" in STAGES
     gcm = first(EXPERIMENT_GCMS)
-    schedule, warming = experiment_schedule(EXPERIMENT_SCENARIO, gcm)
+    schedule, warming, ftemps, fdates = experiment_daily_schedule(EXPERIMENT_SCENARIO, gcm)
     for fraction in OPTIMUM_FRACTIONS
         name = "optimum_$(fraction)"
         optima = optimum_sweep_optima(data_base.species_chars_df, data_base.species;
@@ -341,11 +380,12 @@ if "E4" in STAGES
         _, baseline_density = spin_for(params)
         dir = solve_case(; stage="E4", case_name=name, params=params,
             schedule=schedule, u0=vec(baseline_density), warming=warming,
+            forcing_temps=ftemps, forcing_dates=fdates,
             baseline_species_density=baseline_density,
-            metadata=Dict("forcing_mode" => "annual_mean", "heat_stress_k" => heat_k,
+            metadata=Dict("forcing_mode" => "daily", "heat_stress_k" => heat_k,
                 "k_scaling" => 1.0, "optimum_fraction" => fraction))
         record_case(stage="E4", case_name=name, scenario=EXPERIMENT_SCENARIO,
-            gcm=gcm, forcing_mode="annual_mean", k=heat_k, k_scaling=1.0,
+            gcm=gcm, forcing_mode="daily", k=heat_k, k_scaling=1.0,
             fraction=fraction, run_dir=dir)
     end
 end

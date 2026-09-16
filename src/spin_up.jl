@@ -47,7 +47,8 @@ function spin_up(params::MetacommunityParams;
         tol::Real=1e-6,
         solver=Tsit5(),
         reltol::Real=1e-6,
-        abstol::Real=1e-6)
+        abstol::Real=1e-6,
+        schedule::Union{Nothing,TemperatureSchedule}=nothing)
     max_years >= 1 || error("max_years must be >= 1")
     n_sites, n_species = params.n_sites, params.n_species
     length(initial_state) == n_sites * n_species ||
@@ -72,8 +73,15 @@ function spin_up(params::MetacommunityParams;
         end;
         save_positions=(false, false))
 
+    # When a one-year baseline schedule is supplied the equilibrium is computed
+    # under seasonal forcing, matching the scenario runs (the static annual-mean
+    # equilibrium is not the seasonal one; see the E1 seasonality gate).
+    ode! = schedule === nothing ? metacommunity_ode! : metacommunity_ode_scheduled!
+    rhs_params = schedule === nothing ? params :
+        ScheduledMetacommunityParams(params, schedule)
+
     for _ in 1:max_years
-        prob = ODEProblem(metacommunity_ode!, u0, (0.0, Float64(days_per_year)), params)
+        prob = ODEProblem(ode!, u0, (0.0, Float64(days_per_year)), rhs_params)
         # Only the end state is needed: saving every internal step for a
         # 775-site × 24-species state would exhaust memory.
         sol = solve(prob, solver; reltol=reltol, abstol=abstol,

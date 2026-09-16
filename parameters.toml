@@ -166,6 +166,8 @@ presence_threshold = 0.1
 upstream_cost = 0.05
 # Generate the four-level / ensemble figures after the run (env GUADEX_CLIMATE_PLOT=0 disables).
 make_figures = true
+# Output root for the runs (env GUADEX_CLIMATE_OUTPUT_DIR overrides).
+output_dir = "results/climate_scenarios"
 temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
 scenarios = ["ssp126", "ssp245", "ssp370", "ssp585"]
 gcms = [
@@ -178,7 +180,10 @@ gcms = [
 # "annual_mean" reproduces the historical annual-node warming curve (default);
 # "daily" uses a per-site daily water-temperature forcing file (WP1).
 forcing_mode = "annual_mean"
-daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites.csv"
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"
+# Use the per-(scenario, GCM) wide files (<base>_<scenario>_<gcm>.csv) so the
+# ensemble carries GCM spread instead of the ensemble-median product.
+daily_forcing_per_gcm = false
 # Baseline period for daily anomalies (PNACC convention).
 baseline_period_start = 1986
 baseline_period_end = 2005
@@ -212,7 +217,7 @@ quasi_extinction_persistence = 3
 [temperature_stress]
 enabled = false
 k = 0.0
-calibrate = false
+calibrate = true
 max_annual_loss = 0.05
 limits_source = "trait_table"
 
@@ -243,4 +248,4 @@ spin_up_max_years = 50
 spin_up_tol = 1.0e-6
 output_dir = "results/climate_experiments"
 temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
-daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites.csv"
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"

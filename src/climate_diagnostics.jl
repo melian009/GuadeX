@@ -476,8 +476,8 @@ function plot_climate_diagnostics(results_root::AbstractString=joinpath("results
         density_file::AbstractString=joinpath("data", "BIOTIC",
             "FishDensity_and_Juveniles_Matrix.csv"),
         native_codes::AbstractVector{<:AbstractString}=["AB", "AH", "SP", "PW",
-            "LS", "SA", "IL", "CP", "IO"],
-        extra_codes::AbstractVector{<:AbstractString}=["ST"],
+            "LS", "SA", "IL", "CP", "IO", "ST"],
+        extra_codes::AbstractVector{<:AbstractString}=String[],
         representative_run::Union{Nothing,AbstractString}=nothing)
     runs = read_climate_basin_series(results_root)
     if isempty(runs)
