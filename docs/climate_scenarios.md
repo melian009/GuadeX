@@ -165,11 +165,21 @@ when `make_figures = true` (the default); disable it with
 
 | path | content |
 | :--- | :--- |
-| `per_run/<scenario>__<gcm>.png` | one run: 5 metrics (rows) x 4 levels (columns); nested levels show the across-unit median with a 10-90% band (site spread at the sampling point) |
-| `ensemble/ensemble_<scenario>_<level>.png` | one scenario + level: 5 metric panels with the median across the 11 GCMs and 25-75 / 10-90% bands |
-| `comparison/across_scenarios_<level>.png` | one level: 5 metric panels, one ensemble-median line per SSP (with a light 10-90% band) |
-| `summary_2045.png` | final-year summary: 4 levels x 5 metrics, per-scenario median with 25-75% and 10-90% spreads |
+| `per_run/<scenario>__<gcm>.png` | one run: 5 metrics (rows) x 4 levels (columns); nested levels show the across-unit mean with a 10-90% band (site spread at the sampling point) |
+| `ensemble/ensemble_<scenario>_<level>.png` | one scenario + level: 5 metric panels with the mean across GCMs of the level mean and 25-75 / 10-90% bands across GCMs |
+| `comparison/across_scenarios_<level>.png` | one level: 5 metric panels, one mean line per SSP (with a light 10-90% across-GCM band) |
+| `summary_2045.png` | final-year summary: 4 levels x 5 metrics, per-scenario mean with 25-75% and 10-90% spreads across GCMs |
 | `figure_inventory.csv` | manifest (category, scenario, gcm, metric, level, path, status) |
+
+Ensemble statistics aggregate **per run before pooling**: each run is first
+reduced to its mean across units (sites, sub-basins, water bodies or the single
+basin) and those run-level means are then summarised across runs. The line is the
+mean across GCMs and the bands are the 25-75 / 10-90% across GCMs, so nested
+levels show the aggregate trend with a tight, readable scale. Pooling raw units
+instead pins the central value to the modal unit for discrete or zero-inflated
+metrics (richness, extinction risk), which is why sub-basin / water-body / site
+panels previously rendered flat; `run_level_stats` still exposes the within-run
+across-unit spread used by the per-run figures.
 
 The shipping ensemble yields 65 PNGs: 44 `per_run` (4 SSPs x 11 GCMs), 16
 `ensemble` (4 SSPs x 4 levels), 4 `comparison` and 1 final-year summary. Files
@@ -407,8 +417,10 @@ daily/heat-stress/spin-up flags. Settings live in
   heat-stress term is zero below the upper limit and monotone above it.
 * `test/test_parameters.jl` checks the WP0 classification.
 * `test/test_climate_figures.jl` covers run discovery, incomplete-run detection,
-  per-run level statistics, across-GCM ensemble quantiles and the diagnostic
-  `read_climate_basin_series` reader from synthetic CSVs (no figures are
-  rendered in tests).
+  per-run level statistics, across-GCM ensemble quantiles, the per-run-then-pool
+  ensemble reduction (including a regression test that a skewed sub-basin
+  distribution yields the level aggregate rather than the modal unit) and the
+  diagnostic `read_climate_basin_series` reader from synthetic CSVs (no figures
+  are rendered in tests).
 * `GUADEX_CONFIG_ONLY=1` on any entry script validates the configuration without
   loading data.

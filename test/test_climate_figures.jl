@@ -114,6 +114,47 @@ end
     @test all(isnan, unknown.mean)
 end
 
+@testset "ensemble nested-level central line is not pinned" begin
+    root = mktempdir()
+    scenario, gcm = "ssp126", "GCM1"
+    level_dir = joinpath(root, scenario, gcm, "export", "levels")
+    mkpath(level_dir)
+    years = [2026, 2045]
+
+    # 6 of 10 sub-basins stay at 1.0 and 4 rise to 10.0, so the pooled median
+    # stays pinned at the modal value while the level aggregate changes.
+    sub_2026 = fill(1.0, 10)
+    sub_2045 = vcat(fill(1.0, 6), fill(10.0, 4))
+    CSV.write(joinpath(level_dir, "level_subcatchment.csv"), DataFrame(
+        subcatchment=repeat(string.(1:10); outer=2),
+        year=repeat(years; inner=10),
+        n_sites=fill(1, 20),
+        mean_native_richness=vcat(sub_2026, sub_2045),
+        mean_native_extinction_risk=zeros(20),
+        mean_total_biomass=vcat(sub_2026, sub_2045) .* 10.0,
+    ))
+    CSV.write(joinpath(level_dir, "level_basin.csv"), DataFrame(
+        basin=fill("ES050", 2),
+        year=years,
+        n_sites=fill(10, 2),
+        mean_native_richness=[1.6, 4.6],
+        mean_native_extinction_risk=zeros(2),
+        mean_total_biomass=[16.0, 46.0],
+    ))
+    CSV.write(joinpath(root, "runs_index.csv"),
+        DataFrame(scenario=[scenario], gcm=[gcm], end_year=[2045]))
+
+    runs, _ = Guadex.discover_climate_runs(root)
+    run = only(runs)
+    ens = Guadex.ensemble_level_stats([run], :subcatchment, :native_richness)
+    # Each run is reduced to its mean across sub-basins, so the modal unit value
+    # (1.0) never pins the line: 2026 mean = 1.0, 2045 mean = (6*1 + 4*10)/10.
+    @test ens.mean[1] ≈ 1.0
+    @test ens.mean[2] ≈ 4.6
+    @test ens.median[2] ≈ 4.6
+    @test ens.p10[2] ≈ 4.6
+end
+
 @testset "climate diagnostics data readers" begin
     root = mktempdir()
     _write_run(root, "ssp126", "GCM1", [2026, 2045], [2.0, 4.0])

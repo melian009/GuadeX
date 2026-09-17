@@ -16,10 +16,16 @@ Reporting levels (see `docs/climate_scenarios.md`):
 | `:water_body` | `ID_masa` | `water_body` | `mean_<metric>` |
 | `:basin` | `ES050` | `basin` | `mean_<metric>` |
 
-Ensemble bands pool every finite value of a level/metric for a given year across
-all selected runs.  At the basin level that is exactly the across-GCM spread; at
-nested levels it also includes the spread across sub-basins / water bodies /
-sites, so the sampling-point panels show the site-level 10-90% range.
+Ensemble statistics aggregate per run before pooling: each run is reduced to the
+mean across units of the level (sites, sub-basins, water bodies or the single
+basin) and those run-level means are summarised across runs per year.  The line is
+the mean across runs and the bands are the 10-90% / 25-75% across runs, so the
+spread is always the across-GCM uncertainty of the level aggregate.
+
+Pooling raw units instead pins the central value to the modal unit for discrete or
+zero-inflated metrics (richness, extinction risk), rendering the sub-basin /
+water-body / site panels flat even when the aggregate changes.  The per-run
+figures (`run_level_stats`) still show the within-run across-unit spread.
 """
 
 const CLIMATE_LEVELS = (:site, :subcatchment, :water_body, :basin)
@@ -412,46 +418,60 @@ end
 """
     ensemble_level_stats(runs, level, metric)
 
-Pool the finite values of every supplied run (and every unit for nested levels)
-per year and return `median` plus `p10`/`p25`/`p75`/`p90` bands and the number of
+Per year, reduce each run to the **mean across units** (sites, sub-basins, water
+bodies, or the single basin) and aggregate those run-level means across runs,
+returning `mean`, `median` and `p10`/`p25`/`p75`/`p90` bands plus the number of
 contributing runs (`n_models`).
+
+Aggregating per run *before* pooling is what makes nested levels meaningful.  The
+previous implementation pooled every unit of every run and took quantiles, so for
+discrete or zero-inflated metrics (richness, extinction risk) the central value
+was the modal unit (e.g. 3 species, or 0 risk) for every year and the panel
+rendered as a flat line.  Averaging within a run removes that pinning, and the
+bands then describe the across-GCM spread of the level aggregate - the same
+quantity the basin level has always shown.
 """
 function ensemble_level_stats(runs::AbstractVector, level::Symbol, metric::Symbol)
     _check_level(level)
     col = climate_metric_column(level, metric)
-    pooled = Dict{Int,Vector{Float64}}()
-    models = Dict{Int,Set{Int}}()
+    # year -> one value per contributing run (the run's across-unit mean)
+    per_year = Dict{Int,Vector{Float64}}()
     yearset = Set{Int}()
-    for (i, run) in enumerate(runs)
+    for run in runs
         for year in _level_years(run, level)
             push!(yearset, year)
         end
         for (year, values) in _collect_year_values(get(run.tables, level, nothing), col)
             isempty(values) && continue
-            append!(get!(pooled, year, Float64[]), values)
-            push!(get!(models, year, Set{Int}()), i)
+            push!(get!(per_year, year, Float64[]), mean(values))
         end
     end
     years = sort(collect(yearset))
-    quantiles = Dict{Float64,Vector{Float64}}(p => Float64[] for p in (0.1, 0.25, 0.5, 0.75, 0.9))
+    means = Float64[]
+    medians = Float64[]
+    p10 = Float64[]
+    p25 = Float64[]
+    p75 = Float64[]
+    p90 = Float64[]
     n_models = Int[]
     for year in years
-        values = get(pooled, year, Float64[])
+        values = get(per_year, year, Float64[])
         if isempty(values)
-            for p in keys(quantiles)
-                push!(quantiles[p], NaN)
-            end
+            push!(means, NaN); push!(medians, NaN)
+            push!(p10, NaN); push!(p25, NaN); push!(p75, NaN); push!(p90, NaN)
             push!(n_models, 0)
         else
-            for p in keys(quantiles)
-                push!(quantiles[p], quantile(values, p))
-            end
-            push!(n_models, length(get(models, year, Set{Int}())))
+            push!(means, mean(values))
+            push!(medians, median(values))
+            push!(p10, quantile(values, 0.1))
+            push!(p25, quantile(values, 0.25))
+            push!(p75, quantile(values, 0.75))
+            push!(p90, quantile(values, 0.9))
+            push!(n_models, length(values))
         end
     end
-    return (years=years, median=quantiles[0.5], p10=quantiles[0.1],
-        p25=quantiles[0.25], p75=quantiles[0.75], p90=quantiles[0.9],
-        n_models=n_models)
+    return (years=years, mean=means, median=medians, p10=p10, p25=p25, p75=p75,
+        p90=p90, n_models=n_models)
 end
 
 # =============================================================================
@@ -516,8 +536,12 @@ end
 """
     plot_ensemble_level_figure(scenario, level, runs, output_path)
 
-Ensemble figure for one scenario and level: five metric panels with the median
+Ensemble figure for one scenario and level: five metric panels with the mean
 across the supplied GCMs and 25-75 / 10-90 bands.
+
+Each run first contributes its mean across units, so nested levels (sub-basin,
+water body, site) show the aggregate trend instead of a line pinned to the modal
+unit.
 """
 function plot_ensemble_level_figure(scenario::AbstractString, level::Symbol,
         runs::AbstractVector{<:ClimateRun}, output_path::AbstractString)
@@ -528,17 +552,18 @@ function plot_ensemble_level_figure(scenario::AbstractString, level::Symbol,
         ax = Axis(fig[1, ci]; title="$label ($unit)", titlesize=12,
             xlabel="Year", ylabel=ci == 1 ? LEVEL_LABELS[level] : "")
         stats = ensemble_level_stats(runs, level, metric)
-        if !isempty(stats.years) && !all(isnan, stats.median)
+        if !isempty(stats.years) && !all(isnan, stats.mean)
             drew = true
             band!(ax, stats.years, stats.p10, stats.p90; color=(:steelblue, 0.18))
             band!(ax, stats.years, stats.p25, stats.p75; color=(:steelblue, 0.32))
-            lines!(ax, stats.years, stats.median; color=:black, linewidth=2.2)
+            lines!(ax, stats.years, stats.mean; color=:black, linewidth=2.2)
         end
     end
     drew || return nothing
     Label(fig[0, :],
         "Ensemble $scenario — $(LEVEL_LABELS[level]) ($(length(runs)) GCMs)\n" *
-        "bands: 10-90% and 25-75% across GCMs (and sites/units at nested levels)",
+        "line: mean across GCMs of the level mean across units; " *
+        "bands: 10-90% and 25-75% across GCMs",
         fontsize=14, font=:bold, justification=:center, halign=:center)
     return _save_climate_figure(fig, output_path)
 end
@@ -546,8 +571,9 @@ end
 """
     plot_across_scenarios_figure(level, scenario_runs, output_path)
 
-Across-scenario comparison for one level: five metric panels, one ensemble
-median line per scenario with a light 10-90% band.
+Across-scenario comparison for one level: five metric panels, one mean line per
+scenario with a light 10-90% band.  Each run contributes its mean across units,
+so nested levels show the aggregate trend rather than a modal-unit flat line.
 """
 function plot_across_scenarios_figure(level::Symbol,
         scenario_runs::AbstractDict, output_path::AbstractString)
@@ -561,17 +587,18 @@ function plot_across_scenarios_figure(level::Symbol,
             xlabel="Year", ylabel=ci == 1 ? LEVEL_LABELS[level] : "")
         for scenario in scenarios
             stats = ensemble_level_stats(scenario_runs[scenario], level, metric)
-            (isempty(stats.years) || all(isnan, stats.median)) && continue
+            (isempty(stats.years) || all(isnan, stats.mean)) && continue
             drew = true
             color = scenario_color(scenario)
             band!(ax, stats.years, stats.p10, stats.p90; color=(color, 0.10))
-            lines!(ax, stats.years, stats.median; color=color, linewidth=2.2, label=scenario)
+            lines!(ax, stats.years, stats.mean; color=color, linewidth=2.2, label=scenario)
         end
         ci == 1 && (legend_ax = ax)
     end
     drew || return nothing
     legend_ax === nothing || axislegend(legend_ax; position=:rb, nbanks=2, fontsize=10)
-    Label(fig[0, :], "Across-scenario comparison — $(LEVEL_LABELS[level])",
+    Label(fig[0, :], "Across-scenario comparison — $(LEVEL_LABELS[level]) " *
+        "(line: mean across GCMs of the level mean; band: 10-90% across GCMs)",
         fontsize=15, font=:bold)
     return _save_climate_figure(fig, output_path)
 end
@@ -580,7 +607,8 @@ end
     plot_final_year_summary(scenario_runs, output_path; year)
 
 Final-year summary: rows are levels, columns are metrics; every scenario is a
-point (median) with 25-75 (thick) and 10-90 (thin) spreads across GCMs/units.
+point (mean across GCMs of the level mean) with 25-75 (thick) and 10-90 (thin)
+spreads across GCMs.
 """
 function plot_final_year_summary(scenario_runs::AbstractDict,
         output_path::AbstractString; year::Int)
@@ -598,22 +626,21 @@ function plot_final_year_summary(scenario_runs::AbstractDict,
             for (si, scenario) in enumerate(scenarios)
                 stats = ensemble_level_stats(scenario_runs[scenario], level, metric)
                 idx = findfirst(==(year), stats.years)
-                (idx === nothing || isnan(stats.median[idx])) && continue
+                (idx === nothing || isnan(stats.mean[idx])) && continue
                 drew = true
                 color = scenario_color(scenario)
                 lines!(ax, [si, si], [stats.p10[idx], stats.p90[idx]];
                     color=color, linewidth=1.2)
                 lines!(ax, [si, si], [stats.p25[idx], stats.p75[idx]];
                     color=color, linewidth=4)
-                scatter!(ax, [si], [stats.median[idx]]; color=color,
+                scatter!(ax, [si], [stats.mean[idx]]; color=color,
                     marker=:circle, markersize=8)
             end
         end
     end
     drew || return nothing
     Label(fig[0, :],
-        "Year $year summary — median with 25-75% and 10-90% spreads " *
-        "(GCMs, and sites/units at nested levels)",
+        "Year $year summary — mean with 25-75% and 10-90% spreads across GCMs",
         fontsize=14, font=:bold)
     return _save_climate_figure(fig, output_path)
 end
