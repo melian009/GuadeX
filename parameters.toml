@@ -195,6 +195,17 @@ control_run = false
 spin_up = false
 spin_up_max_years = 50
 spin_up_tol = 1.0e-6
+# Stop rule for the burn-in: "basin" = basin-total relative annual change
+# (robust, default), "q95" = 95th percentile of the per-site change, "max" = the
+# strict legacy max-over-sites rule.
+spin_up_criterion = "basin"
+# Print a burn-in progress line every N year-blocks (0 disables).
+spin_up_progress_every = 50
+# Multiplier linking observed total density to the base carrying capacity
+# (build_carrying_capacity).  10.0 = legacy "10x observed"; 1.0 = the observed
+# snapshot is the capacity level.  The effective multiplier is
+# carrying_capacity_base_scaling * carrying_capacity_scaling.
+carrying_capacity_base_scaling = 10.0
 carrying_capacity_scaling = 1.0
 # WP3 optimum sweep: 0.0 = cold edge, 0.5 = midpoint (default), 1.0 = warm edge.
 thermal_optima_fraction = 0.5
@@ -242,6 +253,9 @@ gcms = ["ACCESS-CM2", "CMCC-CM2-SR5", "CNRM-ESM2-1", "EC-Earth3-Veg", "IITM-ESM"
     "KACE-1-0-G", "MIROC6", "MPI-ESM1-2-HR", "MRI-ESM2-0", "NorESM2-MM",
     "UKESM1-0-LL"]
 # E3 carrying-capacity multipliers and E4 optimum positions within the range.
+# The effective multiplier against observed density is
+# carrying_capacity_base_scaling * k_scaling_grid[k], and both are recorded per case.
+carrying_capacity_base_scaling = 10.0
 k_scaling_grid = [1.0, 3.0, 10.0]
 optimum_fractions = [0.0, 0.25, 0.5, 0.75, 1.0]
 spin_up_max_years = 50

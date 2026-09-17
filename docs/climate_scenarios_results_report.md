@@ -283,3 +283,60 @@ Outputs: `runs_index.csv`, the four-level CSVs, `levels/species_timeseries.csv`,
 - Per-GCM daily forcing is now exported
   (`water_temp_daily_guadex_sites_wide_<ssp>_<gcm>.csv`); extend to 2070 if the
   longer horizon is adopted.
+
+---
+
+## 7. Effective K = 1x observed with a converged burn-in
+
+The §6 ensemble still showed a rising control because the 50-year spin-up had not
+converged. This run fixes both the K convention and the burn-in, into
+`results/climate_scenarios_k1x_burnin` (44 GCM x SSP runs + control).
+
+**Configuration**
+
+| setting | value |
+| :--- | :--- |
+| effective K | `carrying_capacity_base_scaling = 1.0` x `carrying_capacity_scaling = 1.0` = **1x observed** (K range 5.0-9533.3, mean 86.6 vs observed mean 84.4) |
+| forcing | per-site **daily** water temperature, per-GCM (seasonal) |
+| burn-in | seasonal baseline climatology, `criterion = basin`, `tol = 5e-5` |
+| burn-in result | **converged at year 373**, basin change 5.0e-5, q95 3.0e-3, max 1.8e-2 |
+| heat stress | on, `k = 3.78e-5` |
+| horizon | 2026-2045 |
+
+The minimum-capacity floor is expressed in observed-density units (5.0, or the
+10th percentile of non-zero observations when larger) and multiplied by the same
+base factor, so the effective multiplier against observed density holds for every
+site. The basin-total change plateaus at ~3e-5/yr after ~400 years (a slow
+internal cycle), so `tol = 5e-5` is the reachable stationarity threshold.
+
+**The control is now stationary.** `control/baseline` over 2026-2045:
+
+| metric (basin mean) | 2026 | 2045 | change | previous (§6) |
+| :--- | ---: | ---: | ---: | ---: |
+| native richness / site | 2.5148 | 2.5006 | **-0.57 %** | +2.0 % |
+| native biomass | 79.412 | 79.494 | **+0.10 %** | +9.5 % |
+| total biomass | 92.768 | 92.844 | **+0.082 %** | +8.1 % |
+
+The residual richness movement (±0.014 species, oscillating around the 0.1
+presence cutoff) is threshold flicker, not a systematic trend. At K = 1x the
+equilibrium biomass is ~92.8 per site, versus ~677 in the 10x runs.
+
+**The scenario signal is preserved and now interpretable.** With a stationary
+baseline, the cold-water keystone `ST` separates cleanly, while warm-adapted
+natives do not move:
+
+| species | control, relative biomass change | ssp585 / UKESM1-0-LL (+1.27 degC) |
+| :--- | ---: | ---: |
+| ST (Salmo trutta) | -0.19 % | **-11.14 %** |
+| LS, SA, CP, IL, AB | -1.5 to +2.6 % | -1.4 to +2.7 % |
+
+Basin native richness is still scenario-insensitive (2.499-2.505 across all 45
+runs) because the warm-adapted natives dominate the count, confirming the §6
+finding that richness is the wrong aggregate for this question.
+
+**Caveats.** (1) The quasi-extinction fraction is not yet usable: with the
+baseline now genuinely at equilibrium, `q * baseline` flags species that are
+simply rare (e.g. `ST` occupancy is 4 %, so 96 % of sites are flagged) - the
+threshold definition, not the scenario, drives it. (2) The burn-in is lake-wise
+mean-field over one seasonal climatology; per-GCM historical biases are still
+removed per run by the anomaly construction rather than by a per-GCM burn-in.

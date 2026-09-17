@@ -1111,27 +1111,34 @@ function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vect
 end
 
 """
-    build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String})
+    build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String}; scaling=10.0)
 
 Build site-specific carrying capacities from observed fish density data.
 
 The carrying capacity K_i for each site is derived from the observed total fish density,
-scaled by a factor to represent the maximum sustainable biomass the site can support.
+scaled by `scaling` to represent the maximum sustainable biomass the site can support.
 The scaling factor accounts for:
 - Natural fluctuations around observed densities
 - Additional habitat not sampled during surveys
 - Density-dependent regulation allowing populations to exceed observed levels
+
+`scaling = 1.0` sets K_i to the observed total density (with the floor below), i.e.
+the observed snapshot is treated as the equilibrium.  `scaling = 10.0` is the legacy
+convention.  A minimum-capacity floor of 5.0 observed-density units (10th percentile
+of non-zero observations when larger) is multiplied by the same `scaling`, so the
+effective multiplier against observed density is `scaling` for every site.
 
 # Arguments
 - `density_df`: DataFrame with species density data (from load_species_density_data)
 - `site_df`: DataFrame with site data
 - `sites`: Vector of site codes in order
 - `species_codes`: Vector of species codes
+- `scaling`: factor applied to the observed total density (default 10.0)
 
 # Returns
 - Vector of carrying capacities for each site
 """
-function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String})
+function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String}; scaling::Real=10.0)
     println("Building site-specific carrying capacities from density data...")
 
     site_to_idx = Dict{String, Int}()
@@ -1141,7 +1148,8 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
 
     density_cols = [Symbol("$(sp)_DEN") for sp in species_codes]
 
-    K_scaling = 10.0
+    K_scaling = Float64(scaling)
+    K_scaling > 0 || error("carrying-capacity scaling must be > 0")
 
     raw_capacities = Float64[]
     for site in sites
@@ -1163,9 +1171,16 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
         end
     end
 
-    nonzero_caps = filter(c -> c > 0, raw_capacities)
-    K_min = 50.0
-    K_floor = isempty(nonzero_caps) ? K_min : max(K_min, quantile(nonzero_caps, 0.1))
+    # The minimum-capacity floor is expressed in *observed-density* units and then
+    # multiplied by the same factor, so the effective multiplier against observed
+    # density is `K_scaling` for every site.  The legacy absolute floor of 50.0
+    # was defined at the legacy 10x base, i.e. 5.0 observed-density units, which
+    # reproduces the historical K floor exactly when `scaling == 10.0`.
+    K_min_observed = 5.0
+    nonzero_observed = filter(c -> c > 0, raw_capacities ./ K_scaling)
+    floor_observed = isempty(nonzero_observed) ? K_min_observed :
+        max(K_min_observed, quantile(nonzero_observed, 0.1))
+    K_floor = K_scaling * floor_observed
 
     carrying_capacity = Float64[]
     for cap in raw_capacities
@@ -1174,7 +1189,7 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
 
     println("Carrying capacity range: $(minimum(carrying_capacity)) - $(maximum(carrying_capacity))")
     println("Mean carrying capacity: $(mean(carrying_capacity))")
-    println("K floor (10th percentile of non-zero K, min $K_min): $K_floor")
+    println("K floor: $K_floor ($(floor_observed) observed-density units x $(K_scaling))")
 
     return carrying_capacity
 end
@@ -1347,6 +1362,7 @@ function prepare_ode_data(;
     obstacle_passability::Float64 = 0.1,
     obstacle_downstream_passability::Float64 = 0.5,
     heat_stress_rate::Float64 = 0.0,
+    carrying_capacity_base_scaling::Float64 = 10.0,
     carrying_capacity_scaling::Float64 = 1.0,
     thermal_optima_override::Union{Nothing,AbstractVector} = nothing
 )
@@ -1481,7 +1497,9 @@ function prepare_ode_data(;
 
     # 11. Build carrying capacities from observed density data
     println("\n[11/12] Building carrying capacities...")
-    carrying_capacity = build_carrying_capacity(density_df, site_df, sites, species_codes)
+    carrying_capacity = build_carrying_capacity(density_df, site_df, sites, species_codes;
+        scaling=carrying_capacity_base_scaling)
+    println("Carrying capacity base scaling (observed-density multiplier): $(carrying_capacity_base_scaling)x")
     if carrying_capacity_scaling != 1.0
         carrying_capacity = carrying_capacity .* carrying_capacity_scaling
         println("Carrying capacity scaled by $(carrying_capacity_scaling) (WP4 sensitivity): " *

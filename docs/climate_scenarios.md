@@ -329,15 +329,27 @@ of scope.
 
 `[run_climate_scenarios] spin_up` integrates to steady state under baseline
 forcing before any scenario and reuses the state for every run;
-`spin_up_max_years` / `spin_up_tol` control the stop criterion (the default
-50-year cap is reported as `converged = false` if it is hit). In daily mode the
-spin-up uses the **seasonal** baseline climatology (`spin_up(...; schedule=...)`),
-because the annual-mean and seasonal equilibria differ substantially (the E1
-gate: end biomass 759 vs 678) and only the seasonal one matches the runs.
-`carrying_capacity_scaling` (1×, 3×, 10×) is the K sensitivity. When spin-up is
-on, `native_richness_relative`, `native_extinction_risk` and the new biomass
-ratios are rebased on the spun-up state rather than the t = 0 snapshot, which was
-not an equilibrium.
+`spin_up_max_years` / `spin_up_tol` control the stop criterion and
+`spin_up_criterion` selects the measure (`"basin"` = basin-total relative annual
+change, the robust default; `"q95"` = 95th percentile of the per-site change;
+`"max"` = strict legacy max-over-sites, which a single near-empty site can make
+unreachable). The run reports `converged = false` when the cap is hit;
+`spin_up_progress_every` prints a progress line every N year-blocks. In daily mode
+the spin-up uses the **seasonal** baseline climatology
+(`spin_up(...; schedule=...)`), because the annual-mean and seasonal equilibria
+differ substantially (the E1 gate: end biomass 759 vs 678) and only the seasonal
+one matches the runs.
+
+Carrying capacity has **two** multipliers:
+`carrying_capacity_base_scaling` maps observed total density to the base K inside
+`build_carrying_capacity` (legacy default `10.0`, i.e. K = 10× observed), and
+`carrying_capacity_scaling` is the WP4 sensitivity multiplier applied on top
+(`1×`, `3×`, `10×`). The effective multiplier against observed density is their
+product, and both are recorded in `run_metadata.json`. Setting
+`carrying_capacity_base_scaling = 1.0` treats the observed snapshot as the
+capacity level. When spin-up is on, `native_richness_relative`,
+`native_extinction_risk` and the new biomass ratios are rebased on the spun-up
+state rather than the t = 0 snapshot, which was not an equilibrium.
 
 ### WP5 — abundance, occupancy and quasi-extinction
 

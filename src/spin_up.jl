@@ -25,20 +25,36 @@ end
 
 """
     spin_up(params; initial_state, days_per_year=365.0, max_years=50, tol=1e-6,
-            solver=Tsit5(), reltol=1e-6, abstol=1e-6)
+            solver=Tsit5(), reltol=1e-6, abstol=1e-6, schedule=nothing,
+            criterion=:basin)
 
 Integrate the static (baseline-forcing) metacommunity model in one-year blocks
-until the largest relative annual change in site total biomass falls below `tol`,
-or `max_years` blocks have been integrated.
+until the chosen convergence measure falls below `tol`, or `max_years` blocks
+have been integrated.
+
+`criterion` selects the annual-change measure used to declare convergence:
+
+- `:basin` (default) : relative change in **basin total** biomass,
+  `|Σu(t+1) − Σu(t)| / |Σu(t)|`.  Robust and dominated by the aggregate, so it
+  is the right stop rule for a burn-in whose purpose is to remove the
+  community-filling transient; the former max-over-sites rule could not be met
+  because a single near-empty site kept the relative change large.
+- `:q95`             : 95th percentile of the per-site relative change, which
+  additionally requires the bulk of sites (not just the basin mean) to settle.
+- `:max`             : strictest legacy rule, the largest per-site relative
+  change.  Kept for backwards compatibility and diagnostics; a single site with
+  near-zero biomass can make it effectively unreachable.
 
 Returns a named tuple:
 
-- `state`                 : final flattened state (the equilibrium initial condition)
-- `converged`             : whether `tol` was reached
-- `years`                 : number of one-year blocks integrated
-- `last_relative_change`  : final max relative annual change in site biomass
-- `site_biomass`          : final site total biomass vector
-- `history`               : site total biomass at the end of each block
+- `state`                  : final flattened state (the equilibrium initial condition)
+- `converged`              : whether `tol` was reached
+- `years`                  : number of one-year blocks integrated
+- `last_relative_change`   : final **max** per-site relative annual change (strict diagnostic)
+- `last_basin_change`      : final basin-total relative annual change
+- `last_q95_change`        : final 95th-percentile per-site relative annual change
+- `site_biomass`           : final site total biomass vector
+- `history`                : site total biomass at the end of each block
 """
 function spin_up(params::MetacommunityParams;
         initial_state::AbstractVector,
@@ -48,8 +64,12 @@ function spin_up(params::MetacommunityParams;
         solver=Tsit5(),
         reltol::Real=1e-6,
         abstol::Real=1e-6,
-        schedule::Union{Nothing,TemperatureSchedule}=nothing)
+        schedule::Union{Nothing,TemperatureSchedule}=nothing,
+        criterion::Symbol=:basin,
+        progress_every::Int=0)
     max_years >= 1 || error("max_years must be >= 1")
+    criterion in (:basin, :max, :q95) ||
+        error("criterion must be :basin, :max or :q95 (got $criterion)")
     n_sites, n_species = params.n_sites, params.n_species
     length(initial_state) == n_sites * n_species ||
         error("initial_state has $(length(initial_state)) entries, expected $(n_sites * n_species)")
@@ -58,8 +78,12 @@ function spin_up(params::MetacommunityParams;
     prev_total = site_totals(u0, n_sites, n_species)
     history = Vector{Vector{Float64}}()
     converged = false
-    change = Inf
     years = 0
+    # Declared before the loop so the per-block assignments below update these
+    # function-local variables instead of creating loop-local ones.
+    change_max = Inf
+    change_basin = Inf
+    change_q95 = Inf
 
     # Keep the state non-negative and finite; long equilibrations can otherwise
     # drift into negative densities and, eventually, non-finite values.
@@ -89,12 +113,24 @@ function spin_up(params::MetacommunityParams;
         u0 = vec(Float64.(sol.u[end]))
         if !all(isfinite, u0)
             return (state=u0, converged=false, years=years + 1,
-                last_relative_change=NaN, site_biomass=prev_total, history=history)
+                last_relative_change=NaN,
+                last_basin_change=NaN, last_q95_change=NaN,
+                site_biomass=prev_total, history=history)
         end
         total = site_totals(u0, n_sites, n_species)
-        change = maximum(abs.(total .- prev_total) ./ max.(abs.(prev_total), 1e-12))
+        rel_site = abs.(total .- prev_total) ./ max.(abs.(prev_total), 1e-12)
+        change_max = maximum(rel_site)
+        change_basin = abs(sum(total) - sum(prev_total)) /
+            max(abs(sum(prev_total)), 1e-12)
+        change_q95 = quantile(rel_site, 0.95)
+        change = criterion === :basin ? change_basin :
+                 criterion === :q95 ? change_q95 : change_max
         push!(history, total)
         years += 1
+        if progress_every > 0 && years % progress_every == 0
+            println("    burn-in yr $(years): basin=$(round(change_basin, sigdigits=4)), " *
+                    "q95=$(round(change_q95, sigdigits=4)), max=$(round(change_max, sigdigits=4))")
+        end
         if change < tol && years >= 2
             converged = true
             break
@@ -106,7 +142,9 @@ function spin_up(params::MetacommunityParams;
         state=u0,
         converged=converged,
         years=years,
-        last_relative_change=change,
+        last_relative_change=change_max,
+        last_basin_change=change_basin,
+        last_q95_change=change_q95,
         site_biomass=prev_total,
         history=history,
     )

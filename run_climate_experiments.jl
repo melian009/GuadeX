@@ -16,7 +16,7 @@ using Guadex
 #   E0 spin-up realism  : spun-up state vs observed (report, don't hide)
 #   E1 seasonality      : baseline annual-mean vs baseline daily climatology
 #   E2 heat stress      : heat-stress off vs on (Warm lowland sites)
-#   E3 K sensitivity    : carrying capacity x {1, 3, 10}
+#   E3 K sensitivity    : carrying capacity x {1, 3, 10} on top of the base multiplier
 #   E4 optimum sweep    : thermal optimum across the empirical range
 #   E5 full ensemble    : delegated to run_climate_scenarios.jl
 #
@@ -54,6 +54,7 @@ end
 const EXPERIMENT_SCENARIO = string(get(CFG, "scenario", "ssp585"))
 const EXPERIMENT_GCMS = String.(get(CFG, "gcms", ["ACCESS-CM2"]))
 const K_SCALING_GRID = Float64.(get(CFG, "k_scaling_grid", [1.0, 3.0, 10.0]))
+const K_BASE_SCALING = Float64(get(CFG, "carrying_capacity_base_scaling", 10.0))
 const OPTIMUM_FRACTIONS = Float64.(get(CFG, "optimum_fractions", [0.0, 0.25, 0.5, 0.75, 1.0]))
 const SPIN_UP_MAX_YEARS = Int(get(CFG, "spin_up_max_years", 50))
 const SPIN_UP_TOL = Float64(get(CFG, "spin_up_tol", 1.0e-6))
@@ -88,10 +89,13 @@ data_base = prepare_ode_data(
     obstacle_mode = Symbol(get(GUADEX_PARAMS["obstacles"], "mode", "legacy")),
     obstacle_matching_tolerance = Float64(get(GUADEX_PARAMS["obstacles"], "matching_tolerance_m", 2000.0)),
     obstacle_passability = Float64(get(GUADEX_PARAMS["obstacles"], "upstream_passability", 0.1)),
-    obstacle_downstream_passability = Float64(get(GUADEX_PARAMS["obstacles"], "downstream_passability", 0.5))
+    obstacle_downstream_passability = Float64(get(GUADEX_PARAMS["obstacles"], "downstream_passability", 0.5)),
+    carrying_capacity_base_scaling = K_BASE_SCALING
 )
 n_sites = data_base.params.n_sites
 n_species = data_base.params.n_species
+println("Effective carrying-capacity base multiplier: $(K_BASE_SCALING)x observed " *
+        "(E3 effective grid: $(join(K_BASE_SCALING .* K_SCALING_GRID, ", "))x)")
 
 density_cols = [Symbol("$(sp)_DEN") for sp in data_base.species]
 density_df_filtered = filter(row -> row.CODIGO in data_base.sites, data_base.density_df)
@@ -160,7 +164,8 @@ function solve_case(; stage, case_name, params, schedule, u0, warming,
         daily_forcing=forcing_temps === nothing ? nothing :
             (temps=forcing_temps, dates=forcing_dates),
         run_metadata=merge(Dict("script" => "run_climate_experiments.jl",
-            "stage" => stage, "case" => case_name), metadata))
+            "stage" => stage, "case" => case_name,
+            "carrying_capacity_base_scaling" => K_BASE_SCALING), metadata))
     return run_dir
 end
 

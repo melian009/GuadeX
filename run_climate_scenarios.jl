@@ -92,8 +92,18 @@ const SPIN_UP_MAX_YEARS = parse(Int, get(ENV, "GUADEX_CLIMATE_SPIN_UP_YEARS",
     string(_climate_setting("spin_up_max_years", 50))))
 const SPIN_UP_TOL = parse(Float64, get(ENV, "GUADEX_CLIMATE_SPIN_UP_TOL",
     string(_climate_setting("spin_up_tol", 1.0e-6))))
+const SPIN_UP_CRITERION = Symbol(lowercase(get(ENV, "GUADEX_CLIMATE_SPIN_UP_CRITERION",
+    string(_climate_setting("spin_up_criterion", "basin")))))
+const SPIN_UP_PROGRESS_EVERY = parse(Int, get(ENV, "GUADEX_CLIMATE_SPIN_UP_PROGRESS",
+    string(_climate_setting("spin_up_progress_every", 50))))
 const K_SCALING = parse(Float64, get(ENV, "GUADEX_CLIMATE_K_SCALING",
     string(_climate_setting("carrying_capacity_scaling", 1.0))))
+# Multiplier linking observed total density to the base carrying capacity
+# (`build_carrying_capacity`).  Legacy convention is 10x observed; set to 1.0 to
+# treat the observed snapshot as the capacity level.  The effective multiplier is
+# K_BASE_SCALING * K_SCALING.
+const K_BASE_SCALING = parse(Float64, get(ENV, "GUADEX_CLIMATE_K_BASE",
+    string(_climate_setting("carrying_capacity_base_scaling", 10.0))))
 const OPTIMA_FRACTION = parse(Float64, get(ENV, "GUADEX_CLIMATE_OPTIMA_FRACTION",
     string(_climate_setting("thermal_optima_fraction", 0.5))))
 const QUASI_EXTINCTION_Q = parse(Float64, get(ENV, "GUADEX_CLIMATE_QE_Q",
@@ -143,8 +153,10 @@ if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
     println("  forcing mode: $FORCING_MODE")
     println("  heat stress: enabled=$HEAT_STRESS_ENABLED k=$HEAT_STRESS_K " *
             "calibrate=$HEAT_STRESS_CALIBRATE")
-    println("  spin-up: $SPIN_UP_ENABLED (max $(SPIN_UP_MAX_YEARS) yr)")
-    println("  carrying-capacity scaling: $(K_SCALING)x; optimum fraction: $OPTIMA_FRACTION")
+    println("  spin-up: $SPIN_UP_ENABLED (max $(SPIN_UP_MAX_YEARS) yr, criterion=:$SPIN_UP_CRITERION)")
+    println("  carrying-capacity base scaling: $(K_BASE_SCALING)x; WP4 scaling: $(K_SCALING)x; " *
+            "effective: $(K_BASE_SCALING * K_SCALING)x")
+    println("  optimum fraction: $OPTIMA_FRACTION")
     exit(0)
 end
 
@@ -160,7 +172,9 @@ println("  save:      every $(SAVE_INTERVAL_DAYS) days (monthly by default)")
 println("  elevation scaling: $ELEVATION_SCALING")
 println("  forcing:   $FORCING_MODE")
 println("  heat stress: $HEAT_STRESS_ENABLED (k=$(HEAT_STRESS_K))")
-println("  spin-up:   $SPIN_UP_ENABLED; K scaling: $(K_SCALING)x")
+println("  spin-up:   $SPIN_UP_ENABLED (criterion=:$SPIN_UP_CRITERION)")
+println("  K multiplier: base $(K_BASE_SCALING)x * WP4 $(K_SCALING)x = " *
+        "$(K_BASE_SCALING * K_SCALING)x observed density")
 println("="^70)
 
 projections = load_temperature_projections(PROJECTION_FILE)
@@ -176,7 +190,8 @@ data_base = prepare_ode_data(
     obstacle_mode = OBSTACLE_MODE,
     obstacle_matching_tolerance = OBSTACLE_MATCHING_TOLERANCE,
     obstacle_passability = OBSTACLE_PASSABILITY,
-    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY
+    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY,
+    carrying_capacity_base_scaling = K_BASE_SCALING
 )
 
 n_sites = data_base.params.n_sites
@@ -206,6 +221,8 @@ if K_SCALING != 1.0
     params = scale_carrying_capacity(params, K_SCALING)
     println("WP4 carrying-capacity scaling: $(K_SCALING)x")
 end
+println("Effective carrying-capacity multiplier vs observed density: " *
+        "$(K_BASE_SCALING * K_SCALING)x")
 
 # WP1: per-site daily forcing, loaded only in the daily mode.  A separate
 # "historical" series provides the 1986-2005 baseline when present.
@@ -261,13 +278,16 @@ if SPIN_UP_ENABLED
             days_per_year=Float64(DAYS_PER_YEAR))
     end
     println("WP4 spin-up under $(spin_schedule === nothing ? "annual-mean" : "seasonal") " *
-            "baseline forcing (max $(SPIN_UP_MAX_YEARS) yr, tol=$SPIN_UP_TOL)...")
+            "baseline forcing (max $(SPIN_UP_MAX_YEARS) yr, tol=$SPIN_UP_TOL, " *
+            "criterion=:$SPIN_UP_CRITERION)...")
     spin = spin_up(params; initial_state=u0_flat, schedule=spin_schedule,
-        days_per_year=Float64(DAYS_PER_YEAR), max_years=SPIN_UP_MAX_YEARS, tol=SPIN_UP_TOL)
+        days_per_year=Float64(DAYS_PER_YEAR), max_years=SPIN_UP_MAX_YEARS, tol=SPIN_UP_TOL,
+        criterion=SPIN_UP_CRITERION, progress_every=SPIN_UP_PROGRESS_EVERY)
     u0_flat = spin.state
     baseline_species_density = reshape(u0_flat, n_sites, params.n_species)
     println("  spin-up: years=$(spin.years), converged=$(spin.converged), " *
-            "last relative change=$(spin.last_relative_change)")
+            "basin change=$(spin.last_basin_change), q95=$(spin.last_q95_change), " *
+            "max=$(spin.last_relative_change)")
 end
 
 saveat = unique(vcat(collect(0.0:SAVE_INTERVAL_DAYS:T_END), T_END))
@@ -416,6 +436,8 @@ for scenario in CLIMATE_SCENARIOS
             thermal_upper_limits=data_base.params.thermal_upper_limits,
             spin_up=SPIN_UP_ENABLED,
             carrying_capacity_scaling=K_SCALING,
+            carrying_capacity_base_scaling=K_BASE_SCALING,
+            spin_up_criterion=string(SPIN_UP_CRITERION),
             thermal_optima_fraction=OPTIMA_FRACTION,
             upstream_cost=UPSTREAM_COST,
             cedex_var_file=CEDEX_VAR_FILE,
@@ -455,6 +477,11 @@ for scenario in CLIMATE_SCENARIOS
                 "heat_stress_k" => k_heat,
                 "spin_up" => SPIN_UP_ENABLED,
                 "carrying_capacity_scaling" => K_SCALING,
+                "carrying_capacity_base_scaling" => K_BASE_SCALING,
+                "spin_up_criterion" => string(SPIN_UP_CRITERION),
+                "spin_up_converged" => SPIN_UP_ENABLED ? spin.converged : nothing,
+                "spin_up_years" => SPIN_UP_ENABLED ? spin.years : nothing,
+                "spin_up_basin_change" => SPIN_UP_ENABLED ? spin.last_basin_change : nothing,
                 "thermal_optima_fraction" => OPTIMA_FRACTION,
                 "baseline_period" => "$BASELINE_PERIOD_START-$BASELINE_PERIOD_END",
                 "elevation_scaling" => ELEVATION_SCALING,
