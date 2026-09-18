@@ -215,8 +215,8 @@ never bias the across-GCM statistics.
 The four-level + viewer export is also wired into:
 
 * `scripts/run_model.jl` - single management scenario.
-* `run_sensitivity_report.jl` - temperature x upstream cost x passability sweep.
-* `run_alt_interactions.jl` - alternative interaction matrices.
+* `run_sensitivity_report.jl` - obstacle/passability x upstream-cost sweep under two extreme climate projections (see below).
+* `run_alt_interactions.jl` - the same sweep with alternative interaction matrices and a thermal-sigma multiplier.
 * `run_climate_scenarios.jl` - all climate scenarios.
 
 For an already-saved JLD2 file:
@@ -228,6 +228,60 @@ julia --project=. scripts/export_run_outputs.jl <simulation_output.jld2> [output
 This re-export uses the crosswalk for water bodies; connectivity metrics are only
 included when the JLD2 stores `dams` (the in-memory exports during a run always
 include them).
+
+## Obstacle / upstream-cost sensitivity (daily forcing)
+
+`run_sensitivity_report.jl` and `run_alt_interactions.jl` answer *"what do
+obstacles and upstream dispersal cost do to the fish community?"* under the same
+climate-consistent setup as the `climate_scenarios_k1x_burnin` ensemble:
+
+* per-site **daily** water temperature from the two extreme projections of the
+  44-run ensemble (`ssp126/IITM-ESM` and `ssp245/UKESM1-0-LL`; the climate
+  ensemble index reports 0.28 / 1.37 °C basin-median warming by 2045);
+* a seasonal baseline **burn-in** (cached under `results/sensitivity_spinup_cache`
+  and reused across runs);
+* calibrated heat stress, K = 1x observed, WP0 classification (ST native,
+  migratory group reported separately).
+
+Shared settings live in `[obstacle_sensitivity]`; the swept grids in
+`[run_sensitivity_report]` (upstream cost × passability) and
+`[run_alt_interactions]` (adds interaction matrix × thermal sigma). Each run is
+written to
+`results/sensitivity_obstacles[/alt_interactions]/<matrix>/[sig_<sigma>/]<model>/uc_<cost>/<pass>/`
+with the four-level + viewer export, plus a `runs_index.csv` summary and a
+`sensitivity_effects.csv` / `summary_plots/` produced by:
+
+```bash
+julia --project=. scripts/plot_obstacle_sensitivity.jl results/sensitivity_obstacles
+```
+
+In the sensitivity index, `warming_end_degc` is the **maximum site-level**
+annual-mean anomaly of the forcing actually delivered to the ODE (it differs
+from the basin-median curve reported by the climate ensemble index).
+
+Resuming is safe: a run counts as complete only when its full export is present
+**and** a `.sensitivity_complete.jld2` marker (or, for runs written before
+markers existed, the stored JLD2) matches the current science-affecting settings
+— horizon, upstream cost, passability, K, optima fraction, interaction matrix and
+thermal sigma. A rerun under changed settings is recomputed rather than reused or
+relabelled. `[obstacle_sensitivity].spin_up = false` skips the burn-in and starts
+from observed densities.
+
+Configuration smoke test (no data loading):
+
+```bash
+GUADEX_CONFIG_ONLY=1 julia --project=. run_sensitivity_report.jl
+```
+
+Useful overrides: `GUADEX_SENSITIVITY_END_YEAR`, `GUADEX_SENSITIVITY_MAX_RUNS`,
+`GUADEX_SENSITIVITY_FORCE`, `GUADEX_SENSITIVITY_OUTPUT_DIR`,
+`GUADEX_SENSITIVITY_CLIMATE_MODELS` (`scenario:gcm,scenario:gcm`),
+`GUADEX_SENSITIVITY_K_BASE`, `GUADEX_SENSITIVITY_SPIN_UP`, `GUADEX_SPINUP_REUSE`,
+`GUADEX_SPINUP_FORCE`. Completed runs are skipped unless
+`GUADEX_SENSITIVITY_FORCE=1`, so an interrupted sweep resumes where it stopped.
+The burn-in cache key covers the upstream cost, obstacle configuration, forcing
+file size/mtime and initial state, so changing any of them recomputes the
+burn-in instead of silently reusing a stale equilibrium.
 
 ## Assumptions and limitations
 

@@ -131,20 +131,72 @@ upstream_costs = [0.01, 0.05, 0.1, 0.5]
 exploitation_scenarios = ["baseline", "low_exploitation", "medium_exploitation", "high_exploitation"]
 passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
 
+# ---------------------------------------------------------------------------
+# Obstacle / upstream-cost sensitivity: shared climate-consistent settings.
+#
+# These reproduce the `climate_scenarios_k1x_burnin` configuration (per-GCM
+# daily water temperature, seasonal baseline burn-in, calibrated heat stress,
+# effective K = 1x observed, WP0 species classification).  Both
+# `run_sensitivity_report.jl` and `run_alt_interactions.jl` read this section,
+# so the two sweeps are directly comparable.  Per-run overrides use the
+# GUADEX_SENSITIVITY_* environment variables (and GUADEX_SPINUP_* for the cache).
+# ---------------------------------------------------------------------------
+
+[obstacle_sensitivity]
+start_year = 2026
+end_year = 2045
+save_interval_days = 30.4167
+presence_threshold = 0.1
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"
+baseline_period_start = 1986
+baseline_period_end = 2005
+carrying_capacity_base_scaling = 1.0
+carrying_capacity_scaling = 1.0
+thermal_optima_fraction = 0.5
+spin_up = true
+spin_up_max_years = 600
+spin_up_tol = 5.0e-5
+spin_up_criterion = "basin"
+spin_up_progress_every = 50
+heat_stress_enabled = true
+heat_stress_calibrate = true
+heat_stress_max_loss = 0.05
+quasi_extinction_q = 0.1
+quasi_extinction_persistence = 3
+upstream_cost = 0.05
+output_dir = "results/sensitivity_obstacles"
+
+# The two temperature extremes of the 44-run climate ensemble, used as the
+# background climate for every obstacle/passability combination.  Each entry is
+# a scenario x GCM pair; the per-GCM daily files are read directly.
+climate_models = [
+    { scenario = "ssp126", gcm = "IITM-ESM" },     # coolest run (0.28 degC by 2045)
+    { scenario = "ssp245", gcm = "UKESM1-0-LL" },  # warmest run (1.37 degC by 2045)
+]
+
+# ---------------------------------------------------------------------------
+# Obstacle / upstream-cost sweep (run_sensitivity_report.jl).
+#
+# Sweeps the upstream dispersal cost x passability scenario under each of the
+# `obstacle_sensitivity.climate_models` above.  No exploitation is applied.
+# ---------------------------------------------------------------------------
+
 [run_sensitivity_report]
-simulation_years = 3
-temperature_increases = [0.0, 1.0, 2.0, 3.0]
 upstream_costs = [0.01, 0.05, 0.1, 0.5]
 passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
-report_years = [1, 2, 3]
+
+# ---------------------------------------------------------------------------
+# Alternative-interaction sweep (run_alt_interactions.jl).
+#
+# Adds the interaction-matrix and thermal-sigma uncertainty axes on top of the
+# same obstacle/upstream-cost sweep, so it answers "is the passability signal
+# robust to the interaction structure / thermal breadth?".
+# ---------------------------------------------------------------------------
 
 [run_alt_interactions]
-simulation_years = 3
 thermal_sigma_multiplier = 0.3
-temperature_increases = [0.0, 4.0, 8.0, 12.0]
 upstream_costs = [0.01, 0.5]
 passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
-report_years = [1, 2, 3]
 
 # ---------------------------------------------------------------------------
 # Climate-driven runs (run_climate_scenarios.jl).

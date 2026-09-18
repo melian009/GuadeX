@@ -201,6 +201,54 @@ function set_heat_stress_rate(params::MetacommunityParams, k::Real)
 end
 
 """
+    set_dispersal_matrix(params, matrix)
+
+Return a copy of `params` with the precomputed dispersal matrix replaced.  Used
+by the obstacle/passability sweeps, where the dispersal network is rebuilt for
+each scenario while every other parameter (including the empirical thermal
+limits and heat-stress slope) is preserved.
+"""
+function set_dispersal_matrix(params::MetacommunityParams, matrix)
+    return MetacommunityParams(
+        params.n_sites, params.n_species, params.interaction_matrix,
+        matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
+        params.temperatures, params.habitat_suitability, params.thermal_optima,
+        params.thermal_sigmas, params.carrying_capacity,
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+end
+
+"""
+    set_interaction_matrix(params, matrix)
+
+Return a copy of `params` with the species interaction matrix replaced (used by
+the alternative-interaction sensitivity).
+"""
+function set_interaction_matrix(params::MetacommunityParams, matrix)
+    return MetacommunityParams(
+        params.n_sites, params.n_species, matrix,
+        params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
+        params.temperatures, params.habitat_suitability, params.thermal_optima,
+        params.thermal_sigmas, params.carrying_capacity,
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+end
+
+"""
+    set_thermal_sigma_multiplier(params, factor)
+
+Return a copy of `params` with every species' thermal tolerance scaled by
+`factor` (narrowing sigma sharpens the thermal filter).
+"""
+function set_thermal_sigma_multiplier(params::MetacommunityParams, factor::Real)
+    factor > 0 || error("thermal sigma multiplier must be > 0")
+    return MetacommunityParams(
+        params.n_sites, params.n_species, params.interaction_matrix,
+        params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
+        params.temperatures, params.habitat_suitability, params.thermal_optima,
+        params.thermal_sigmas .* Float64(factor), params.carrying_capacity,
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+end
+
+"""
     with_temperature_baseline(params, temperatures)
 
 Return a copy of `params` whose baseline site temperatures are replaced (used to

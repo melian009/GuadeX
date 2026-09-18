@@ -1,39 +1,38 @@
-using Pkg; Pkg.activate(".");
+using Pkg; Pkg.activate(".")
 using DifferentialEquations
 using DataFrames
 using CSV
 using SparseArrays
 using LinearAlgebra
 using JLD2
-using Guadex
-using Random
 using Dates
+using Random
+using Guadex
 
 # =============================================================================
-# Sensitivity sweep with alternative interaction matrices
+# --- Alternative-interaction obstacle sensitivity ---
 #
-# Tests three interaction matrices:
-#   1. "original"     — the empirical Guadalquivir interaction matrix (control)
-#   2. "random"       — fully random negative interactions
-#   3. "invasive_favoring" — invasives suppress natives, natives have no effect on invasives
+# Extends `run_sensitivity_report.jl` with a robustness axis: the interaction
+# matrix (empirical, random, invasive-favouring) and a thermal-sigma multiplier,
+# on top of the same upstream-cost x passability sweep.  The climate background,
+# daily forcing, seasonal burn-in, heat stress, K convention and species
+# classification are shared with the climate scenarios.
 #
-# Results are saved under results/sensitivity_alt_interactions/
+# Settings come from `[obstacle_sensitivity]` and `[run_alt_interactions]` in
+# parameters.toml.
 # =============================================================================
 
-# --- Load run parameters (single source of truth: parameters.toml) ---
 const _GUADEX_ROOT = isfile(joinpath(@__DIR__, "parameters.jl")) ? (@__DIR__) : dirname(@__DIR__)
 include(joinpath(_GUADEX_ROOT, "parameters.jl"))
+include(joinpath(_GUADEX_ROOT, "sensitivity_core.jl"))
 using .SimulationParameters
 const GUADEX_PARAMS = SimulationParameters.load()
-SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obstacles", "species", "subcatchments", "scenarios", "run_alt_interactions")
+SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obstacles",
+    "species", "subcatchments", "scenarios", "obstacle_sensitivity", "run_alt_interactions")
 
-const DAYS_PER_YEAR = Int(GUADEX_PARAMS["general"]["days_per_year"])
-const SIMULATION_YEARS = Int(GUADEX_PARAMS["run_alt_interactions"]["simulation_years"])
-const T_SPAN = (0.0, Float64(SIMULATION_YEARS * DAYS_PER_YEAR))
+const SETTINGS = load_sensitivity_settings(GUADEX_PARAMS)
+const THERMAL_SIGMA_MULTIPLIER = Float64(GUADEX_PARAMS["run_alt_interactions"]["thermal_sigma_multiplier"])
 
-# Updated 2045 inputs.  CEDEX tables are loaded for provenance; the obstacle
-# overlay is the configured network update used by this simulation.  Each value
-# can be overridden per run via its GUADEX_* environment variable.
 const CEDEX_VAR_FILE = get(ENV, "GUADEX_CEDEX_VAR_FILE", GUADEX_PARAMS["inputs"]["cedex_var_file"])
 const CEDEX_UTS_FILE = get(ENV, "GUADEX_CEDEX_UTS_FILE", GUADEX_PARAMS["inputs"]["cedex_esc_uts_file"])
 const OBSTACLES_FILE = get(ENV, "GUADEX_OBSTACLES_FILE", GUADEX_PARAMS["inputs"]["obstacles_file"])
@@ -42,36 +41,43 @@ const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOL
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
 
-const THERMAL_SIGMA_MULTIPLIER = Float64(GUADEX_PARAMS["run_alt_interactions"]["thermal_sigma_multiplier"])
-
 const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
 const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
+const MIGRATORY_SPECIES = String.(get(GUADEX_PARAMS["species"], "migratory", String[]))
 
 all_subcatchments = SimulationParameters.float_vector(GUADEX_PARAMS["subcatchments"]["all"])
 
-# --- Parameter Grid (read from the [run_alt_interactions] section of parameters.toml) ---
-temperature_increases = SimulationParameters.float_vector(GUADEX_PARAMS["run_alt_interactions"]["temperature_increases"])
-upstream_costs = SimulationParameters.float_vector(GUADEX_PARAMS["run_alt_interactions"]["upstream_costs"])
-passability_scenarios = SimulationParameters.scenario_library(
-    all_subcatchments, GUADEX_PARAMS["scenarios"]["passability"], GUADEX_PARAMS["run_alt_interactions"]["passability_scenarios"])
-report_years = Int.(SimulationParameters.float_vector(GUADEX_PARAMS["run_alt_interactions"]["report_years"]))
+const UPSTREAM_COSTS = SimulationParameters.float_vector(GUADEX_PARAMS["run_alt_interactions"]["upstream_costs"])
+const PASSABILITY_NAMES = String.(GUADEX_PARAMS["run_alt_interactions"]["passability_scenarios"])
+const PASSABILITY_SCENARIOS = SimulationParameters.scenario_library(
+    all_subcatchments, GUADEX_PARAMS["scenarios"]["passability"], PASSABILITY_NAMES)
+const CLIMATE_MODELS = parse_climate_models(get(ENV, "GUADEX_SENSITIVITY_CLIMATE_MODELS",
+    GUADEX_PARAMS["obstacle_sensitivity"]["climate_models"]))
+const MAX_RUNS = parse(Int, get(ENV, "GUADEX_SENSITIVITY_MAX_RUNS", "0"))
+const FORCE_RERUN = lowercase(get(ENV, "GUADEX_SENSITIVITY_FORCE", "0")) in ("1", "true", "yes")
 
-# Stop before data loading when GUADEX_CONFIG_ONLY=1 (configuration smoke test).
 if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
     println("[parameters] configuration smoke test passed")
+    println("  horizon:         $(SETTINGS.start_year)-$(SETTINGS.end_year) ($(SETTINGS.simulation_years) yr, daily)")
+    println("  climate models:  $(join([climate_model_tag(m) for m in CLIMATE_MODELS], ", "))")
+    println("  upstream costs:  $(join(UPSTREAM_COSTS, ", "))")
+    println("  passability:     $(join(PASSABILITY_NAMES, ", "))")
+    println("  sigma multiplier: $(THERMAL_SIGMA_MULTIPLIER)")
+    println("  forcing file:    $(SETTINGS.daily_forcing_file)")
+    println("  heat stress:     enabled=$(SETTINGS.heat_stress_enabled) calibrate=$(SETTINGS.heat_stress_calibrate)")
+    println("  burn-in:         max $(SETTINGS.spin_up_max_years) yr, tol=$(SETTINGS.spin_up_tol), criterion=:$(SETTINGS.spin_up_criterion)")
     exit(0)
 end
 
 # =============================================================================
-# --- Alternative Interaction Matrix Generators ---
+# --- Alternative interaction matrices ---
 # =============================================================================
 
 """
     make_random_interaction_matrix(n_species, val_range)
 
-Fill every off-diagonal cell with a random negative value in [-val_range, 0].
-Diagonal is zero (self-interaction handled by logistic carrying capacity).
-Uses a fixed seed for reproducibility.
+Every off-diagonal cell gets a random negative value in `[-val_range, 0]`;
+fixed seed for reproducibility.
 """
 function make_random_interaction_matrix(n_species::Int, val_range::Float64=1.0)
     Random.seed!(42)
@@ -86,302 +92,253 @@ end
 """
     make_invasive_favoring_matrix(n_species, native_idx, invasive_idx)
 
-Creates an interaction matrix where:
-- Invasives exert strong suppression on natives (−0.8)
-- Natives exert zero effect on invasives (0.0)
-- Invasives compete moderately with each other (−0.3)
-- Natives compete weakly with each other (−0.1)
-- Unclassified species (neither native nor invasive) are neutral (0.0)
-- Diagonal is zero.
+Invasives suppress natives (-0.8), natives have no effect on invasives (0.0),
+invasives compete moderately (-0.3) and natives weakly (-0.1); unclassified
+species are neutral.
 """
 function make_invasive_favoring_matrix(n_species::Int, native_idx::Vector{Int}, invasive_idx::Vector{Int})
     mat = zeros(n_species, n_species)
-
-    for inv in invasive_idx
-        for nat in native_idx
-            mat[nat, inv] = -0.8
-        end
+    for inv in invasive_idx, nat in native_idx
+        mat[nat, inv] = -0.8
     end
-
-    for inv in invasive_idx
-        for inv2 in invasive_idx
-            inv == inv2 && continue
-            mat[inv2, inv] = -0.3
-        end
+    for inv in invasive_idx, inv2 in invasive_idx
+        inv == inv2 && continue
+        mat[inv2, inv] = -0.3
     end
-
-    for nat in native_idx
-        for nat2 in native_idx
-            nat == nat2 && continue
-            mat[nat2, nat] = -0.1
-        end
+    for nat in native_idx, nat2 in native_idx
+        nat == nat2 && continue
+        mat[nat2, nat] = -0.1
     end
-
     return mat
 end
 
-# =============================================================================
-# --- Helper Functions (from run_sensitivity_report.jl) ---
-# =============================================================================
-
-function build_dam_passability_vector(site_df, sites; passability_per_subcatchment::Dict{Float64, Float64}=Dict{Float64, Float64}())
-    n_sites = length(sites)
-    passability_vector = ones(n_sites)
-    site_to_sc = Dict(row.CODIGO => row.CODIGO_S for row in eachrow(site_df))
-    for (i, site) in enumerate(sites)
-        if haskey(site_to_sc, site) && haskey(passability_per_subcatchment, site_to_sc[site])
-            passability_vector[i] = passability_per_subcatchment[site_to_sc[site]]
-        end
-    end
-    return passability_vector
-end
-
-function classify_species_indices(all_species, target_group)
-    return [findfirst(==(sp), all_species) for sp in target_group if sp in all_species]
-end
-
-function run_single_simulation(data_base, temp_increase, upstream_cost, passability_dict;
-    simulation_years=SIMULATION_YEARS, interaction_matrix=nothing,
-    thermal_sigma_multiplier=THERMAL_SIGMA_MULTIPLIER)
-
-    t_span = (0.0, Float64(simulation_years * DAYS_PER_YEAR))
-
-    int_mat = interaction_matrix !== nothing ? copy(interaction_matrix) : copy(data_base.params.interaction_matrix)
-
-    params_copy = MetacommunityParams(
-        data_base.params.n_sites,
-        data_base.params.n_species,
-        int_mat,
-        copy(data_base.params.dispersal_matrix),
-        copy(data_base.params.dispersal_scaling),
-        copy(data_base.params.intrinsic_growth_rates),
-        copy(data_base.params.temperatures) .+ temp_increase,
-        copy(data_base.params.habitat_suitability),
-        copy(data_base.params.thermal_optima),
-        copy(data_base.params.thermal_sigmas) .* thermal_sigma_multiplier,
-        copy(data_base.params.carrying_capacity)
-    )
-
-    passability_vector = build_dam_passability_vector(data_base.site_df, data_base.sites;
-        passability_per_subcatchment=passability_dict)
-
-    modified_dams = copy(data_base.dams)
-    for j in 1:params_copy.n_sites
-        for i in 1:params_copy.n_sites
-            if i != j && modified_dams[i, j] < 1.0
-                modified_dams[i, j] *= passability_vector[j]
-                modified_dams[i, j] = min(1.0, modified_dams[i, j])
-            end
-        end
-    end
-
-    new_dispersal_matrix = precompute_dispersal_matrix(
-        params_copy.n_sites,
-        Matrix(data_base.distance_matrix),
-        data_base.elevations,
-        upstream_cost,
-        modified_dams,
-        data_base.species
-    )
-
-    params_final = MetacommunityParams(
-        params_copy.n_sites,
-        params_copy.n_species,
-        params_copy.interaction_matrix,
-        new_dispersal_matrix,
-        params_copy.dispersal_scaling,
-        params_copy.intrinsic_growth_rates,
-        params_copy.temperatures,
-        params_copy.habitat_suitability,
-        params_copy.thermal_optima,
-        params_copy.thermal_sigmas,
-        params_copy.carrying_capacity
-    )
-
-    density_cols = [Symbol("$(sp)_DEN") for sp in data_base.species]
-    density_df_filtered = filter(row -> row.CODIGO in data_base.sites, data_base.density_df)
-    u0 = Matrix(density_df_filtered[:, density_cols])
-    replace!(u0, NaN => 0.0)
-    u0 = max.(u0, 0.0)
-    u0_flat = vec(u0)
-
-    prob = ODEProblem(metacommunity_ode!, u0_flat, t_span, params_final)
-
-    function positivity_condition(u, t, integrator)
-        any(x -> x < 0, u)
-    end
-    function positivity_affect!(integrator)
-        integrator.u .= max.(integrator.u, 0.0)
-    end
-    positivity_cb = DiscreteCallback(positivity_condition, positivity_affect!; save_positions=(false, true))
-
-    sol = solve(prob, Tsit5(), reltol=1e-6, abstol=1e-6, saveat=0:1.0:t_span[2], callback=positivity_cb)
-
-    return sol, passability_vector, modified_dams
-end
+println("="^70)
+println("Alternative-interaction obstacle sensitivity (daily forcing + burn-in)")
+println("  horizon:        $(SETTINGS.start_year)-$(SETTINGS.end_year)")
+println("  climate models: $(join([climate_model_tag(m) for m in CLIMATE_MODELS], ", "))")
+println("  sigma multiplier: $(THERMAL_SIGMA_MULTIPLIER)")
+println("="^70)
 
 # =============================================================================
-# --- Main Sweep Loop ---
+# --- Base data, burn-in per interaction matrix ---
 # =============================================================================
-
-thermal_sigma_multiplier = THERMAL_SIGMA_MULTIPLIER
-i = 1
-while i <= length(ARGS)
-    arg = ARGS[i]
-    if arg in ("--sigma", "-s")
-        i += 1
-        if i > length(ARGS); error("--sigma requires a value"); end
-        thermal_sigma_multiplier = parse(Float64, ARGS[i])
-    elseif startswith(arg, "--sigma=")
-        thermal_sigma_multiplier = parse(Float64, arg[9:end])
-    elseif arg in ("--help", "-h")
-        println("Usage: julia --project=. run_alt_interactions.jl [options]")
-        println()
-        println("Options:")
-        println("  --sigma, -s VALUE    Thermal sigma multiplier (default: $THERMAL_SIGMA_MULTIPLIER)")
-        println("  --help, -h           Show this help")
-        exit(0)
-    else
-        error("Unknown argument: $arg (use --help for usage)")
-    end
-    i += 1
-end
-
-println("="^60)
-println("Alternative Interaction Matrix Sensitivity Analysis")
-println("="^60)
-
-base_output_dir = "results/sensitivity_alt_interactions_$(Dates.format(Dates.now(), "yyyy-mm-dd_HHMMSS"))_temp=$(join(temperature_increases, "-"))_uc=$(join(upstream_costs, "-"))_sigma=$(thermal_sigma_multiplier)"
-mkpath(base_output_dir)
-
-println("\nSettings: sigma_multiplier = $(thermal_sigma_multiplier)")
-println()
 
 println("\nLoading base data (once)...")
 data_base = prepare_ode_data(
-    upstream_cost = 0.05,
+    upstream_cost = SETTINGS.upstream_cost_default,
     cedex_var_file = CEDEX_VAR_FILE,
     cedex_esc_uts_file = CEDEX_UTS_FILE,
     obstacles_file = OBSTACLES_FILE,
     obstacle_mode = OBSTACLE_MODE,
     obstacle_matching_tolerance = OBSTACLE_MATCHING_TOLERANCE,
     obstacle_passability = OBSTACLE_PASSABILITY,
-    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY
+    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY,
+    carrying_capacity_base_scaling = SETTINGS.carrying_capacity_base_scaling,
+    carrying_capacity_scaling = SETTINGS.carrying_capacity_scaling
 )
+
+n_sites = data_base.params.n_sites
+n_species = data_base.params.n_species
+
+base_params = data_base.params
+if SETTINGS.thermal_optima_fraction != 0.5
+    optima = optimum_sweep_optima(data_base.species_chars_df, data_base.species;
+        fraction=SETTINGS.thermal_optima_fraction)
+    base_params = set_thermal_optima(base_params, optima)
+end
+
+density_cols = [Symbol("$(sp)_DEN") for sp in data_base.species]
+density_df_filtered = filter(row -> row.CODIGO in data_base.sites, data_base.density_df)
+u0_obs = Matrix(density_df_filtered[:, density_cols])
+replace!(u0_obs, NaN => 0.0)
+u0_obs = max.(u0_obs, 0.0)
+
+println("\nLoading baseline daily forcing ($(SETTINGS.daily_forcing_file))...")
+baseline_dates, baseline_temps = load_baseline_forcing(SETTINGS.daily_forcing_file, data_base.sites)
+println("  baseline series: $(length(baseline_dates)) days " *
+        "($(SETTINGS.baseline_period_start)-$(SETTINGS.baseline_period_end))")
+
+k_heat = resolve_heat_stress_rate(SETTINGS, base_params.thermal_upper_limits, baseline_temps)
+println("Heat-stress mortality: $(k_heat > 0 ? "k=$k_heat" : "disabled")")
 
 native_idx = classify_species_indices(data_base.species, NATIVE_SPECIES)
 invasive_idx = classify_species_indices(data_base.species, INVASIVE_SPECIES)
 
-# Build alternative matrices
-n_species = data_base.params.n_species
-original_interaction = data_base.params.interaction_matrix
+original_interaction = base_params.interaction_matrix
+matrices = [
+    (name="original", matrix=original_interaction),
+    (name="random", matrix=make_random_interaction_matrix(n_species, abs(minimum(original_interaction)))),
+    (name="invasive_favoring", matrix=make_invasive_favoring_matrix(n_species, native_idx, invasive_idx)),
+]
 
-random_interaction = make_random_interaction_matrix(n_species, abs(minimum(original_interaction)))
-invasive_fav_interaction = make_invasive_favoring_matrix(n_species, native_idx, invasive_idx)
-
-matrices = Dict{String, Matrix{Float64}}(
-    "original"          => original_interaction,
-    "random"            => random_interaction,
-    "invasive_favoring" => invasive_fav_interaction,
-)
-
-total_runs = length(temperature_increases) * length(upstream_costs) * length(passability_scenarios) * length(matrices)
-current_run = 0
-
-for (matrix_name, matrix) in matrices
-    for dt in temperature_increases
-        for uc in upstream_costs
-            for (pass_name, pass_dict) in passability_scenarios
-                global current_run += 1
-                run_label = "$(matrix_name)_dT=$(dt)C_uc=$(uc)_pass=$(pass_name)"
-                println("\n[$current_run/$total_runs] Running: $run_label")
-
-                run_dir = joinpath(base_output_dir, matrix_name, "dT_$(dt)C", "uc_$(uc)", pass_name)
-                mkpath(run_dir)
-
-                sol, pass_vec, modified_dams = run_single_simulation(
-                    data_base, dt, uc, pass_dict;
-                    interaction_matrix=matrix,
-                    thermal_sigma_multiplier=thermal_sigma_multiplier
-                )
-
-                output_jld2 = joinpath(run_dir, "simulation_output.jld2")
-                jldsave(output_jld2;
-                    sol_t=sol.t,
-                    sol_u=sol.u,
-                    sites=data_base.sites,
-                    species=data_base.species,
-                    temperature_increase=dt,
-                    upstream_cost=uc,
-                    simulation_years=SIMULATION_YEARS,
-                    passability_scenario=pass_name,
-                    passability_vector=pass_vec,
-                    interaction_matrix_type=matrix_name,
-                    thermal_sigma_multiplier=thermal_sigma_multiplier,
-                    cedex_var_file=CEDEX_VAR_FILE,
-                    cedex_uts_file=CEDEX_UTS_FILE,
-                    obstacles_file=OBSTACLES_FILE,
-                    obstacle_mode=string(OBSTACLE_MODE),
-                    obstacle_matching_tolerance_m=OBSTACLE_MATCHING_TOLERANCE,
-                    obstacle_passability=OBSTACLE_PASSABILITY,
-                    obstacle_downstream_passability=OBSTACLE_DOWNSTREAM_PASSABILITY,
-                    obstacle_matched_count=count(data_base.obstacle_mapping_diagnostics.matched),
-                    obstacle_total_count=nrow(data_base.obstacle_mapping_diagnostics)
-                )
-
-                fig_biomass = plot_avg_total_biomass(sol, data_base.sites, data_base.species)
-                save_figure(fig_biomass, joinpath(run_dir, "avg_total_biomass.png"))
-
-                fig_richness = plot_avg_species_richness(sol, data_base.sites, data_base.species)
-                save_figure(fig_richness, joinpath(run_dir, "avg_species_richness.png"))
-
-                fig_combined = plot_combined_analysis(sol, data_base.site_df, data_base.sites, data_base.species, data_base.distance_matrix)
-                save_figure(fig_combined, joinpath(run_dir, "combined_analysis.png"))
-
-                plot_richness_change_per_site(sol, data_base.species, data_base.sites, data_base.site_df,
-                    native_idx, invasive_idx, report_years,
-                    joinpath(run_dir, "richness_change_per_site.png"); days_per_year=DAYS_PER_YEAR)
-
-                plot_richness_change_per_subcatchment(sol, data_base.species, data_base.sites, data_base.site_df,
-                    native_idx, invasive_idx, report_years,
-                    joinpath(run_dir, "richness_change_per_subcatchment.png"); days_per_year=DAYS_PER_YEAR)
-
-                plot_richness_timeseries_grid(sol, data_base.species, data_base.sites, data_base.site_df,
-                    native_idx, invasive_idx, data_base.params.n_sites, data_base.params.n_species,
-                    joinpath(run_dir, "richness_timeseries_grid.png"); days_per_year=DAYS_PER_YEAR)
-
-                export_run_outputs(joinpath(run_dir, "export");
-                    sol_t = sol.t,
-                    sol_u = sol.u,
-                    sites = data_base.sites,
-                    species = data_base.species,
-                    site_df = data_base.site_df,
-                    crosswalk_path = joinpath(_GUADEX_ROOT, "data", "site_waterbody_crosswalk.csv"),
-                    native_species = NATIVE_SPECIES,
-                    invasive_species = INVASIVE_SPECIES,
-                    days_per_year = DAYS_PER_YEAR,
-                    temperature_baseline = data_base.params.temperatures .+ dt,
-                    warming = nothing,
-                    dams = modified_dams,
-                    distance_matrix = data_base.distance_matrix,
-                    habitat_suitability = data_base.params.habitat_suitability,
-                    upstream_cost = uc,
-                    run_metadata = Dict(
-                        "script" => "run_alt_interactions.jl",
-                        "temperature_increase" => dt,
-                        "upstream_cost" => uc,
-                        "passability_scenario" => pass_name,
-                        "interaction_matrix_type" => matrix_name,
-                        "thermal_sigma_multiplier" => thermal_sigma_multiplier,
-                        "simulation_years" => SIMULATION_YEARS,
-                        "obstacle_mode" => string(OBSTACLE_MODE)))
-
-                println("  Saved to: $run_dir")
-            end
-        end
+# One burn-in per interaction matrix + sigma: the equilibrium composition
+# depends on the interaction structure, so every matrix is started from its own
+# baseline equilibrium.
+matrix_states = Dict{String,Any}()
+for entry in matrices
+    p = set_heat_stress_rate(set_interaction_matrix(base_params, entry.matrix), k_heat)
+    if THERMAL_SIGMA_MULTIPLIER != 1.0
+        p = set_thermal_sigma_multiplier(p, THERMAL_SIGMA_MULTIPLIER)
     end
+    tag = "alt_$(entry.name)_sig$(THERMAL_SIGMA_MULTIPLIER)"
+    spinup_extra = "mode=$(OBSTACLE_MODE)_tol=$(OBSTACLE_MATCHING_TOLERANCE)_" *
+        "pass=$(OBSTACLE_PASSABILITY)_down=$(OBSTACLE_DOWNSTREAM_PASSABILITY)_" *
+        "obs=$(basename(OBSTACLES_FILE))_matrix=$(entry.name)_sig=$(THERMAL_SIGMA_MULTIPLIER)"
+    spin = if SETTINGS.spin_up
+        get_or_compute_spinup(SETTINGS, p, vec(u0_obs), baseline_temps, baseline_dates;
+            tag=tag, extra=spinup_extra)
+    else
+        println("Burn-in disabled ([obstacle_sensitivity].spin_up = false) for " *
+                "matrix $(entry.name); starting from observed densities")
+        observed_initial_state(u0_obs)
+    end
+    matrix_states[entry.name] = (params=p, spin=spin,
+        baseline_species_density=reshape(spin.state, n_sites, n_species))
 end
 
-println("\n" * "="^60)
-println("Alternative interaction sweep complete. $total_runs runs saved to '$base_output_dir'")
-println("="^60)
+# The forcing depends only on (scenario, gcm), so load each per-GCM series once
+# and reuse it across all interaction matrices.
+forcing_by_model = Dict{String,Any}()
+warming_end_by_model = Dict{String,Float64}()
+for model in CLIMATE_MODELS
+    model_tag = climate_model_tag(model)
+    forcing = load_climate_model_forcing(SETTINGS.daily_forcing_file, data_base.sites,
+        model.scenario, model.gcm;
+        baseline_start=SETTINGS.baseline_period_start,
+        baseline_end=SETTINGS.baseline_period_end,
+        days_per_year=SETTINGS.days_per_year,
+        year_labels=SETTINGS.year_labels)
+    forcing_by_model[model_tag] = forcing
+    warming_end_by_model[model_tag] = maximum(forcing.warming[:, end])
+    println("  loaded daily forcing for $model_tag (" *
+            "$(round(warming_end_by_model[model_tag], digits=3)) degC by $(SETTINGS.end_year))")
+end
+
+saveat = sensitivity_saveat(SETTINGS)
+positivity_cb = sensitivity_positivity_callback()
+
+# =============================================================================
+# --- Main sweep ---
+# =============================================================================
+
+base_output_dir = get(ENV, "GUADEX_ALT_OUTPUT_DIR",
+    joinpath(SETTINGS.output_dir, "alt_interactions"))
+mkpath(base_output_dir)
+index_path = joinpath(base_output_dir, "runs_index.csv")
+index_df = read_sensitivity_index(index_path; with_matrix=true)
+
+total_runs = length(matrices) * length(CLIMATE_MODELS) * length(UPSTREAM_COSTS) * length(PASSABILITY_NAMES)
+current_run = 0
+started = time()
+
+for entry in matrices
+    matrix_name = entry.name
+    state = matrix_states[matrix_name]
+    params = state.params
+    spin = state.spin
+    baseline_species_density = state.baseline_species_density
+
+    println("\n" * "="^70)
+    println("Interaction matrix: $matrix_name (sigma x $(THERMAL_SIGMA_MULTIPLIER))")
+    println("="^70)
+
+    for model in CLIMATE_MODELS
+        model_tag = climate_model_tag(model)
+        println("\n" * "-"^70)
+        println("Climate model: $(model.scenario) / $(model.gcm)  [$matrix_name]")
+        println("-"^70)
+
+        forcing = forcing_by_model[model_tag]
+        warming_end = warming_end_by_model[model_tag]
+        println("  warming by $(SETTINGS.end_year): $(round(warming_end, digits=3)) degC")
+
+        for uc in UPSTREAM_COSTS
+            for pass_name in PASSABILITY_NAMES
+                global current_run += 1
+                if MAX_RUNS > 0 && current_run > MAX_RUNS
+                    println("[cap] GUADEX_SENSITIVITY_MAX_RUNS=$MAX_RUNS reached; stopping")
+                    current_run = MAX_RUNS
+                    break
+                end
+
+                run_dir = joinpath(base_output_dir, matrix_name,
+                    "sig_$(THERMAL_SIGMA_MULTIPLIER)", model_tag, "uc_$(uc)", pass_name)
+                println("\n[$current_run/$total_runs] $matrix_name $model_tag uc=$(uc) pass=$(pass_name)")
+
+                fingerprint = sensitivity_run_fingerprint(SETTINGS, model;
+                    upstream_cost=uc, passability_scenario=pass_name,
+                    interaction_matrix=matrix_name, sigma=THERMAL_SIGMA_MULTIPLIER)
+
+                if !FORCE_RERUN && sensitivity_run_status(run_dir, fingerprint)
+                    println("  skipped (complete and fingerprint matches; " *
+                            "GUADEX_SENSITIVITY_FORCE=1 to rerun)")
+                else
+                    mkpath(run_dir)
+                    passability_vector = build_dam_passability_vector(data_base.site_df, data_base.sites;
+                        passability_per_subcatchment=PASSABILITY_SCENARIOS[pass_name])
+                    sol, modified_dams, scenario_params = run_sensitivity_scenario(
+                        data_base, params, forcing.schedule, spin.state, uc, passability_vector;
+                        settings=SETTINGS, saveat=saveat, positivity_cb=positivity_cb)
+
+                    jldsave(joinpath(run_dir, "simulation_output.jld2");
+                        sol_t=sol.t, sol_u=sol.u,
+                        sites=data_base.sites, species=data_base.species,
+                        climate_scenario=model.scenario, gcm=model.gcm,
+                        interaction_matrix_type=matrix_name,
+                        thermal_sigma_multiplier=THERMAL_SIGMA_MULTIPLIER,
+                        start_year=SETTINGS.start_year, end_year=SETTINGS.end_year,
+                        upstream_cost=uc, passability_scenario=pass_name,
+                        passability_vector=passability_vector,
+                        simulation_years=SETTINGS.simulation_years,
+                        warming_end_degc=warming_end,
+                        temperature_baseline=params.temperatures, warming=forcing.warming,
+                        heat_stress_k=k_heat,
+                        spin_up=SETTINGS.spin_up, spin_up_years=spin.years, spin_up_converged=spin.converged,
+                        carrying_capacity_base_scaling=SETTINGS.carrying_capacity_base_scaling,
+                        carrying_capacity_scaling=SETTINGS.carrying_capacity_scaling,
+                        thermal_optima_fraction=SETTINGS.thermal_optima_fraction,
+                        cedex_var_file=CEDEX_VAR_FILE, cedex_uts_file=CEDEX_UTS_FILE,
+                        obstacles_file=OBSTACLES_FILE, obstacle_mode=string(OBSTACLE_MODE),
+                        obstacle_matching_tolerance_m=OBSTACLE_MATCHING_TOLERANCE,
+                        obstacle_passability=OBSTACLE_PASSABILITY,
+                        obstacle_downstream_passability=OBSTACLE_DOWNSTREAM_PASSABILITY,
+                        obstacle_matched_count=count(data_base.obstacle_mapping_diagnostics.matched),
+                        obstacle_total_count=nrow(data_base.obstacle_mapping_diagnostics))
+
+                    export_sensitivity_run(run_dir;
+                        data_base=data_base, sol=sol, params=scenario_params, forcing=forcing,
+                        settings=SETTINGS, dams=modified_dams, upstream_cost=uc,
+                        baseline_species_density=baseline_species_density,
+                        native_species=NATIVE_SPECIES, invasive_species=INVASIVE_SPECIES,
+                        migratory_species=MIGRATORY_SPECIES,
+                        run_metadata=sensitivity_run_metadata(SETTINGS, model;
+                            script="run_alt_interactions.jl",
+                            upstream_cost=uc, passability_scenario=pass_name,
+                            warming_end=warming_end, heat_stress_k=k_heat,
+                            spin_years=spin.years, spin_converged=spin.converged,
+                            obstacle_mode=OBSTACLE_MODE,
+                            extras=Dict{String,Any}(
+                                "interaction_matrix_type" => matrix_name,
+                                "thermal_sigma_multiplier" => THERMAL_SIGMA_MULTIPLIER)))
+                    mark_sensitivity_run_complete(run_dir, fingerprint)
+                    println("  saved to: $run_dir")
+                end
+
+                row = index_row_values(run_dir, SETTINGS, model;
+                    upstream_cost=uc, passability_scenario=pass_name, warming_end=warming_end,
+                    matrix=matrix_name, sigma=THERMAL_SIGMA_MULTIPLIER)
+                upsert_index_row!(index_df, row)
+                CSV.write(index_path, index_df)
+            end
+            MAX_RUNS > 0 && current_run >= MAX_RUNS && break
+        end
+        MAX_RUNS > 0 && current_run >= MAX_RUNS && break
+    end
+    MAX_RUNS > 0 && current_run >= MAX_RUNS && break
+end
+
+elapsed = round(time() - started, digits=1)
+println("\n" * "="^70)
+println("Alternative-interaction sensitivity complete: $(nrow(index_df)) run(s) under '$base_output_dir' in $(elapsed)s")
+println("Run index: $index_path")
+println("="^70)

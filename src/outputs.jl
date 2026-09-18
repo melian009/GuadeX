@@ -45,7 +45,13 @@ _json_escape(s::AbstractString) = replace(String(s), "\\" => "\\\\", "\"" => "\\
 
 function _json_number(x::Real)
     if isfinite(x)
-        return isinteger(x) ? string(Int(x)) : string(Float64(x))
+        xf = Float64(x)
+        # Only collapse to an integer when the conversion is exact and safe:
+        # |x| <= 2^53 is exactly representable and far below typemax(Int64), so a
+        # ratio that has blown up (e.g. division by a near-zero burn-in baseline)
+        # is written as a JSON float instead of throwing InexactError.
+        return (isinteger(xf) && abs(xf) <= 9.007199254740992e15) ?
+            string(Int(xf)) : string(xf)
     end
     return "null"
 end

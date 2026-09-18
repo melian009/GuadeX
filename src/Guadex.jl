@@ -33,6 +33,7 @@ export exposure_days, exposure_table
 
 # Export equilibrium spin-up and K sensitivity (WP4)
 export spin_up, scale_carrying_capacity, set_thermal_optima, set_heat_stress_rate
+export set_dispersal_matrix, set_interaction_matrix, set_thermal_sigma_multiplier
 export with_temperature_baseline, site_totals
 
 # Export four-level reporting / viewer output functions

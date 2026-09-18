@@ -302,3 +302,14 @@ end
     @test r2.native_quasi_extinct == 1
     @test r2.native_quasi_extinct_fraction ≈ 1.0
 end
+
+@testset "JSON number serialisation" begin
+    @test Guadex._json_number(3.0) == "3"
+    @test Guadex._json_number(3.5) == "3.5"
+    @test Guadex._json_number(Inf) == "null"
+    @test Guadex._json_number(NaN) == "null"
+    # A relative metric divided by a near-zero burn-in baseline can be huge;
+    # serialisation must emit a JSON float rather than throw InexactError.
+    @test Guadex._json_number(5.3e164) == string(5.3e164)
+    @test Guadex._json_number(2.0^60) == string(2.0^60)
+end
