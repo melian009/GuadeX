@@ -1,0 +1,832 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{tabularx}
+
+% Define custom gray for neutral/zero values to clean up visual clutter
+\definecolor{neutralgray}{gray}{0.65}
+\newcommand{\zero}{\textcolor{neutralgray}{0.0}}
+\newcommand{\diag}{\cdot}
+
+
+%\usepackage{natbib}
+
+
+\geometry{margin=2.5cm}
+
+\title{\textbf{Extinction Risk Dynamics in Mediterranean River Basin Fish Metacommunities: \\A Case Study of the Guadalquivir River Basin \\ 
+\vspace{0.2 in}
+Numerical analysis \& Robustness evaluation
+\\
+Summary May 2026}}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\newpage
+
+\tableofcontents
+\printindex
+
+\newpage
+
+\section{Abstract}
+We develop a framework to study extinction dynamics on 3D Dendritic Ecological Networks (DENs). Riverine networks are hierarchical and branching, which constrains movement and creates spatial dependencies based on a site’s position (headwater vs. mainstream). The research integrates the four primary paradigms in metacommunity theory: patch dynamics, species sorting, mass effects, and neutral theory, to decipher how colonization, environmental and biotic filtering, and dispersal determine community composition of native and exotic species under warming, fragmentation and nutrient loads. The Guadalquivir Basin is a global biodiversity hotspot with high levels of endemism (approx. 80$\%$ among Iberian freshwater fish). It is currently in a state of biological transition driven by a synergy between biotic homogenization (where the native-to-exotic ratio is nearly 1:1 and 50$\%$ to 85$\%$ of natives are threatened), severe fragmentation (over 50 large dams), and climate change (a $1.5^{\circ}\text{C}$ summer temperature increase and a projected 34$\%$ reduction and increasing variation in water resources by 2050). Our simulations reveal that native speciUnder a baseline empirical scenario, Original, expert based, Biotic interactioes extinction risk is deeply accelerated by the cross-interaction of these stressors. ns matrix, native communities offer a degree of biotic resistance, holding off severe richness drops until warming thresholds breach $+2.0^{\circ}\text{C}$ to $+3.0^{\circ}\text{C}$. When community structure collapses (Random Interactions) or when climate effects act synergistically with direct competitive displacement (Invasive-Favouring Interactions), native richness collapses pervasively across almost all thermal tiers. Conversely, invasive species consistently exhibit widespread richness stability or significant expansion under identical warming profiles, effectively saturating the network. Our simulations expose a "Connectivity Paradox" regarding network fragmentation. While high fragmentation (Blocked Connectivity) traps native species and triggers severe local extinctions due to an inability to escape rising thermal constraints in headwaters, open networks (Baseline Connectivity) do not guarantee safety; instead, they act as open corridors that maximize the rapid expansion of invasive generalists. Furthermore, high upstream dispersal costs ($uc = 0.5$) systematically exacerbate native richness losses under high warming by pinching remaining viable populations into narrower, disconnected headwater pockets, while doing little to slow down invasive species whose high growth rates allow them to easily overcome these energetic barriers. Reservoirs act as permanent exotic species reservoirs that facilitate this landscape-wide expansion. The report concludes with the following targeted management interventions: 1. Hydrological Continuity: Shifting away from binary "open vs. closed" mentalities to prioritize selective barrier management or constraints that facilitate native-dependent connectivity while checking invasive corridors; 2. Refugia Protection: Aggressively safeguarding critical thermal and hydrological refugia in headwaters against climate-driven desiccation; 3. Invasive Management: Shifting from localized suppression to a basin-wide strategy aimed at managing major invasive source areas (reservoirs), and 4. Transdisciplinary Modeling: Extending the preliminary metacommunity tool developed in this report to evaluate policy scenarios and socio-economic drivers by coupling it with macro-policy frameworks such as PESTEL-FCM or VAST-JARA.
+
+\newpage
+
+
+\section{Introduction}
+
+\subsection{Metacommunity Theory in Dendritic Ecological Networks}
+The conceptualization of ecological communities has undergone a paradigm shift over the last two decades, moving from a view of local communities as closed, niche-determined systems toward a far-out-equilibrium system, the metacommunity framework \cite{leibold2004metacommunity}. A metacommunity is defined as a set of local communities linked by the dispersal of multiple interacting species \cite{gravel_trophic_2011, Larsenetal2021}. This framework is essential for understanding ecosystems where local community assembly cannot be explained solely by local environmental conditions but is instead heavily influenced by regional processes such as colonization, extinction, and mass effects \cite{leibold2004metacommunity, Leibold2020}. In the context of freshwater ecology, this theory has gained significant traction because dendritic river networks inherently constrain dispersal pathways, creating unique spatial dynamics compared to terrestrial landscapes \cite{brown2011metacommunity, altermatt2013dendritic}. Consequently, it explicitly embraces processes at multiple spatial scales, providing a foundation for a richer understanding of stream and river communities under multiple perturbations \cite{PerkinGido2012, tonkin2018preparing}.
+
+Riverine systems are archetypical examples of Dendritic Ecological Networks (DENs). Unlike terrestrial landscapes, which are often modeled as a series of patches on a two-dimensional plane, rivers exhibit a hierarchical, branching structure that fundamentally constrains the movement of aquatic organisms \cite{Pelletieretal2009}. This dendritic topology dictates that dispersal is primarily restricted to the watercourse, creating a unique spatial dependency where the position within the network, whether a headwater, a mid-reach, or a mainstem—determines the level of connectivity and the potential for demographic rescue \cite{Pelletieretal2009}. Metacommunity theory as applied to DENs highlights that regional processes (dispersal) depend on the spatial structure of the habitat and the degree of connection to the regional species pool \cite{Larsenetal2021}.
+
+The four main paradigms of metacommunity theory, patch dynamics, species sorting, mass effects, and neutral theory, provide a lens through which researchers can analyze riverine fish dynamics. In the patch dynamics paradigm, community composition is determined by a trade-off between colonization and extinction in equivalent habitat patches. Species sorting assumes that habitats are heterogeneous and species are filtered into local communities based on their environmental tolerances, provided dispersal is sufficient \cite{PerkinGido2012}. Mass effects describe situations where high dispersal allows species to persist in suboptimal habitats, essentially creating source-sink dynamics \cite{Larsenetal2021}. Finally, the neutral paradigm suggests that species are functionally equivalent and that community structure arises from demographic stochasticity. In dendritic networks, these paradigms often coexist across a gradient: headwaters, being more isolated, are often shaped by species sorting and stochastic extinction, while mainstreams, characterized by high connectivity, may exhibit stronger mass effects and greater community synchrony \cite{Pelletieretal2009} (See Table 1 for a summary of the main paradigms in Metacommunity Theory).
+
+\subsection{Eco-Evolutionary Biogeography and Mediterranean Endemism}
+Mediterranean river basins represent some of the most ecologically unique and vulnerable ecosystems on the planet. These basins are recognized as global biodiversity hotspots, characterized by high levels of endemism and a complex evolutionary history shaped by geological isolation and climatic shifts \cite{Herrera2022}. In the Iberian Peninsula, the native Ichthyofauna is characterized by a relatively small number of families but an extraordinary degree of diversification at the species level \cite{Herrera2022}. Endemism rates among Iberian freshwater fish are estimated at approximately 80\%, with the Cyprinidae, Cobitidae, and Cyprinodontidae families exhibiting the highest proportion of endemic taxa in Europe \cite{DeMiguel2014}.
+
+This high degree of endemism is a direct consequence of the "island-like" nature of Mediterranean river systems. Throughout the Pleistocene, the complex orography of the Mediterranean peninsula created isolated refugia where fish populations were protected from glacial extremes, leading to different types of speciation, as independent river systems were cut off from the rest of the European continent \cite{Tsirintanis2021}. In these systems, the dendritic network does not just structure local communities; it acts as an evolutionary crucible. Species have evolved specialized life-history traits to survive the characteristic Mediterranean hydrological regime, which features catastrophic winter floods and severe summer droughts \cite{Herrera2022}.
+
+The resilience of these species is rooted in their ability to endure high temperatures and low-oxygen conditions in isolated pools during the dry season \cite{Carosietal2023}. However, the very isolation that fostered this diversity now poses the greatest threat to its survival. Unlike species in northern temperate regions, Mediterranean fish have limited dispersal capacity to respond to rapid environmental changes because they are confined to discrete basins with limited upstream escape routes across high-altitude drainage divides \cite{DeMiguel2014}. When local conditions deteriorate due to climate change or habitat degradation, the risk of basin-scale extinction is high because many of these endemics have range-restricted distributions, sometimes occurring in only a single river or lake \cite{DeMiguel2014} (Table 2 summarizes the key families and the Mediterranean endemisms.)
+
+\subsection{Dendritic Connectivity and the Fragmentation Paradigm}
+In riverine metacommunities, connectivity is the glue that allows for the persistence of species across the landscape. Structural connectivity refers to the physical arrangement of habitat patches, while functional connectivity relates to the ability of organisms to move through that landscape \cite{PerkinGido2012}. In dendritic networks, the introduction of barriers, such as dams, weirs, and culverts, fundamentally alters both forms of connectivity, leading to the fragmentation of the network into a series of isolated islands of water.
+
+The impacts of fragmentation might have a fragmentation bias; they are dictated by the topology of the network. For example, a single dam on a mainstream river can disconnect an entire upstream sub-basin from the regional species pool, whereas a dam on a headwater stream may only impact a small, localized community. To quantify these impacts, ecologists have developed the Dendritic Connectivity Index (DCI), a mathematical measure that assesses the probability of an organism being able to move freely between any two points in the network \cite{PerkinGido2012}.
+
+The DCI is calculated based on the length of connected segments $i$ ($L_i$) relative to the total length of the network ($L$):
+\begin{equation}
+DCI = \sum_{i=1}^{n} \frac{L_i^2}{L^2} \times 100,
+\end{equation}
+where $n$ is the number of fragments created by barriers \cite{PerkinGido2012}. This index allows managers to prioritize barrier removals or the installation of fish passages based on the potential gain in network-wide connectivity.
+
+Fragmentation in Mediterranean DENs is particularly dangerous because it interferes with the natural fluctuation of the system, high chances of winter floods and severe summer droughts. Native species often rely on seasonal migrations to reach spawning grounds or to escape drying reaches during the summer \cite{FernandezDelgado2007,Herrera2022}. When these pathways are blocked, populations become isolated, and the probability of demographic rescue after a drought-induced local extinction might drop quickly \cite{Larsenetal2021}. Furthermore, fragmentation often leads to metapopulation synchrony in population demography; while asynchrony promotes long-term stability by ensuring that some populations survive even if others fail, high synchrony caused by uniform anthropogenic stressors can lead to simultaneous extinctions across the entire network of many local populations \cite{Larsenetal2021}.
+
+\subsection{The Guadalquivir Basin: A Microcosm of Mediterranean Crisis}
+The Guadalquivir River Basin, situated in Southern Spain, serves as a critical case study for understanding extinction risk dynamics in Mediterranean metacommunities. Covering approximately 57,000 $km^2$, it is one of the largest and most biologically significant basins in the Iberian Peninsula \cite{Herrera2022}. Historically, the basin supported a rich array of native fish, with approximately one-third of all Iberian species found within its borders \cite{Herrera2022}. However, the basin has undergone dramatic transformations over the last century, shifting from a natural, flood-prone system to a highly regulated landscape dominated by agriculture and infrastructure \cite{Herrera2022}.
+
+Recent biodiversity assessments indicate that the basin is in a state of biological transition. Out of 40 species documented in the basin over the last century, only about 18 to 20 are typically captured in modern field surveys \cite{FernandezDelgado,Tsirintanis2021}. This decline is characterized by a nearly 1:1 ratio between native and exotic species, a phenomenon known as biotic homogenization \cite{FernandezDelgado,Tsirintanis2021}. The conservation status of the native community is alarming: between 50\% and 85\% of native species in the Guadalquivir are currently categorized as threatened according to IUCN Red List criteria \cite{Herrera2022} (Table 3 summarizes the Ecological status across basin segments.)
+
+The spatial distribution of biodiversity in the Guadalquivir does not follow the classic "longitudinal increase" pattern \cite{Herrera2022}. Instead, the highest species richness is often found in the mid-reaches, where habitats are relatively stable and connected. The lower reaches, which should naturally support high diversity, are often the most degraded due to high pollution levels, habitat loss, and the overwhelming presence of invasive species such as the wels catfish (\textit{Silurus glanis}) and the black bullhead (\textit{Ameiurus melas}) \cite{Herrera2022}.
+
+\subsection{Climate Change and the Intensification of Hydrological Stress}
+Climate change is not a future threat for the Guadalquivir Basin; it is a present reality. Southern Spain is one of the regions most severely affected by global warming, with summer temperatures already having increased by 1.5$^\circ$C, a rate that outpaces the global average by 20\% \cite{Berbeletal2011,doi:10.1080/07900627.2012.640875}. Projections for the mid-21st century suggest that these trends will only accelerate, with seasonal irrigation needs expected to increase by 15\% to 20\% as temperatures rise and the landscape becomes more arid \cite{Berbeletal2011,doi:10.1080/07900627.2012.640875}.
+
+The hydrological consequences of this warming are profound. Total annual rainfall is projected to decrease by 14\% to 23\% by 2050 compared to the 1971-2000 reference period \cite{w17213052}. Under a 3$^\circ$C warming scenario, available water resources in the Guadalquivir could be reduced by as much as 34\% \cite{Pelletieretal2009}. For a river system already under severe pressure from irrigated agriculture (which accounts for over 25\% of the total cropped area in the basin), these reductions threaten to collapse the remaining aquatic habitats \cite{Pelletieretal2009}.
+
+For fish metacommunities, the most critical impact of climate change will be the intensification of the variation in the drought-flood cycle. As droughts become longer and more frequent, the pool phase of the Mediterranean river cycle will expand, potentially leading to the complete dry-out of headwater streams. This desiccation eliminates the very refugia that native species rely on for survival. Furthermore, the rising water temperatures and decreasing levels of dissolved oxygen in these isolated pools create physiological barriers to survival, particularly for stenothermic native species that cannot adapt to the heat (Table 4 summarizes the Climate Change Impacts in the Guadalquivir).
+
+\subsection{Synergistic Impacts: Warming and the Invasional Meltdown}
+The extinction risk for Mediterranean fish is rarely driven by a single factor but is instead the result of synergistic interactions between multiple stressors. The most potent synergy in the Guadalquivir is the interaction between climate change and biological invasions. As warming water temperatures stress native species, they often create conditions that favor invasive generalists from warmer climates. This process can lead to an invasional meltdown, where the presence of one invasive species facilitates the establishment and expansion of others, further accelerating the decline of native biodiversity.
+
+Reservoirs play a pivotal role in this synergy. These artificial structures provide stable, lentic habitats that mimic the native environments of many invasive fish species, such as the largemouth bass (\textit{Micropterus salmoides}) and various limnophilous cyprinids. Without these reservoirs, many invasive species would struggle to survive the extreme hydrological variability of Mediterranean rivers. Instead, reservoirs act as exotic species reservoirs, providing a constant source of immigrants that can colonize the surrounding river network, especially during high-flow events that bypass the dams (Table 5 summarizes the synergistic impacts of stressors on the Guadalquivir basin.)
+
+Invasive species such as the mosquitofish (\textit{Gambusia holbrooki}) have demonstrated remarkable adaptive capacity, following a boom and bust population dynamics that allow them to rapidly exploit disturbed habitats. In the Guadalquivir, the introduction of the European catfish (\textit{Silurus glanis}), an apex predator capable of reaching massive sizes, poses a new and severe threat to regional wildlife. The presence of such predators in the slow-moving, degraded waters of the lower Guadalquivir and the Doñana National Park creates a predation trap for native endemics that have no historical experience with such large-scale predators.
+
+\subsection{Modeling Extinction Risk: Tools for Practitioners}
+To address the complexity of these threats, there is an urgent need for advanced modeling tools that can help researchers and practitioners predict extinction risks and assess the effectiveness of conservation interventions. Traditionally, species distribution models (SDMs) have been used to map habitat suitability, but these often fail to account for the dynamic, multi-scale processes that define metacommunities. Modern approaches are now integrating spatially explicit simulations, Bayesian networks, and expert-based Decision Support Systems (DSS) to provide a more holistic view of extinction risk.
+
+One such tool is the BESTEL-FCM framework, which integrates Biological, Economic, Social, Technological, Environmental, and Legal factors into a Fuzzy Cognitive Mapping (FCM) model. This system allows stakeholders to simulate policy scenarios, such as dam removals or stricter pollution regulations, and evaluate their impact on species' extinction risk. For example, simulations have shown that while dam removal can significantly reduce risk by restoring connectivity, these gains can be completely offset if climate change is left unchecked.
+
+Another significant advancement is the coupling of spatio-temporal modeling tools like VAST ("Vector Autoregressive Spatio-Temporal") with Red List assessment models like JARA ("Just Another Red List Assessment"). This framework allows for the characterization of uncertainty in extinction risk assessments by propagating scientific survey data through a probabilistic model. In the North Sea, this approach has successfully identified species in urgent need of research and conservation, and it holds great promise for application in Mediterranean river basins where data is often sparse and uncertain (Table 6 introduces a summary of the approaches and applications)
+
+\subsection{Conservation Strategy and Policy Alignment}
+The conservation of the Guadalquivir’s Ichthyofauna is not only a biological imperative but a legal and strategic one. Spain has committed to several high-level initiatives aimed at restoring its river systems, including the Spanish National Strategy for River Restoration 2022-2030 and the National Plan for Adaptation to Climate Change (PNACC) 2021-2030. These strategies are aligned with European policies such as the EU Biodiversity Strategy for 2030, which mandates the restoration of at least 30\% of degraded habitats.
+
+In the Guadalquivir Basin, these objectives are being operationalized through specific restoration projects, such as those in the Segura and Guadiamar sub-basins. The Guadiamar, in particular, highlights the complexity of restoration; after a catastrophic mine spill in 1998, a massive recovery plan was undertaken, but the basin remains a source of invasive species despite the physical habitat restoration. This underscores a critical lesson: habitat restoration alone is insufficient if the regional metacommunity is dominated by exotic species. Restoration must be coupled with active management of invasive populations to ensure that native species can successfully recolonize the recovered reaches (Table 7 summarizes the strategy components and policy alignments applicable to the Guadalquivir basin.)
+
+\subsection{The challenges of Modeling and Actionable Recommendations}
+The extinction risk dynamics of many native-endemic species in the Guadalquivir River Basin serve as a stark warning for Mediterranean river systems worldwide. The interaction of a naturally constrained dendritic topology with rapid climate warming, extensive fragmentation, biological invasions and severe nutrient loads have created a perfect storm that threatens the very existence of one of Europe’s most unique biotas. The transition from a native-dominated system to one of biotic homogenization is already well underway, and the window for effective intervention is closing.
+
+This situation justifies an urgent, multi-pronged approach to conservation. First, the maintenance of hydrological continuity must be prioritized; barrier removal is essential to allow native species to migrate and escape local stressors. Second, climate adaptation must focus on the protection of thermal refugia in headwaters, ensuring that these areas do not dry out during increasingly severe summers. Third, the management of invasive species must move beyond a site-by-site basis to a basin-wide strategy that recognizes reservoirs as major source areas for exotic expansion.
+
+Finally, the development and deployment of spatially explicit modeling tools are critical for providing practitioners with the evidence base needed for targeted conservation. These models must integrate not only biological and hydrological data but also the socio-economic drivers, such as agricultural water demand, that dictate the hydrological reality of the basin. By aligning local management actions with the strategic goals of the Spanish National Strategy for River Restoration, there remains a path to preserve the biological heritage of the Guadalquivir.
+
+\section{Material and Methods}
+We address the extinction risk of fish species in a large Mediterranean basin in Southern Spain. We integrate empirical data into a 3D dendritic network framework with more than 1k sampling sites along the whole basin containing endemic, native and exotic species. By taking into account multiple threats and the empirical data we derive the probability of extinction for each native and endemic species along perturbation gradients. For the threats, we model how extinction risk varies with topography along the basin, including fragmentation (reservoirs), anthropogenic land uses, warming and dessication together with exotic species. Threats were introduced into a dendritic network containing the sampling sites. We run simulations under three scenarios: A first one with the empirical biotic interaction network to obtain the probability to local- and basin-level extinction of each species; A second scenario with a randomized interspecific species interaction matrix and a third scenario with an invasive-favoured species interaction matrix (See tables 12-14 for the Original expertwise interspecific species interaction matrix, the randomized matrix, and the invasive-favoured matrix, respectively.)
+
+\subsection{Study Area}
+The Guadalquivir River Basin is located in the south of the Iberian Peninsula, rising in the Cazorla Mountains at approximately 1400m above sea level, flowing into the Gulf of Cádiz. The basin covers an area of 57,439km2 and the main river channel is 680 km long \cite{GRANADOLORENCIO199191}. The river network is comprised of 80 main tributaries and 80 sub-watersheds. The basin is characterized by a Mediterranean climate with a mean yearly temperature of 16.8°C \cite{doi:10.1080/07900627.2012.640875}. The hydrological regime is extremely variable, with severe droughts and flooding. The flow is typically dependent on the seasonal distribution of rain (630mm of unevenly distributed precipitation per annum), concentrated mainly from October to March. Therefore, water resource availability in the basin is highly variable, with an average of 7,043 hm3/year but a range from 372 to 21,530 hm3/year. During the summer months, June to September, streams become reduced to isolated pools until river connectivity is re-established by following rains or may dry up entirely. The area is under several intense anthropogenic pressures: 47\% of the basin landcover is agriculture, river flow is regulated by a total of 65 dams and most river courses are under threat of pollution, including urban and industrial waste water discharge, erosion, and nutrient and pesticide runoff from agricultural land.
+
+The fish community in the Guadalquivir River Basin is composed of approximately fifteen native and eight non-native species, presenting clear seasonal and spatial patterns. The most abundant and widespread native species are \textit{Anaecypris hispanica} (Steindachner, 1866), \textit{Cobitis paludica} (de Buen, 1930), \textit {I. lemmingii}, \textit{Luciobarbus sclateri} (Günther, 1868), \textit{P. willkommii} and \textit{S. alburnoides}, all of which are Iberian endemic species. Non-native introduced fish include \textit{A. alburnus}, \textit{Gambusia holbrooki} (Girard, 1859) and \textit{Lepomis gibbosus} (Linnaeus, 1758) (\cite{doi:10.1111/j.1095-8649.2001.tb01393.x,RAMOSMERCHANTE201845}) (Tables 8-9).
+
+\subsection{Sampling scheme}
+This study uses data collected from 1037 sampling points between 2006-2009 in wadeable rivers of the Guadalquivir river basin as part of a project commissioned by the Guadalquivir Rivers Authority (Confederacion Hidrografica del Guadalquivir, CGH) and the Andalusian Regional Government (Junta de Andalucia). Each sampling point corresponds to a river reach 100-300m long. Reaches were selected using GIS layers of the dendritic river network of the Guadalquivir River Basin, including all sub-watersheds. Number of sampling points per watershed were adjusted for watershed size, ensuring that the whole range of the main river continuum (from source to mouth of the main river, and tributaries) were represented.
+
+In each reach, the fish community was sampled by electrofishing. All captured fish were transferred to buckets and anesthetized with benzocaine to aid identification. All individuals were identified, counted and measured. All native individuals were then released back into the river. All sampling and fish handling complied with Spanish legislation. Our empirical dataset includes 776 sampling points that cover all wadeable rivers and streams in the whole Guadalquivir River Basin (57,439km2). The data include presence/absence and abundance of a 14 native and 14 exotic freshwater fish species in wadeable points within all tributary sub-watersheds in the Guadalquivir basin. Relative fish density (catch-per-unit effort, CPUE hereafter) was estimated for each species at each sampling point. Juvenile presence for each species was coded at each sampling point as follows: 1 = only juveniles present; 2 = both juveniles and adults present; 3 = no juveniles present \cite{Matos2019}.
+
+\subsection{Mathematical Formulation of the Fish Metacommunity Model}\label{mathematical-formulation-of-the-fish-metacommunity-model}
+The following section provides is a detailed description of the spatially-explicit modeling framework to simulate fish metacommunity dynamics in the Guadalquivir River basin. The model first describes a system of
+Ordinary Differential Equations (ODEs) integrating local population
+dynamics and environmental filtering in a 3D dendritic dispersal. In a second stage we include the dynamics under the effect of warming, fragmentation, exotic species, exploitation and nutrient loads. 
+
+%\hypertarget{general-model-structure}{%
+\subsubsection{General Model Structure}\label{general-model-structure}
+The rate of change for the population size \(N_{i,s}\) of species \(s\)
+at site \(i\) is defined by the sum of local dynamics and net spatial
+flux:
+\begin{equation}
+\frac{dN_{i,s}}{dt} = \underbrace{f_{local}(N_{i,s}, \mathbf{N}_i, E_i)}_{\text{Local Dynamics}} + \underbrace{\sum_{j \in \text{neighbors}} (m_{ji} N_{j,s} - m_{ij} N_{i,s})}_{\text{Spatial Flux}},
+\end{equation}
+where \(N_{i,s}\) is the population density of species \(s\) at site
+\(i\), \(\mathbf{N}_i\) is the vector of all species populations at
+site \(i\), - \(E_i\) represents the local environmental conditions, and
+\(m_{ij}\) is the dispersal rate from site \(i\) to site \(j\).
+
+%\hypertarget{local-dynamics-and-environmental-filtering}{%
+\subsubsection{Local Dynamics and Biotic Interactions}\label{local-dynamics-and-environmental-filtering}
+The local component follows a Generalized Lotka-Volterra (GLV)
+structure, modified by environmental suitability filters. The local dynamics are expressed as:
+\begin{equation}
+f_{local} = N_{i,s} \left( r_{i,s}^{eff} - \sum_{j=1}^{S} \alpha_{sj} N_{i,j} \right),
+\end{equation}
+where \(r_{i,s}^{eff}\) is the effective intrinsic growth rate,\(\alpha_{sj}\) is the interaction coefficient representing the effect
+of species \(j\) on species \(s\) (asymmetric interaction matrix).
+
+%\hypertarget{environmental-filtering}{%
+\subsubsection{Environmental Filtering}\label{environmental-filtering}
+The effective growth rate \(r_{i,s}^{eff}\) is determined by the base
+growth rate \(r_{s}\) and a site-specific suitability factor
+\(W_{i,s}\):
+\begin{equation}
+r_{i,s}^{eff} = r_{s} \cdot W_{i,s}.
+\end{equation}
+The suitability factor \(W_{i,s}\) incorporates thermal tolerance and
+habitat quality:
+\begin{equation}
+W_{i,s} = \text{ThermalFilter}(T_i, \text{opt}_s, \sigma_s) \cdot h_i,
+\end{equation}
+where Thermal Filter\label{thermal-filter} use a Gaussian-shaped ``thermal window'' to model species-specific temperature tolerances:
+\begin{equation}
+\text{ThermalFilter}(T_i, \text{opt}_s, \sigma_s) = \exp\left( -\frac{(T_i - \text{opt}_s)^2}{2\sigma_s^2} \right),
+\end{equation}
+where \(T_i\) is the temperature at site \(i\), \(\text{opt}_s\) is
+the optimal temperature for species \(s\) and \(\sigma_s\) is the thermal
+tolerance (standard deviation) of species \(s\) and Habitat Suitability \label{habitat-suitability} \(h_i\) is the habitat suitability index at site \(i\), which accounts for anthropogenic stressors (e.g., conductivity), river width, and mesohabitat types.
+
+%\hypertarget{spatial-flux-3d-dendritic-dispersal}{%
+\subsubsection{Spatial connectivity in 3D Dendritic Networks}\label{spatial-flux-3d-dendritic-dispersal}
+The spatial component models the movement of individuals through the
+river network, accounting for hydrological distance, elevation changes,
+and physical barriers. The dispersal rate \(m_{ij}\) from site \(i\) to site \(j\) is defined as:
+\begin{equation}
+m_{ij} = m \cdot \left( \frac{1}{d_{ij}} \right) \cdot x_{ij} \cdot p_{ij},
+\end{equation}
+where \(m\) is the base dispersal intensity, \(d_{ij}\) is the
+hydrological distance between site \(i\) and \(j\), \(x_{ij}\) is the
+3D connectivity factor (elevation cost) and \(p_{ij}\) is the dam
+passability factor (ranging from 0.0 to 1.0).
+
+%\hypertarget{elevation-cost-upstream-vs.-downstream}{%
+\subsubsection{Elevation Cost (Upstream vs.~Downstream)}\label{elevation-cost-upstream-vs.-downstream
+The cost of movement depends on the relative elevation of the sites:
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Downstream or Equal Elevation (\(e_j \le e_i\)):}
+  \begin{equation}
+  x_{ij} = 1.0
+  \end{equation}
+\item
+  \textbf{Upstream (\(e_j > e_i\)):}
+  \begin{equation}
+  x_{ij} = \frac{1}{1 + c(e_j - e_i),}
+  \end{equation}
+\end{itemize}
+where \(e_i\) and \(e_j\) are the elevations of the source and
+destination sites, respectively and \(c\) is the upstream migration cost
+constant.
+
+%\hypertarget{implementation-details}{%
+\subsubsection{Implementation Details}\label{implementation-details}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{State Vector:} The system state \(u\) is a matrix of size
+  \(N_{sites} \times N_{species}\).
+\item
+  \textbf{Sparse Matrix Optimization:} To handle large-scale river
+  networks efficiently, the dispersal rates are pre-calculated into a
+  sparse matrix \(M\), where \(M_{ji}\) represents the rate from \(i\)
+  to \(j\).
+\item
+  \textbf{Numerical Integration:} Given the potential stiffness arising
+  from the coupling of fast dispersal and slower local dynamics, the
+  system is solved using stiff-aware solvers (e.g., \texttt{Rodas5} or
+  \texttt{TRBDF2}).
+\end{itemize}
+
+%\hypertarget{model-assumptions}{%
+\subsubsection{Model Assumptions}\label{model-assumptions}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Constant Interaction Matrix:} Biotic interaction coefficients
+  (\(\alpha_{sj}\)) are assumed to be constant across the entire basin,
+  though the realized interaction depends on local densities.
+\item
+  \textbf{Passive/Active Dispersal Balance:} Dispersal is modeled as a
+  density-dependent flux proportional to the population at the source
+  site.
+\item
+  \textbf{Gaussian Thermal Niche:} Species performance is assumed to
+  decay symmetrically as temperatures deviate from the optimum.
+\item
+  \textbf{Dam Passability:} Dams act as semi-permeable filters that
+  reduce the effective dispersal rate between connected nodes.
+\end{enumerate}
+
+\section{Model Parametrization}
+
+\subsection{Intrinsic Growth Rates ($r$): Resilience vs. Invasiveness}
+The intrinsic growth rate ($r$) is the fundamental metric of a population's capacity to recover from disturbances. In the Guadalquivir, native species often exhibit $r$ values that are finely tuned to the historical predictability of the hydrological cycle. However, anthropogenic impacts, ranging from dam regulation to climate-driven temperature increases, have shifted the fitness landscape.
+
+%The disparity in growth rates between native endemics like \textit{Anaecypris hispanica} and invasive species like \textit{Gambusia holbrooki} highlights the "extinction-invasion" trap. While native species struggle to recover from localized extinctions caused by summer drying, invasive species can rapidly repopulate vacant niches due to their high reproductive output. \cite{24}
+
+%\subsection{Dispersal Dynamics in Dendritic Networks}
+%In a riverine system, dispersal is constrained by the topology of the network. Movement is primarily longitudinal, meaning that connectivity is dictated by the physical structure of the channel and the presence of barriers. \cite{5} Dispersal rates ($D$) are often modeled as a function of body size, swimming capacity, and the "resistance" of the landscape (e.g., current velocity, thermal barriers, or dams).
+%\begin{equation}
+%D_{spatial} = \int_{0}^{\infty} K(x) \cdot e^{-\gamma x} dx,
+%\end{equation}
+%where $K(x)$ represents the dispersal kernel and $\gamma$ represents the landscape resistance factor. In the Guadalquivir, the introduction of over 50 large dams has effectively reduced the effective dispersal rate for native migratory species to near zero in several sub-basins.
+
+\subsection{Hydrological Influence on Life History}
+The variability of the Guadalquivir's flow regime acts as a "pacemaker" for population dynamics. High-flow years increase connectivity, allowing for widespread dispersal and high recruitment. Conversely, "drought years" act as a demographic bottleneck.
+
+\begin{itemize}
+    \item \textbf{Flood Phase:} High $r$ achievement; maximal $D$; genetic mixing.
+    \item \textbf{Drought Phase:} Population contraction into refugia; $D \rightarrow 0$; local stochastic extinctions.
+\end{itemize}
+
+\subsection{Data summary, Fish size, density of adults and juveniles, trait data and biotic interaction matrix, distance and connectivity matrix}
+\url{https://github.com/melian009/GuadeX/blob/master/docs/data_summary.md}
+
+\section{Results}
+We address the extinction risk of native fish species and the expansion of exotic species in a large Mediterranean basin in Southern Spain. We integrate empirical data into a 3D dendritic network framework with more than 1k sampling sites along the whole basin containing endemic, native and exotic species. By taking into account multiple threats and the empirical data we derive the probability of extinction for each native and endemic species along perturbation gradients. For the threats, we model how extinction risk varies with topography along the basin, including fragmentation (reservoirs), anthropogenic land uses, warming, species interactions and dessication together with exotic species. Threats were introduced into a dendritic network containing the sampling sites. We run simulations along warming-connectivity-biotic interaction gradients (Table 10): A first one with the existing threats to obtain the probability to subcatchment- and basin-level extinction of each species and a second one introducing additional disturbances, i.e., increasing dessication (consequence of warming), fragmentation (all the reservoirs) and land use. We contrast the extinction probability for the native and exotic species along these scenarios (Figs. 1-4).
+
+A comparative analysis of the three richness change heatmap visualization suites, \textbf{Original}, \textbf{Random}, and \textbf{Invasive-Favouring} reveals several distinct macro-ecological patterns (Tables 11-13). These dynamics emerge across the multi-dimensional parameter spaces defined by Temperature Increase ($\Delta T$), Upstream Dispersal Cost ($uc$), and River Network Connectivity (Baseline, Reduced Passability, and Blocked).
+
+\subsection{The Native vs. Invasive Divergence}
+Across all three structural scenarios, there is a fundamental asymmetric decoupling between native and invasive richness trajectories:
+\begin{itemize}
+    \item \textbf{Native Collapse:} Native species matrices show pervasive, high-intensity richness declines (graphically represented by dark red/orange heat zones) as thermal stress intensifies (Fig. 1).
+    \item \textbf{Invasive Expansion:} Invasive species consistently exhibit widespread richness stability or significant increases successfully expanding their spatial footprint under identical warming profiles (Figs. 2 and 3).
+\end{itemize}
+
+\subsection{Scenario-Specific Biotic Buffers and Amplifiers}
+
+\subsubsection{Original Biotic Interactions (Empirical Baseline)}
+This scenario acts as a moderate buffer for native species. While natives still suffer significantly from thermal stress, the richness drop-off is vertically stratified by upstream dispersal costs ($uc$). Native losses are concentrated heavily when warming thresholds reach $+2.0^\circ\text{C}$ to $+3.0^\circ\text{C}$ (Fig. 1). Invasive gains are robust but constrained somewhat under highly fragmented states, indicating that empirically structured native communities offer a baseline level of biotic resistance.
+
+\subsubsection{Random Biotic Interactions (Unstructured Noise)}
+Under a randomized interaction matrix, structured community resistance completely breaks down. For \textbf{native species}, the heatmaps become visually homogeneous in their degradation; the decline triggers at lower temperature tiers and is no longer buffered by variations in upstream dispersal costs. For \textbf{invasive species}, the randomized matrix yields highly chaotic, checkerboard expansion configurations, meaning species distributions become geographically erratic rather than organized around geomorphological or environmental gradients (Fig. 2).
+
+\subsubsection{Invasive-Favouring Interactions (Synergistic Stress)}
+This represents the worst-case landscape for native biodiversity. The native heatmaps are almost completely engulfed in deep blue tones even at a minimal temperature increase ($+1.0^\circ\text{C}$), demonstrating a powerful synergy between climate warming and direct competitive displacement. Conversely, the invasive matrices show intense, uniform deep-red patches across nearly all cells, signaling comprehensive landscape saturation (Fig. 3).
+
+Fig. 4 summarizes the changes in proportional native species richness remaining as a function of climate warming stress gradient for the three biotic interaction scenarios. Despite all the biotic interactions scenarios decay differently, i.e., original, random and invasive-favoured interaction matrix, warming drives more than 50\% decay in native species richness 
+
+\subsection{The Connectivity Paradox}
+Altering river fragmentation levels from \textbf{Baseline} $\rightarrow$ \textbf{Reduced Passability} $\rightarrow$ \textbf{Blocked} creates distinct, contrasting management tradeoffs across the simulations, as summarized in Table~\ref{tab:connectivity_tradeoffs}.
+
+\subsection{Upstream Dispersal Cost ($uc$)}
+\begin{itemize}
+    \item \textbf{Native Matrices:} High upstream costs ($uc = 0.5$) systematically exacerbate richness losses when combined with maximum temperature increases ($\Delta T = 3.0^\circ\text{C}$). It pinches the remaining viable populations into narrower, disconnected geographical headwaters.
+    \item \textbf{Invasive Matrices:} Variations in $uc$ exert noticeably less impact on overall colonizing success. This highlights that the competitive advantages or high intrinsic growth rates of invasive species allow them to easily overcome the physical, energetic barriers of moving upstream, a pattern particularly pronounced in the \textit{Invasive-Favouring} scenario.
+\end{itemize}
+
+\subsection{Subcatchments patterns}
+Across all six subcatchments plots, the interaction network has the most dramatic impact on native richness retention. The original (Expert-Based) Scenario consistently shows the highest retention of native species (Figs. 5-7). The subcatchments are overwhelmingly dominated by red, orange, and light yellow hues. This indicates that under the expert-validated network, native species are highly resilient and tend to maintain or even increase their relative richness ($S/S_0 \ge 1.0$) despite warming and changes in connectivity and upstream cost. When interactions between native and invasive species are randomly assigned, native richness retention drops sharply. The heatmaps shift predominantly to mid-greens and light greens ($S/S_0$ mostly between 0.4 and 0.8), showing a general decline in native richness compared to the Original baseline, with only a few isolated subcatchments retaining higher values. The Invasive-Favoured Scenario represents the worst-case outcome for native biodiversity. The panels are almost entirely a uniform dark green ($S/S_0 \approx 0.2$ to 0.4). When interaction networks inherently favor invasive species, native richness collapses severely across nearly all subcatchments.
+
+Comparing the top row of Figs 5-7 ($uc=0.01$) against the bottom row ($uc=0.5$) reveals how migration/isolation costs interact with ecological pressure.
+For low upstream cost ($uc=0.01$) the subcatchments look uniformly deep red. Lowering the upstream cost allows species to move more freely, which seems to homogenize the landscape and buffers native species against loss, leading to uniformly high richness retention across almost the entire catchment network. High upstream cost ($uc=0.5$) in the "Original" network predicts a distinct vertical checkerboard or "banded" pattern. Distinct subcatchments display highly localized outcomes (some bright red bands alongside lighter yellow/orange bands). This implies that high upstream costs isolate subcatchments, making their individual native richness retention highly dependent on local, sub-network connectivity, subcatchment conditions. 
+
+Within almost any single panel (looking from left to right from $\Delta T = 0$ to $3^\circ\text{C}$), the color gradients are remarkably stable and horizontal. This pattern indicates that the baseline interaction network and connectivity constraints outweigh the incremental impacts of warming. While individual subcatchments may show minor shifts in shading as temperature rises, the overarching status of a subcatchment (whether it is a refuge of high retention or a zone of collapse) is established at $\Delta T=0$ and largely persists through $\Delta T=3$.
+
+As passability shifts from Baseline $\rightarrow$ Reduced Passability $\rightarrow$ Blocked, the boundaries between subcatchment bands become slightly more rigid, and a few high-performing subcatchments show marginal drops in richness (shifting from deep red to lighter orange). Restricting passability traps species or limits colonization. However, because the interaction network (Original vs. Invasive-Favoured) exerts such an overwhelming control on the system, changing the passability acts as a secondary modifier rather than a primary driver of the broad community shifts.
+
+
+\section{Acknowledgements}
+\noindent{This work has been funded by the Guadalquivir confederation, Spain with project number XYZ. CJM was partly funded by SNSF-Spark project (CRSK-3$\_$228777).} 
+
+\section{Code and data availability}
+Codes and data supporting results are in the public GitHub repository \href{https://github.com/melian009/GuadeX.git}{Guadex}.
+
+
+
+%Simulated basin-data reveal that Biomass Recovery Time is significantly delayed by high exploitation levels but can be moderated by connectivity constraints (Figure 1). For instance, scenarios with high upstream cost and reduced passability (red line) exhibit earlier recovery points compared to well-connected, low-cost systems (green line), suggesting that some degree of isolation and upstream cost allows for faster biomass recovery and may act as a spatial buffer against basin-wide depletion. Extension of these simulations under the  using 3D empirical water flow basin-level data to compute the relationship between the exploitation-to-recovery and extinction dynamics. A second set of simulations will run the second scenario by introducing the effect of increasing dessication (consequence of warming), fragmentation (all the reservoirs) and land use (increasing nutrient load) to contrast the extinction probability for the two scenarios for the native and exotic species. 
+
+\newpage
+
+\section{Figures}
+
+\begin{figure}[htpb]
+\hspace{-0.5 in}\includegraphics[width=1.2\textwidth]{Figures/Figure1.png}
+%\vspace{0.1 in}\\
+\hspace{-0.5 in}\caption{\scriptsize Sampling sites for the Guadalquivir river basin.}
+\end{figure}
+
+\begin{figure}[htpb]
+\hspace{-1.5 in}\includegraphics[width=1.25\textwidth]{Figures/Fig1.png}
+\vspace{0.1 in}\\
+\hspace{-0.5 in}\caption{\scriptsize Spatial position of all the sampling sites as a function of elevation (top) and proportion of exotic (top) and native (bottom) species in each sampling site for the original species interaction network, upstream cost equal to 0.01 and no increase in temperature.}
+\end{figure}
+
+\begin{figure}[htpb]
+%\hspace{-0.1 in}
+\includegraphics[width=1\textwidth]{Figures/OriginalBioticInteraction_richness_change_heatmaps.png}
+%\vspace{0.1 in}\\
+\hspace{-0.5 in}\caption{\scriptsize Native (top) and invasive (bottom) species richness as a function of Temperature increase (x=axis), upstream cost (y-axis) for baseline, reduced and blocked connectivity for the original, expert-based species interaction network.}
+\end{figure}
+
+\begin{figure}[htpb]
+\hspace{-0.1 in}
+\includegraphics[width=1\textwidth]{Figures/RandomBioticInteraction_richness_change_heatmaps.png}
+%\vspace{0.1 in}\\
+\hspace{-0.5 in}\caption{\scriptsize Native (top) and invasive (bottom) species richness as a function of Temperature increase (x=axis), upstream cost (y-axis) for baseline, reduced and blocked connectivity for the invasive favoring species interaction network.}
+\end{figure}
+
+\begin{figure}[htpb]
+\hspace{-0.1 in}
+\includegraphics[width=1\textwidth]{Figures/InvasiveFavouringBioticInteraction_richness_change_heatmaps.png}
+\hspace{-0.5 in}\caption{\scriptsize Native (top) and invasive (bottom) species richness as a function of Temperature increase (x=axis), upstream cost (y-axis) for baseline, reduced and blocked connectivity for the random species interaction network.}
+\end{figure}
+
+\begin{figure}[htpb]
+\hspace{-0.1 in}
+\includegraphics[width=1\textwidth]{Figures/Figure4.png}
+\hspace{-0.5 in}\caption{\scriptsize Proportional native species richness (y-axis) as a function of climate warming stress gradient for the empirical based (blue), random (orange) and invasive favored (orange) species interaction networks.}
+\end{figure}
+
+%Subcatchments
+\begin{figure}[htpb]
+\vspace{-0.75 in}
+\hspace{-0.2 in}\includegraphics[width=1.65\textwidth,angle=90]{Figures/comparison_subcatchment_heatmap_uc0.01_baseline.png}
+\vspace{-0.15 in}
+\includegraphics[width=1.65\textwidth,angle=90]{Figures/comparison_subcatchment_heatmap_uc0.5_baseline.png}
+\caption{\scriptsize Proportional native species richness for upstream cost equal to 0.01 (top) and 0.5 (bottom) and baseline passability for all subcatchments (y-axis) as a function of climate warming stress gradient for the original, random and invasive favoured species interaction networks, respectively.}
+\end{figure}
+
+\begin{figure}[htpb]
+\vspace{-0.75 in}
+\hspace{-0.2 in}\includegraphics[width=1.65\textwidth,angle=90]{Figures/comparison_subcatchment_heatmap_uc0.01_reduced_passability.png}
+\vspace{-0.15 in}
+\includegraphics[width=1.65\textwidth,angle=90]{Figures/comparison_subcatchment_heatmap_uc0.5_reduced_passability.png}
+\caption{\scriptsize Proportional native species richness for upstream cost equal to 0.01 (top) and 0.5 (bottom) and reduced passability for all subcatchments (y-axis) as a function of climate warming stress gradient for the original, random and invasive favoured species interaction networks, respectively.}
+\end{figure}
+
+\begin{figure}[htpb]
+\vspace{-0.75 in}
+\hspace{-0.2 in}\includegraphics[width=1.65\textwidth,angle=90]{Figures/comparison_subcatchment_heatmap_uc0.01_blocked.png}
+\vspace{-0.15 in}
+\includegraphics[width=1.65\textwidth,angle=90]{Figures/comparison_subcatchment_heatmap_uc0.5_blocked.png}
+\caption{\scriptsize Proportional native species richness for upstream cost equal to 0.01 (top) and 0.5 (bottom) and blocked passability for all subcatchments (y-axis) as a function of climate warming stress gradient for the original, random and invasive favoured species interaction networks, respectively.}
+\end{figure}
+
+
+\newpage
+\section{Tables}
+
+\begin{table}[h!]
+\centering
+\caption{Metacommunity Paradigms and Mechanisms}
+\begin{tabular}{p{3.5cm} p{3.5cm} p{3.5cm} p{3.5cm}}
+\toprule
+\textbf{Metacommunity Paradigm} & \textbf{Primary Mechanism} & \textbf{Connectivity Role} & \textbf{Relevance to DENs} \\
+\midrule
+Patch Dynamics & Colonization-extinction trade-offs & High connectivity allows for rescue effects & Essential for understanding recovery after droughts \cite{leibold2004metacommunity} \\
+\midrule
+Species Sorting & Environmental filtering & Dispersal allows species to reach optimal niche & Explains headwater community distinctness \cite{leibold2004metacommunity} \\
+\midrule
+Mass Effects & High immigration (source-sink) & Over-connectivity can override local filtering & Relevant to mainstem and reservoir-impacted reaches \cite{brown2011metacommunity} \\
+\midrule
+Neutral Theory & Stochastic births, deaths, immigration & Dispersal limitation leads to divergence & Applicable in highly isolated headwater fragments \cite{brown2011metacommunity} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+\begin{table}[h!]
+\centering
+\caption{Key Fish Families and Mediterranean Endemism}
+\begin{tabular}{p{3cm} p{3.5cm} p{3.5cm} p{3.5cm}}
+\toprule
+\textbf{Family} & \textbf{Endemism Characteristic} & \textbf{Key Genera in Mediterranean} & \textbf{Conservation Sensitivity} \\
+\midrule
+Cyprinidae & High diversification; dominant family & \textit{Luciobarbus}, \textit{Squalius}, \textit{Anaecypris} & Highly vulnerable to flow regulation \cite{DeMiguel2014} \\
+\midrule
+Cobitidae & Benthic specialists; range-restricted & \textit{Cobitis} & Sensitive to sedimentation and pollution \cite{DeMiguel2014} \\
+\midrule
+Cyprinodontidae & Killifishes; extreme habitat specialists & \textit{Aphanius}, \textit{Valencia} & Critically endangered by habitat loss \cite{DeMiguel2014} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+\begin{table}[h!]
+\centering
+\caption{Ecological Status across Basin Segments}
+\begin{tabular}{p{2.5cm} p{3.5cm} p{3.5cm} p{3.5cm}}
+\toprule
+\textbf{Basin Segment} & \textbf{Ecological Characteristic} & \textbf{Dominant Threats} & \textbf{Biodiversity Status} \\
+\midrule
+Headwaters & Mountainous; natural forest; low human disturbance & Climate-driven desiccation; fragmentation & Native refugia; lower richness \cite{Herrera2022} \\
+\midrule
+Mid Reaches & Fertile valleys; moderate flow & Intensive agriculture; reservoirs & Highest richness; high invasion risk \cite{Herrera2022} \\
+\midrule
+Lower Reaches & Lowland; slow water; saline influences & Pollution; extreme habitat transformation; exotics & High degradation; exotic dominance \cite{Herrera2022} \\
+\midrule
+Reservoirs & Artificial lentic habitats & Water abstraction; flow regulation & Source of invasive species \cite{Herrera2022} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+\begin{table}[h!]
+\centering
+\caption{Climate Change Impacts in the Guadalquivir}
+\begin{tabular}{p{3cm} p{3cm} p{3.5cm} p{4cm}}
+\toprule
+\textbf{Climate Parameter} & \textbf{Observed Trend} & \textbf{2050 Projection} & \textbf{Impact on Fish} \\
+\midrule
+Summer Temperature & +1.5$^\circ$C & +0.7$^\circ$C per decade & Thermal stress; reduced oxygen \\
+\midrule
+Annual Rainfall & Highly variable & 14-23\% reduction & Habitat loss; loss of connectivity \\
+\midrule
+Water Demand & Increasing & +15-20\% for irrigation & Reduced baseflows; pool desiccation \\
+\midrule
+Drought Severity & Increasing & Shift toward "exceptional" levels & Localized extinctions in headwaters \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%\newpage
+
+\begin{table}[h!]
+\centering
+\caption{Synergistic Impacts of Stressors}
+\begin{tabular}{p{3.5cm} p{3.5cm} p{6cm}}
+\toprule
+\textbf{Stressor A} & \textbf{Stressor B} & \textbf{Combined Effect (Synergy)} \\
+\midrule
+Rising Temperature & Invasive Predation & Natives are metabolically stressed, making them easier prey \\
+\midrule
+Habitat Fragmentation & Drought Desiccation & Fish cannot migrate to find permanent water \\
+\midrule
+Reservoir Construction & Invasive Expansion & Reservoirs act as sources for downstream invasion \\
+\midrule
+Pollution, Nutrient load & Species Sorting & Only resistant (often invasive) species persist \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\caption{Modeling Approaches and Applications}
+\begin{tabular}{p{3cm} p{2.5cm} p{4cm} p{4cm}}
+\toprule
+\textbf{Modeling Approach} & \textbf{Specific Tool} & \textbf{Primary Output} & \textbf{Application} \\
+\midrule
+Simulation & ISIS-Fish & Multi-species/multi-fleet dynamics & Evaluating management measures \\
+\midrule
+Spatio-Temporal & VAST-JARA & Probabilistic Red List status & Quantifying extinction risk uncertainty \\
+\midrule
+Decision Support & BESTEL-FCM & Policy scenario evaluation & Identifying dominant climate stressors \\
+\midrule
+Habitat Suitability & InVEST & Spatial trade-offs (e.g., carbon vs. bio) & Prioritizing restoration areas \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\caption{Strategy Components and Policy Alignment}
+\begin{tabular}{p{3.5cm} p{3.5cm} p{3.5cm} p{3.5cm}}
+\toprule
+\textbf{Strategy Component} & \textbf{Target/Metric} & \textbf{Alignment} & \textbf{Impact on Guadalquivir} \\
+\midrule
+Fluvial Continuity & 3,000 km (National) & EU Biodiversity 2030 & Barrier removal in mid-reaches \\
+\midrule
+River Nature Reserves & >3,500 km (National) & Water Framework Directive & Protection of headwater refugia \\
+\midrule
+Efficiency in Use & 10\% improvement & Circular Economy Strategy & Reducing irrigation-induced stress \\
+\midrule
+Wetland Recovery & 20,000 hectares & Ramsar Convention & Restoration of Doñana marshes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\caption{Species Codes Mapping and Status Classification}
+\label{tab:species_mapping}
+\begin{tabular}{llc}
+\toprule
+\textbf{Species Code} & \textbf{Scientific Name} & \textbf{Status} \\
+\midrule
+\multicolumn{3}{l}{\textit{\textbf{Native Species (NA)}}} \\
+SA & \textit{Squalius alburnoides} & NA \\
+LS & \textit{Luciobarbus sclateri} & NA \\
+ST & \textit{Salmo trutta} & NA \\
+SP & \textit{Squalius pyrenaicus} & NA \\
+IL & \textit{Iberochondrostoma lemmingii} & NA \\
+PW & \textit{Pseudochondrostoma willkommii} & NA \\
+CP & \textit{Cobitis paludica} & NA \\
+AA & \textit{Anguilla anguilla} & NA \\
+AH & \textit{Anaecypris hispanica} & NA \\
+LR & \textit{Liza ramada} & NA \\
+MC & \textit{Mugil cephalus} & NA \\
+AB & \textit{Aphanius baeticus} & NA \\
+IO & \textit{Iberochondrostoma oretanum} & NA \\
+\midrule
+\multicolumn{3}{l}{\textit{\textbf{Exotic + Other Species (EX)}}} \\
+OM & \textit{Oncorhynchus mykiss} & EX \\
+LG & \textit{Lepomis gibbosus} & EX \\
+GH & \textit{Gambusia holbrooki} & EX \\
+CG & \textit{Carassius gibelio} & EX \\
+CC & \textit{Cyprinus carpio} & EX \\
+MS & \textit{Micropterus salmoides} & EX \\
+AM & \textit{Ameiurus melas} & EX \\
+TT & \textit{Tinca tinca} & EX \\
+EL & \textit{Esox lucius} & EX \\
+GL & \textit{Gobio lozanoi} & EX \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%\newpage
+
+\begin{table}[h!]
+\centering
+\caption{Literature-Derived Intrinsic Growth Rates and Data Sources for Guadalquivir Basin Fish Species}
+\label{tab:growth_rates}
+{\small \begin{tabular}{lllc}
+\toprule
+\textbf{Code} & \textbf{Scientific Name} & \textbf{Intrinsic Growth Rate ($r$)} & \textbf{Source Reference} \\
+\midrule
+\multicolumn{4}{l}{\textit{\textbf{Native Species}}} \\
+AB & \textit{Aphanius baeticus} & $r_{\text{a}} \approx 1.0$--$1.5\text{ /year}$, $r_{\text{s}} \approx 0.03$--$0.05$ & \cite{FernandezDelgado1988} \\
+AH & \textit{Anaecypris hispanica} & $r_{\text{a}} \approx 0.8$--$1.2\text{/year}$ & \cite{SousaSantosetal2016} \\
+SP & \textit{Squalius pyrenaicus} & $r_{\text{a}} \approx 0.4$--$0.7\text{ /year}$ & \cite{SousaSantosetal2016} \\
+PW & \textit{Pseudochondrostoma willkommii} & $r_{\text{a}} \approx 0.2$--$0.4\text{ /year}$ & \cite{Herrera1992_Barbus} \\
+LS & \textit{Luciobarbus sclateri} & $r_{\text{a}} \approx 0.15$--$0.25\text{ /year}$ & \cite{Herrera1992_Barbus} \\
+SA & \textit{Squalius alburnoides} & $r_{\text{a}} \approx 0.5$--$0.9\text{ /year}$ &  \cite{SousaSantosetal2016} \\
+IL & \textit{Iberochondrostoma lemmingii} & $r_{\text{a}} \approx 0.4$--$0.7\text{ /year}$ &  \cite{SousaSantosetal2016} \\
+CP & \textit{Cobitis paludica} & $r_{\text{a}} \approx 0.5$--$0.8\text{ /year}$ & \cite{VilaGispert2005} \\
+IO & \textit{Iberochondrostoma oretanum} & $r_{\text{a}} \approx 0.3$--$0.6\text{ /year}$ & \cite{Freyhof2011} \\
+\midrule
+\multicolumn{4}{l}{\textit{\textbf{Invasive Species}}} \\
+GH & \textit{Gambusia holbrooki} & $r_{\text{s}} \approx 0.029\text{ /d}$, $r_{\text{a}} > 4.0\text{ /year}$ & \cite{FernandezDelgado1988} \\
+MS & \textit{Micropterus salmoides} & $r_{\text{a}} \approx 0.3$--$0.5\text{ /year}$ & \cite{RuizNavarro2020} \\
+LG & \textit{Lepomis gibbosus} & $r_{\text{a}} \approx 0.4$--$0.6\text{ /year}$ & \cite{Lenoir2020} \\
+CC & \textit{Cyprinus carpio} & $r_{\text{a}} \approx 0.3$--$0.5\text{ /year}$ & \cite{Herrera2022} \\
+CG & \textit{Carassius gibelio} & $r_{\text{a}} \approx 0.5$--$1.1\text{ /year}$ & \cite{Baudrieretal2019} \\
+AM & \textit{Ameiurus melas} & $r_{\text{a}} \approx 0.25$--$0.45\text{ /year}$ & \cite{Herrera2022} \\
+OM & \textit{Oncorhynchus mykiss} & $r_{\text{a}} \approx 0.3$--$0.5\text{ /year}$ & \cite{Herrera2022} \\
+EL & \textit{Esox lucius} & $r_{\text{a}} \approx 0.2$--$0.4\text{ /year}$ & \cite{Herrera2022} \\
+GL & \textit{Gobio lozano} & $r_{\text{a}} \approx 0.6$--$1.0\text{ /year}$ & \cite{Baudrieretal2019} \\
+TT & \textit{Tinca tinca} & $r_{\text{a}} \approx 0.2$--$0.4\text{ /year}$ & \cite{Herrera2022} \\
+\midrule
+\multicolumn{4}{l}{\textit{\textbf{Other Species}}} \\
+AA & \textit{Anguilla anguilla} & $r_{\text{a}} \approx 0.05$--$0.15\text{ /year}$ & \cite{OrdeixCasals2024} \\
+MC & \textit{Mugil cephalus} & $r_{\text{a}} \approx 0.2$--$0.4\text{ /year}$ & \cite{Baudrieretal2019} \\
+LR & \textit{Liza ramada} & $r_{\text{a}} \approx 0.2$--$0.4\text{ /year}$ & \cite{Baudrieretal2019} \\
+ST & \textit{Salmo trutta} & $r_{\text{a}} \approx 0.3$--$0.5\text{ /year}$ & Typical for salmonids \\
+\bottomrule
+\end{tabular}
+\begin{flushleft}
+\small
+\textbf{Note:} Annual rates (a) are converted to daily instantaneous rates (d) via $r_{\text{d}} = \frac{r_{\text{a}}}{365}$. Seasonal rates (s) are converted via $r_{\text{d}} = \frac{\ln(1 + r_{\text{s}})}{183}$.
+\end{flushleft}
+\end{table}}
+
+%\begin{table}[h!]
+%\centering
+%\caption{Estimated Intrinsic Growth Rates ($r$) for Key Species in the Guadalquivir Basin}
+%\begin{tabular}{@{}llll@{}}
+%\toprule
+%\textbf{Species} & \textbf{Status} & \textbf{Estimated $r$ (year$^{-1}$)} & \textbf{Recovery Potential} \\ \midrule
+%\textit{Luciobarbus sclateri} & Native Endemic & 0.15 -- 0.25 & Moderate %\\
+%\textit{Squalius alburnoides} & Native Endemic & 0.35 -- 0.50 & High (R-%strategy) \\
+%\textit{Anaecypris hispanica} & Native (Endangered) & 0.05 -- 0.12 & %Very Low \\
+%\textit{Gambusia holbrooki} & Invasive & 1.20 -- 2.50 & Extreme %(Invader) \\
+%\textit{Micropterus salmoides} & Invasive & 0.30 -- 0.45 & Moderate/High %\\ \bottomrule
+%\end{tabular}
+%end{table}
+
+\begin{table}[h!]
+\centering
+\caption{Simulation Parameter Combinations and Experimental Design}
+\label{tab:parameter_combinations}
+\begin{tabular}{llc}
+\toprule
+\textbf{Parameter} & \textbf{Values / Levels Explored} & \textbf{Total Levels} \\
+\midrule
+Temperature Increase ($\Delta T$) & 0.0, 1.0, 2.0, 3.0 & 4 \\
+Upstream Cost ($uc$)              & 0.01, 0.05, 0.1, 0.5 & 4 \\
+Passability ($p$)                 & Reduced, Improved & 2 \\
+Biotic Interactions               & Original, Random, Invasive-Favoured & 3 \\
+\midrule
+\multicolumn{2}{l}{\textbf{Total Factorial Combinations ($4 \times 4 \times 2 \times 3$):}} & \textbf{96} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\caption{(Original expertwise) Interspecific Species Interaction Matrix ($24 \times 24$)}
+\label{tab:interaction_matrix}
+\vskip 0.1in
+
+% Reduce padding between columns to the minimum possible
+\setlength{\tabcolsep}{1.6pt}
+\renewcommand{\arraystretch}{1.1}
+
+% Resize box ensures it forces fit precisely within the text width bounds
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l *{24}{c}}
+\toprule
+ & \textbf{LS} & \textbf{SA} & \textbf{SP} & \textbf{PW} & \textbf{CP} & \textbf{IL} & \textbf{IO} & \textbf{AA} & \textbf{AH} & \textbf{GL} & \textbf{GH} & \textbf{LG} & \textbf{AAL} & \textbf{CG} & \textbf{CC} & \textbf{MS} & \textbf{ST} & \textbf{OM} & \textbf{EL} & \textbf{AM} & \textbf{TT} & \textbf{LR} & \textbf{MC} & \textbf{AB} \\
+\midrule
+\textbf{LS(N)}  & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -0.5    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -0.3    & -0.3    & \zero   \\
+\textbf{SA(N)}  & \zero   & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{SP(N)}  & \zero   & -0.3    & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{PW(N)}  & \zero   & \zero   & \zero   & $\diag$ & \zero   & -0.3    & -0.3    & -0.5    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -0.3    & -0.3    & \zero   \\
+\textbf{CP(N)}  & \zero   & \zero   & \zero   & \zero   & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{IL(N)}  & \zero   & \zero   & \zero   & \zero   & \zero   & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{IO(N)}  & \zero   & \zero   & \zero   & \zero   & \zero   & -0.3    & $\diag$ & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{AA(O)}  & \zero   & -0.5    & -0.5    & \zero   & -0.5    & -0.5    & -0.5    & $\diag$ & -0.5    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -0.5    \\
+\textbf{AH(N)}  & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{GL(I)}  & -0.3    & \zero   & \zero   & \zero   & \zero   & -0.3    & -0.3    & -1.0    & -1.0    & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -0.5    & \zero   & \zero   & \zero   & \zero   & -1.0    & -1.0    & -1.0    \\
+\textbf{GH(I)}  & -0.3    & -0.8    & -0.8    & \zero   & -0.8    & -0.8    & -0.8    & \zero   & -0.8    & \zero   & $\diag$ & \zero   & \zero   & \zero   & \zero   & -0.3    & -1.0    & \zero   & \zero   & \zero   & \zero   & -0.3    & -0.3    & -0.8    \\
+\textbf{LG(I)}  & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{AAL(I)} & -0.3    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & -0.8    & -0.3    & -0.8    & -0.3    & -0.5    & \zero   & $\diag$ & \zero   & \zero   & -0.3    & -1.0    & \zero   & -0.5    & \zero   & \zero   & -0.3    & -0.3    & -0.8    \\
+\textbf{CG(I)}  & -0.3    & -0.8    & -0.8    & -0.3    & -0.8    & -0.8    & -0.8    & -0.3    & -0.8    & -0.3    & -0.3    & \zero   & -0.5    & $\diag$ & -0.5    & -0.3    & -1.0    & \zero   & -0.5    & \zero   & \zero   & -0.3    & -0.3    & -0.8    \\
+\textbf{CC(I)}  & -0.3    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & -0.8    & -0.3    & -0.8    & -0.5    & -0.5    & \zero   & -0.5    & \zero   & $\diag$ & -0.3    & -1.0    & \zero   & -0.5    & \zero   & \zero   & -0.3    & -0.3    & -0.8    \\
+\textbf{MS(I)}  & -0.8    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & \zero   & \zero   & \zero   & \zero   & \zero   & $\diag$ & -1.0    & \zero   & \zero   & \zero   & \zero   & -0.5    & -0.5    & -0.8    \\
+\textbf{ST(N)}  & \zero   & -0.5    & -0.5    & \zero   & \zero   & -0.5    & -1.0    & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & $\diag$ & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   \\
+\textbf{OM(I)}  & -0.3    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & -0.8    & -1.0    & -1.0    & -0.8    & -1.0    & \zero   & -0.5    & -1.0    & -1.0    & -0.3    & -0.3    & $\diag$ & -0.5    & -1.0    & -1.0    & -1.0    & -1.0    & -1.0    \\
+\textbf{EL(I)}  & -0.5    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & -0.5    & \zero   & \zero   & \zero   & \zero   & -0.5    & -1.0    & \zero   & $\diag$ & \zero   & \zero   & -1.0    & -1.0    & -1.0    \\
+\textbf{AM(I)}  & -0.5    & -0.8    & -0.8    & -0.5    & -0.8    & -0.8    & -0.8    & -0.3    & -1.0    & -0.5    & -0.5    & \zero   & -0.5    & -0.5    & -0.5    & -0.3    & -1.0    & \zero   & -0.5    & $\diag$ & -0.5    & -0.3    & -0.3    & -0.8    \\
+\textbf{TT(I)}  & -0.3    & \zero   & \zero   & -0.3    & \zero   & \zero   & \zero   & -1.0    & \zero   & -0.3    & -0.3    & \zero   & -0.5    & -0.3    & -0.5    & -0.3    & -1.0    & \zero   & -0.5    & \zero   & $\diag$ & -1.0    & -1.0    & -1.0    \\
+\textbf{LR(N)}  & \zero   & -1.0    & -1.0    & \zero   & \zero   & -1.0    & -1.0    & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & $\diag$ & \zero   & \zero   \\
+\textbf{MC(N)}  & \zero   & -1.0    & -1.0    & \zero   & \zero   & -1.0    & -1.0    & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & -0.3    & $\diag$ & \zero   \\
+\textbf{AB(N)}  & \zero   & -1.0    & -1.0    & \zero   & \zero   & -1.0    & -1.0    & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & -1.0    & \zero   & \zero   & \zero   & \zero   & \zero   & \zero   & $\diag$ \\
+\bottomrule
+\end{tabular}%
+}
+\vskip 0.05in
+\begin{flushleft}
+\scriptsize
+\textit{Note:} Matrix rows impact columns ($A_{ij}$ elements denote the directional constraint effect of row species $i$ on column species $j$). Status definitions: (N) Native, (I) Invasive/Exotic, (O) Other. Values of \zero\ represent neutral or undetected interactions.
+\end{flushleft}
+\end{table}
+
+
+\begin{table}[h!]
+\centering
+\caption{Randomized Interspecific Species Interaction Matrix ($24 \times 24$)}
+\label{tab:random_interaction_matrix}
+\vskip 0.1in
+
+% Tighten spacing between columns to prevent over-stretching
+\setlength{\tabcolsep}{1.1pt}
+\renewcommand{\arraystretch}{1.15}
+
+% Force the matrix container to fit exactly inside the horizontal text width bounds
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l *{24}{c}}
+\toprule
+ & \textbf{LS} & \textbf{SA} & \textbf{SP} & \textbf{PW} & \textbf{CP} & \textbf{IL} & \textbf{IO} & \textbf{AA} & \textbf{AH} & \textbf{GL} & \textbf{GH} & \textbf{LG} & \textbf{AAL} & \textbf{CG} & \textbf{CC} & \textbf{MS} & \textbf{ST} & \textbf{OM} & \textbf{EL} & \textbf{AM} & \textbf{TT} & \textbf{LR} & \textbf{MC} & \textbf{AB} \\
+\midrule
+\textbf{LS(N)}  & $\diag$ & -0.6 & -0.5 & -0.5 & -0.7 & -0.7 & -0.2 & -0.6 & -0.7 & -0.5 & -0.3 & -0.7 & -0.6 & -0.3 & -0.3 & -0.5 & -0.1 & -0.3 & -0.2 & -0.4 & -0.5 & -0.1 & -0.5 & -0.2 \\
+\textbf{SA(N)}  & -0.6 & $\diag$ & -0.4 & -0.3 & -0.4 & -0.9 & -0.3 & -0.6 & -0.3 & -0.2 & -0.7 & -0.4 & -0.0 & -0.1 & -0.7 & -0.5 & -0.7 & -0.2 & -0.5 & -0.5 & -0.9 & -0.2 & -0.3 & -1.0 \\
+\textbf{SP(N)}  & -0.4 & -0.7 & $\diag$ & -0.2 & -0.6 & -0.5 & -0.9 & -0.1 & -0.3 & -0.6 & -0.7 & -0.7 & -0.4 & -0.1 & -0.7 & -0.4 & -0.4 & -0.7 & -0.2 & -0.5 & -0.9 & -0.2 & -0.2 & -0.2 \\
+\textbf{PW(N)}  & -0.1 & -0.3 & -0.9 & $\diag$ & -0.2 & -0.1 & -0.9 & -0.3 & -0.7 & -0.4 & -0.3 & -0.2 & -0.5 & -0.8 & -0.7 & -0.4 & -0.9 & -0.4 & -0.7 & -0.4 & -0.1 & -0.2 & -1.0 & -0.8 \\
+\textbf{CP(N)}  & -0.5 & -0.6 & -0.9 & -0.2 & $\diag$ & -0.6 & -0.4 & -0.8 & -0.5 & -0.6 & -0.7 & -0.6 & -0.9 & -0.6 & -0.2 & -0.4 & -0.3 & -0.6 & -0.4 & -0.1 & -0.1 & -0.2 & -0.6 & -0.1 \\
+\textbf{IL(N)}  & -0.5 & -0.1 & -0.9 & -0.2 & -0.8 & $\diag$ & -0.3 & -0.9 & -0.6 & -0.6 & -0.5 & -0.8 & -0.5 & -0.1 & -0.8 & -0.5 & -0.4 & -0.1 & -0.2 & -0.2 & -0.2 & -0.0 & -0.9 & -0.6 \\
+\textbf{IO(N)}  & -0.5 & -0.7 & -0.2 & -0.6 & -0.7 & -0.6 & $\diag$ & -0.9 & -0.1 & -0.8 & -0.1 & -0.6 & -0.1 & -0.7 & -0.5 & -0.3 & -0.5 & -0.9 & -0.0 & -0.6 & -0.6 & -1.0 & -0.6 & -0.3 \\
+\textbf{AA(O)}  & -0.2 & -0.7 & -0.9 & -0.1 & -0.9 & -0.1 & -0.2 & $\diag$ & -0.8 & -0.5 & -0.7 & -0.4 & -0.6 & -0.2 & -0.3 & -0.5 & -0.4 & -0.2 & -0.2 & -1.0 & -0.6 & -0.0 & -0.8 & -1.0 \\
+\textbf{AH(N)}  & -0.2 & -0.5 & -0.3 & -0.5 & -0.5 & -0.3 & -0.8 & -0.6 & $\diag$ & -0.5 & -0.7 & -0.7 & -0.7 & -0.8 & -0.9 & -0.3 & -0.4 & -0.3 & -0.9 & -0.6 & -0.0 & -0.3 & -1.0 & -0.3 \\
+\textbf{GL(I)}  & -0.7 & -0.7 & -0.7 & -0.7 & -0.7 & -0.5 & -0.5 & -0.1 & -0.7 & $\diag$ & -0.1 & -0.3 & -0.4 & -0.5 & -0.9 & -0.3 & -0.8 & -0.6 & -0.6 & -0.9 & -0.9 & -0.6 & -0.9 & -0.7 \\
+\textbf{GH(I)}  & -0.9 & -0.8 & -0.8 & -0.4 & -0.1 & -0.6 & -0.6 & -0.3 & -0.9 & -0.6 & $\diag$ & -0.8 & -0.6 & -0.4 & -0.6 & -0.1 & -0.5 & -0.6 & -0.5 & -0.1 & -0.1 & -0.8 & -0.1 & -0.1 \\
+\textbf{LG(I)}  & -0.2 & -0.8 & -0.2 & -0.6 & -0.7 & -0.5 & -0.0 & -0.2 & -0.9 & -0.7 & -0.2 & $\diag$ & -0.4 & -0.4 & -0.2 & -0.8 & -0.8 & -0.5 & -0.9 & -0.1 & -0.1 & -0.7 & -0.5 & -0.1 \\
+\textbf{AAL(I)} & -0.2 & -0.6 & -0.5 & -0.4 & -0.8 & -0.6 & -0.6 & -0.2 & -0.2 & -0.1 & -0.1 & -0.4 & $\diag$ & -0.6 & -0.2 & -0.5 & -0.7 & -0.6 & -0.7 & -0.8 & -0.5 & -0.7 & -0.2 & -0.5 \\
+\textbf{CG(I)}  & -0.9 & -0.5 & -0.1 & -0.3 & -0.2 & -0.3 & -0.7 & -0.7 & -0.5 & -0.5 & -0.1 & -0.8 & -0.7 & $\diag$ & -0.5 & -0.3 & -0.8 & -0.8 & -0.3 & -0.5 & -0.3 & -0.5 & -0.5 & -0.3 \\
+\textbf{CC(I)}  & -0.7 & -0.6 & -0.3 & -0.4 & -0.4 & -0.1 & -0.4 & -0.2 & -0.3 & -0.3 & -0.6 & -0.4 & -0.2 & -0.5 & $\diag$ & -0.7 & -0.8 & -0.8 & -0.3 & -0.5 & -0.5 & -0.3 & -0.5 & -0.5 \\
+\textbf{MS(I)}  & -0.3 & -0.8 & -0.3 & -0.4 & -0.4 & -0.1 & -0.4 & -0.2 & -0.3 & -0.3 & -0.6 & -0.4 & -0.2 & -0.5 & -0.7 & $\diag$ & -0.8 & -0.3 & -0.4 & -0.5 & -0.9 & -0.8 & -0.5 & -0.7 \\
+\textbf{ST(N)}  & -0.9 & -0.9 & -0.8 & -0.4 & -0.6 & -0.1 & -0.9 & -0.2 & -0.3 & -0.6 & -0.6 & -0.5 & -0.6 & -0.8 & -0.8 & -0.5 & $\diag$ & -0.4 & -0.2 & -0.7 & -0.0 & -1.0 & -0.5 & -0.0 \\
+\textbf{OM(I)}  & -0.5 & -0.7 & -0.7 & -0.4 & -0.2 & -0.0 & -0.2 & -0.9 & -0.6 & -0.5 & -0.5 & -0.9 & -0.7 & -0.3 & -0.3 & -0.4 & -0.2 & $\diag$ & -0.5 & -0.4 & -0.9 & -0.4 & -1.0 & -0.1 \\
+\textbf{EL(I)}  & -0.7 & -0.5 & -0.4 & -0.1 & -0.2 & -0.6 & -1.0 & -0.6 & -0.9 & -0.1 & -0.1 & -0.8 & -0.1 & -0.8 & -0.3 & -0.6 & -0.1 & -0.5 & $\diag$ & -0.6 & -0.0 & -0.0 & -0.5 & -0.1 \\
+\textbf{AM(I)}  & -0.7 & -0.5 & -0.1 & -0.9 & -0.4 & -0.4 & -0.4 & -0.2 & -0.1 & -0.9 & -0.1 & -0.4 & -0.6 & -0.8 & -0.3 & -0.6 & -0.1 & -0.4 & -0.6 & $\diag$ & -0.0 & -0.0 & -0.5 & -0.1 \\
+\textbf{TT(I)}  & -0.7 & -0.5 & -0.1 & -0.9 & -0.4 & -0.4 & -0.4 & -0.2 & -0.1 & -0.9 & -0.1 & -0.4 & -0.6 & -0.8 & -0.3 & -0.6 & -0.1 & -0.4 & -0.6 & -0.0 & $\diag$ & -0.0 & -0.5 & -0.1 \\
+\textbf{LR(N)}  & -0.5 & -0.9 & -0.4 & -0.1 & -0.1 & -0.6 & -0.8 & -0.3 & -0.2 & -0.1 & -0.4 & -0.9 & -0.4 & -0.4 & -0.1 & -0.8 & -0.1 & -0.5 & -0.6 & -0.0 & -0.0 & $\diag$ & -0.5 & -0.1 \\
+\textbf{MC(N)}  & -0.5 & -0.9 & -0.4 & -0.1 & -0.1 & -0.6 & -0.8 & -0.3 & -0.2 & -0.1 & -0.4 & -0.9 & -0.4 & -0.4 & -0.1 & -0.8 & -0.1 & -0.5 & -0.6 & -0.0 & -0.0 & -0.3 & $\diag$ & -0.1 \\
+\textbf{AB(N)}  & -0.5 & -0.9 & -0.4 & -0.1 & -0.1 & -0.6 & -0.8 & -0.3 & -0.2 & -0.1 & -0.4 & -0.9 & -0.4 & -0.4 & -0.1 & -0.8 & -0.1 & -0.5 & -0.6 & -0.0 & -0.0 & -0.0 & -0.0 & $\diag$ \\
+\bottomrule
+\end{tabular}%
+}
+\vskip 0.05in
+\begin{flushleft}
+\scriptsize
+\textit{Note:} Matrix rows impact columns ($A_{ij}$ elements denote the directional interaction multiplier of row species $i$ on column species $j$). Label designations: (N) Native, (I) Invasive/Exotic, (O) Other.
+\end{flushleft}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\caption{Invasive-Favoured Interspecific Species Interaction Matrix ($24 \times 24$)}
+\label{tab:invasive_favoured_matrix}
+\vskip 0.1in
+
+% Tighten spacing between columns to prevent overflow
+\setlength{\tabcolsep}{1.4pt}
+\renewcommand{\arraystretch}{1.15}
+
+% Force the matrix container to fit exactly inside the horizontal text width bounds
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l *{24}{c}}
+\toprule
+ & \textbf{LS} & \textbf{SA} & \textbf{SP} & \textbf{PW} & \textbf{CP} & \textbf{IL} & \textbf{IO} & \textbf{AA} & \textbf{AH} & \textbf{GL} & \textbf{GH} & \textbf{LG} & \textbf{AAL} & \textbf{CG} & \textbf{CC} & \textbf{MS} & \textbf{ST} & \textbf{OM} & \textbf{EL} & \textbf{AM} & \textbf{TT} & \textbf{LR} & \textbf{MC} & \textbf{AB} \\
+\midrule
+\textbf{LS(N)}  & $\diag$ & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{SA(N)}  & -0.1 & $\diag$ & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{SP(N)}  & -0.1 & -0.1 & $\diag$ & -0.1 & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{PW(N)}  & -0.1 & -0.1 & -0.1 & $\diag$ & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{CP(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & $\diag$ & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{IL(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & $\diag$ & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{IO(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & $\diag$ & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{AA(O)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & $\diag$ & \zero & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{AH(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & \zero & $\diag$ & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{GL(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & $\diag$ & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{GH(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & $\diag$ & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{LG(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & $\diag$ & -0.3 & -0.3 & -0.3 & -0.3 & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{AAL(I)} & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & $\diag$ & -0.3 & -0.3 & -0.3 & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{CG(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & -0.3 & $\diag$ & -0.3 & -0.3 & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{CC(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & $\diag$ & -0.3 & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{MS(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & $\diag$ & \zero & -0.3 & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{ST(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & $\diag$ & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & -0.1 \\
+\textbf{OM(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & \zero & $\diag$ & -0.3 & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{EL(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & \zero & -0.3 & $\diag$ & -0.3 & -0.3 & \zero & \zero & \zero \\
+\textbf{AM(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & \zero & -0.3 & -0.3 & $\diag$ & -0.3 & \zero & \zero & \zero \\
+\textbf{TT(I)}  & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & \zero & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & -0.3 & \zero & -0.3 & -0.3 & -0.3 & $\diag$ & \zero & \zero & \zero \\
+\textbf{LR(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & $\diag$ & -0.1 & -0.1 \\
+\textbf{MC(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & $\diag$ & -0.1 \\
+\textbf{AB(N)}  & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & -0.1 & \zero & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.8 & -0.8 & -0.8 & -0.8 & -0.1 & -0.1 & $\diag$ \\
+\bottomrule
+\end{tabular}%
+}
+\vskip 0.05in
+\begin{flushleft}
+\scriptsize
+\textit{Note:} Matrix rows impact columns ($A_{ij}$ elements denote the directional interaction multiplier of row species $i$ on column species $j$). Label designations: (N) Native, (I) Invasive/Exotic, (O) Other. Muted gray entries represent standard \zero\ (neutral) effects to visually contrast the structured competitive pressure blocks.
+\end{flushleft}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\caption{Systemic Tradeoffs of Connectivity States on Species Richness}
+\label{tab:connectivity_tradeoffs}
+\vskip 0.1in
+\begin{tabular}{p{3.5cm} p{5.5cm} p{5.5cm}}
+\toprule
+\textbf{Connectivity State} & \textbf{Effect on Native Species} & \textbf{Effect on Invasive Species} \\
+\midrule
+\textbf{Baseline} \newline (High Connectivity) & \textbf{Highly vulnerable.} Allows thermal migration, but forces intense direct spatial overlap with invasive corridors. & \textbf{Maximum expansion.} Rapidly tracks shifting temperature gradients across the entire river channel network. \\
+\addlinespace
+\textbf{Blocked} \newline (High Fragmentation) & \textbf{Trapped.} Severe local extinctions due to an inability to escape rising thermal minimum constraints. & \textbf{Isolated patches.} Dispersal is strictly contained, showing localized, lower-magnitude change blocks. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+\clearpage
+\section{References}
+\bibliographystyle{apalike}
+\bibliography{guadex}
+
+\end{document}

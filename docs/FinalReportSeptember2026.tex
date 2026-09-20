@@ -1,0 +1,398 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\geometry{margin=2.5cm}
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue,citecolor=black}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\title{\textbf{Thermal Change, Network Fragmentation and Biotic Structure in a Mediterranean Fish Metacommunity}\\
+\vspace{0.15in}
+Final integrated report for the Guadalquivir River Basin\\
+2026--2045 simulation horizon}
+\author{}
+\date{September 2026}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Abstract}
+
+Mediterranean river fish communities experience warming, dendritic habitat fragmentation and biological invasion simultaneously. Their responses cannot be inferred from climate forcing alone because persistence and thermal tracking depend on network connectivity and biotic interactions. We analysed a deterministic, spatially explicit metacommunity model of the Guadalquivir River Basin, southern Spain. The model represented 775 sites, 24 fish species, daily site-level water temperature, species-specific thermal performance, asymmetric interactions and directional dispersal through a dendritic network. We synthesised a climate ensemble of 44 combinations of 11 general circulation models and four Shared Socioeconomic Pathways, a no-warming control, a 32-run obstacle factorial experiment and a 48-run interaction-structure experiment.
+
+Basin-mean warming by 2045 was 0.74--0.97~$^\circ$C across emission scenarios, with individual climate-model combinations spanning approximately 0.28--1.37~$^\circ$C. Total biomass declined weakly with warming (slope $-0.120$ model units per $^\circ$C, $R^2=0.25$), while native richness was effectively unchanged (slope $-0.00071$ species per site per $^\circ$C, $R^2=0.02$). The weak aggregate response resulted from opposing species-level thermal responses: dominant native cyprinids had optima above current basin temperature, whereas brown trout (\textit{Salmo trutta}) was already on the warm side of its optimum. Trout biomass declined by 9.0--10.9\% across scenarios, compared with 0.2\% in the control, and declined at approximately 9.2\% of baseline biomass per $^\circ$C of warming ($R^2=0.65$).
+
+In the obstacle experiment, upstream movement cost was the principal control of aggregate native biomass, whereas the climate endpoint was the principal control of trout biomass. Passability had a non-monotonic effect: blocking barriers reduced native biomass at low background upstream cost but increased basin-mean native biomass at high upstream cost. An invasive-favouring interaction matrix reduced native biomass by approximately 90\% and increased invasive biomass nearly tenfold. This was a deliberately extreme, confounded contrast rather than an empirical uncertainty estimate.
+
+The results indicate that, over this early-warming horizon, community-level indicators are more strongly controlled by network hydraulics and interaction structure than by approximately 1~$^\circ$C of warming. Warming nevertheless produces an early decline in a cold-water specialist. Connectivity interventions should therefore be evaluated jointly with background network resistance, species composition and invasive pressure rather than under the assumption that increased passability always improves aggregate native outcomes.
+
+\section{Introduction}
+
+\subsection{Metacommunities in dendritic river networks}
+
+Riverine metacommunities are structured by the interaction of local environmental filtering, demographic regulation, biotic interactions and dispersal through branching networks. The metacommunity framework motivates this synthesis \cite{leibold2004metacommunity}.
+
+Dendritic topology constrains movement to connected channels and makes directional movement important \cite{altermatt2013dendritic}. Barriers can alter both the amount of movement and the spatial distribution of demographic rescue and colonisation \cite{PerkinGido2012}. The effect of a barrier is therefore expected to depend on its position in the network, the background cost of upstream movement and the species using the corridor.
+
+Mediterranean rivers are especially informative systems for examining these interactions. They contain range-restricted endemic fishes and strong spatial gradients in temperature, habitat quality and flow regulation. Warming can move species away from or towards their thermal optima, while fragmentation can prevent populations from tracking suitable reaches. Invasive species can change the direction and magnitude of these responses through asymmetric competition and predation.
+
+\subsection{The Guadalquivir Basin as a model system}
+
+The Guadalquivir River Basin is a large, strongly regulated Mediterranean basin in southern Spain with high Iberian freshwater endemism and a long history of dam-associated fish-community change \cite{Herrera2022,RamosMerchante2018}. The model domain contains 775 sampling sites aggregated into 774 water bodies and connected as a dendritic river network. The modelled assemblage contains 10 native residents, 10 invasive species and four migratory or diadromous taxa. Migratory taxa remain in the dynamical system and contribute to total biomass, but are excluded from native-richness reporting because their estuarine or marine life histories are not represented by the modelled freshwater corridor.
+
+The basin contains a dense inventory of transverse structures. Of 1,658 non-completely-passable obstacles in the 2026 inventory, 973 were spatially matched to modelled network segments within 2,000~m. Matched links have base upstream passability of 0.1 and downstream passability of 0.5. A global upstream movement cost additionally reduces dispersal as elevation gain increases. These features make the basin a useful system for examining thermal--hydraulic coupling in a regulated Mediterranean river network \cite{PerkinGido2012,Larsenetal2021}.
+
+\subsection{Objectives}
+
+This report addresses three questions:
+
+\begin{enumerate}
+    \item How strongly does projected warming between 2026 and 2045 alter aggregate biomass and richness relative to a stationary seasonal control?
+    \item How do upstream movement cost and local obstacle passability influence native, invasive and total biomass across the dendritic network?
+    \item Does the structure of biotic interactions alter apparent sensitivity to climate and connectivity, and which species provides the earliest indication of thermal change?
+\end{enumerate}
+
+The analysis uses three complementary experiments: a multi-model climate ensemble, a balanced obstacle factorial and a deliberately contrasting interaction-structure sweep. The distinction between robust mechanistic results and effects conditional on perturbed model structure is maintained throughout.
+
+\section{Materials and Methods}
+
+\subsection{Study domain and assemblage}
+
+The model represents one Guadalquivir basin with 775 sites, 774 reporting water bodies and 24 fish species. Native residents are \textit{Aphanius baeticus}, \textit{Anaecypris hispanica}, \textit{Squalius pyrenaicus}, \textit{Pseudochondrostoma willkommii}, \textit{Luciobarbus sclateri}, \textit{Squalius alburnoides}, \textit{Iberochondrostoma lemmingii}, \textit{Cobitis paludica}, \textit{Iberochondrostoma oretanum} and \textit{Salmo trutta}. Invasive species are \textit{Gambusia holbrooki}, \textit{Micropterus salmoides}, \textit{Lepomis gibbosus}, \textit{Cyprinus carpio}, \textit{Carassius gibelio}, \textit{Ameiurus melas}, \textit{Oncorhynchus mykiss}, \textit{Esox lucius}, \textit{Gobio lozanoi} and \textit{Tinca tinca}. Migratory or diadromous taxa are \textit{Anguilla anguilla}, \textit{Alburnus alburnus}, \textit{Liza ramada} and \textit{Mugil cephalus}.
+
+The classification of \textit{Alburnus alburnus} requires verification. It is grouped as migratory in the current model although source inventory information identifies it as exotic. This issue affects interpretation of invasive richness and biomass but does not affect the trout result or the hydraulic rankings.
+
+\subsection{Local population dynamics}
+
+For site $i$ and species $s$, density $N_{i,s}$ follows
+
+\begin{equation}
+\frac{dN_{i,s}}{dt} = N_{i,s}\left[r_s W_{i,s}\left(1-\frac{\sum_j N_{i,j}}{K_i}\right) + \frac{\sum_j \alpha_{sj}N_{i,j}}{K_i} - m^{\mathrm{heat}}_{i,s}(t)\right]
+ + \sum_{j\in\mathrm{nb}(i)}\left(m^s_{ji}N_{j,s}-m^s_{ij}N_{i,s}\right).
+\end{equation}
+
+The local term combines density dependence, environmental suitability and an asymmetric interaction matrix. $K_i$ is site carrying capacity, $r_s$ is the intrinsic growth rate and $\alpha_{sj}$ is the effect of species $j$ on species $s$. Carrying capacity was scaled to 1 times observed total density with a minimum-capacity floor; the mean modelled capacity was approximately 86.6 compared with an observed mean of approximately 84.4. Species observed at a site received their full growth rate and absent species received 10\% of the rate to permit colonisation. Annual literature-derived rates were converted to daily rates.
+
+Environmental suitability was defined as
+
+\begin{equation}
+W_{i,s}(t) = \exp\left[-\frac{(T_i(t)-T_s^*)^2}{2\sigma_s^2}\right]h_i,
+\end{equation}
+
+where $T_i(t)$ is daily site temperature, $T_s^*$ is the species thermal optimum, $\sigma_s$ is thermal breadth and $h_i$ is a static habitat-suitability index bounded between 0.1 and 1.0. The habitat index was derived from the trophic-state index and held constant. Thermal optima were set to the midpoint of each empirical temperature range and thermal breadth to one-sixth of that range. The model therefore uses a fixed, symmetric Gaussian niche with no acclimation, plasticity or evolution.
+
+Heat stress was represented separately:
+
+\begin{equation}
+m^{\mathrm{heat}}_{i,s}(t) = k\,\max\left(0,T_i(t)-T^{\mathrm{up}}_s\right)^2,
+\end{equation}
+
+where $T^{\mathrm{up}}_s$ is the empirical upper thermal limit. The coefficient is
+$k=3.7817692640400324\times10^{-5}$ with units
+$\mathrm{day}^{-1}\,{}^\circ\mathrm{C}^{-2}$. It was calibrated so that the most exposed species--site combination under baseline climate lost no more than 5\% of annual survival. No cold-stress mortality term was applied.
+
+\subsection{Dendritic dispersal and obstacles}
+
+Movement from site $i$ to site $j$ was defined as
+
+\begin{equation}
+m_{ij}=D_{\mathrm{median}}\frac{x_{ij}p_{ij}}{d_{ij}},
+\end{equation}
+
+where $D_{\mathrm{median}}\approx0.0274$ km day$^{-1}$, $d_{ij}$ is hydrological distance, $x_{ij}$ is the elevation-dependent movement factor and $p_{ij}$ is directional passability. Species-specific rates were obtained by multiplying this base rate by literature-derived relative dispersal scalars. Migratory taxa generally had values above five times the median and sedentary taxa below 0.1 times the median.
+
+Downstream or level movement was assigned $x_{ij}=1$. For upstream movement,
+
+\begin{equation}
+x_{ij}=\frac{1}{1+c\Delta e},
+\end{equation}
+
+where $c$ is global upstream movement cost and $\Delta e$ is elevation gain. The network was constructed from hydrological distances by connecting adjacent sites within sub-catchments and linking outlet sites across sub-catchments. The effective passability was the element-wise minimum of legacy dam and directional obstacle constraints. A sparse dispersal matrix was recomputed for each upstream-cost and passability combination. Equal-elevation links were unrestricted by the obstacle overlay because flow direction could not be inferred.
+
+The four passability states were baseline (multiplier 1.0), improved (1.5), reduced (0.5) and blocked (0.1), with passability capped at 1.0. No exploitation-pressure scenario was applied in the experiments reported here. Invasive responses are reported only as aggregate invasive biomass and richness; species-level invasive responses are outside the scope of this synthesis.
+
+\subsection{Temperature forcing and initial conditions}
+
+Climate simulations used daily site-level absolute water temperature for 11 general circulation models under SSP1-2.6, SSP2-4.5, SSP3-7.0 and SSP5-8.5. Anomalies relative to the 1986--2005 baseline were added to observed site temperatures over 2026--2045. The no-warming control repeated the baseline seasonal climatology. Elevation scaling of the warming anomaly was disabled, so all sites received the same basin-scale anomaly while retaining their different absolute temperature levels.
+
+The climate ensemble and obstacle experiment used a converged 373-year seasonal baseline burn-in, with basin convergence tolerance $5\times10^{-5}$. The alternative-interaction experiment used a separate 21-year burn-in for each interaction matrix. The system was integrated with the adaptive fifth-order Runge--Kutta method `Tsit5` using relative and absolute tolerances of $10^{-6}$, with one time unit equal to one day and a positivity callback. Climate outputs were saved on a monthly grid and reported annually.
+
+Two warming quantities were kept distinct. Climate dose--response analysis used imposed basin-mean warming at 2045. The obstacle experiment selected the coolest endpoint (SSP1-2.6/IITM-ESM) and warmest endpoint (SSP2-4.5/UKESM1-0-LL) using the maximum across sites of the final-year annual-mean anomaly; those endpoint values were approximately 0.856~$^\circ$C and 1.852~$^\circ$C, respectively. These quantities are not interchangeable.
+
+\subsection{Experimental design}
+
+\begin{table}[H]
+\centering
+\caption{Current simulation design.}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.30\textwidth}Y}
+\toprule
+Component & Specification \\
+\midrule
+Spatial domain & Guadalquivir basin; 775 sites and 774 water bodies \\
+Assemblage & 24 species: 10 native residents, 10 invasive and 4 migratory/diadromous \\
+Climate ensemble & 11 climate models $\times$ 4 SSPs = 44 scenarios plus one no-warming control \\
+Obstacle experiment & 2 climate endpoints $\times$ 4 upstream costs $\times$ 4 passability states = 32 runs \\
+Interaction experiment & 3 interaction matrices $\times$ 2 climate endpoints $\times$ 2 upstream costs $\times$ 4 passability states = 48 runs \\
+Upstream costs & 0.01, 0.05, 0.10 and 0.50 in the obstacle experiment; 0.01 and 0.50 in the interaction experiment \\
+Interaction matrices & Original qualitative matrix; random placebo with off-diagonal values in $[-1,0]$; invasive-favouring worst-case matrix \\
+Simulation horizon & 2026--2045 with daily temperature forcing and annual reporting \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The original interaction matrix mapped qualitative categories to coefficients of $-1.0$ (no coexistence), $-0.8$ (displacement), $-0.5$ (predation), $-0.3$ (competition or interference), $-0.2$ (weak effect) and $0.0$ (coexistence or neutrality). The random placebo used a fixed seed of 42. The invasive-favouring matrix imposed invasive-to-native effects of $-0.8$, no native-to-invasive effects, invasive--invasive competition of $-0.3$ and native--native competition of $-0.1$. All alternative-interaction runs also used a thermal-breadth multiplier of 0.3, so interaction structure, thermal breadth and burn-in duration are confounded in that experiment.
+
+\subsection{Response metrics and analysis}
+
+Richness was the number of species exceeding 0.1 density units, averaged over sites or reporting units. Native, invasive and total biomass were sums of the relevant species densities. Realised native richness loss was calculated as
+
+\begin{equation}
+L(t)=\max\left(0,1-\frac{R(t)}{R_0}\right),
+\end{equation}
+
+where $R_0$ is richness in the spun-up baseline. This is not an extinction probability. The quasi-extinction diagnostic flagged a site when a species remained below $\max(0.1,0.1\times$ baseline density$)$ for three consecutive annual observations. It was not used as a primary climate outcome because the trout fraction was already near saturation.
+
+Climate dose--response relationships were estimated by ordinary least squares of final-year basin metrics against imposed basin-mean warming across the 44 scenario runs, excluding the control. Factor effect sizes were calculated as the median within-block span over factor levels, standardised by the run-set standard deviation. Balanced within-experiment sums of squares were used descriptively. No formal significance testing was performed and no stochastic replicate simulations were run.
+
+\section{Results}
+
+\subsection{Climate forcing and aggregate community response}
+
+Added basin-mean warming by 2045 was 0.74~$^\circ$C under SSP1-2.6, 0.87~$^\circ$C under SSP2-4.5, 0.88~$^\circ$C under SSP3-7.0 and 0.97~$^\circ$C under SSP5-8.5. Across individual climate-model and pathway combinations, the basin-mean warming axis spanned approximately 0.28--1.37~$^\circ$C. Climate-model spread overlapped differences among pathways.
+
+The control was nearly stationary over 20 years: total biomass changed by +0.08\%, native biomass by +0.10\% and native richness by $-0.57$\%. The small residual drift is interpreted as an internal cycle rather than a climate response. Across climate scenarios, total biomass declined by $-0.120$ model units per $^\circ$C ($R^2=0.25$), an effect of approximately 0.13\% of the roughly 92.7 model units per site at the warming extremes. Native richness declined by only $-0.00071$ species per site per $^\circ$C ($R^2=0.02$). The richness-loss indicator had slope $+0.00015$ per $^\circ$C ($R^2=0.01$) and never exceeded approximately 0.9\%.
+
+Most dominant native cyprinids had optima of 19--20~$^\circ$C against a basin mean of approximately 16.0~$^\circ$C. Warming therefore moved their suitability towards the optimum. Brown trout had an optimum of 12.0~$^\circ$C and was already approximately 1.5 thermal standard deviations on the warm side of its optimum. Aggregate metrics consequently concealed opposing species responses.
+
+\subsection{Brown trout as a thermal--hydraulic sentinel}
+
+Brown trout was the only species with a large, directionally reproducible climate response. Basin trout biomass declined by 9.0\% under SSP1-2.6, 9.7\% under SSP2-4.5, 9.5\% under SSP3-7.0 and 10.9\% under SSP5-8.5, compared with a 0.2\% decline in the control. Individual climate-model responses spanned roughly 4--19\% declines. Across the ensemble, trout biomass declined by approximately 9.2\% of baseline biomass per $^\circ$C of warming ($R^2=0.65$). At occupied sites, median population size fell to approximately 68--92\% of its 2026 value.
+
+Thermal exposure increased with warming. The maximum number of days per year above the 20~$^\circ$C upper limit increased from 131 under baseline conditions to 139--174 across scenarios. Maximum squared exceedance energy increased from approximately $1.6\times10^3$ to $2.1$--$4.2\times10^3$~$^\circ$C$^2$ day. Trout occupies only approximately 4\% of sites, so its large relative decline is diluted in basin-wide richness and biomass. It is an early-warning indicator of thermal--hydraulic coupling, not a proxy for whole-community vulnerability.
+
+In the obstacle experiment, trout remained climate-dominated but was also sensitive to network structure. At upstream cost 0.05, final trout biomass declined from 803.9 to 770.9 model units when passability changed from baseline to blocked under the cool endpoint, and from 725.0 to 704.2 units under the warm endpoint. At the warm endpoint, relative changes were $-13.6$\% (baseline), $-12.8$\% (improved), $-14.7$\% (reduced) and $-16.1$\% (blocked).
+
+\subsection{Hydraulic controls and the passability sign reversal}
+
+Across eight response metrics, mean factor ranking was interaction matrix (1.88) $>$ upstream cost (3.00) $\approx$ thermal breadth (3.12) $>$ passability (3.62) $>$ passability $\times$ upstream cost (4.38) $>$ climate endpoint (5.00) $>$ passability $\times$ temperature (7.00). The interaction matrix also had the largest mean normalised effect (0.871). The passability $\times$ temperature interaction had a median standardised magnitude no greater than 0.15 standard deviations for every metric except the near-saturated trout quasi-extinction flag, where it reached 1.24.
+
+For native biomass, upstream cost explained SS = 0.578, followed by passability $\times$ upstream cost (SS = 0.242), passability (SS = 0.155) and climate endpoint (SS = 0.026). Trout final biomass had a different ordering: climate endpoint SS = 0.886, passability SS = 0.090 and upstream cost SS = 0.011. Total biomass and native richness were dominated by upstream cost, with SS = 0.961 and 0.947, respectively. Invasive biomass also responded primarily to upstream cost (SS = 0.970).
+
+The passability effect changed sign with background upstream cost. At the cool endpoint, the blocked-minus-baseline difference in basin native biomass was $-0.349$, $-0.009$, $+0.146$ and $+0.442$ at upstream costs 0.01, 0.05, 0.10 and 0.50. At the warm endpoint the corresponding values ranged from $-0.336$ to $+0.453$. Reduced passability showed the same reversal, from approximately $-0.101$ to $+0.371$ across the cool-end cost range, whereas improved passability reduced basin native biomass at every upstream cost, from $-0.034$ at cost 0.01 to $-0.407$ at cost 0.50.
+
+This reversal was spatially heterogeneous. The positive basin-level blocked-minus-baseline effect at high upstream cost was a net result of positive and negative changes among sub-catchments and water bodies. Blocking did not uniformly benefit native fish; it redistributed biomass across the network. The outputs cannot uniquely separate loss of native immigration, reduced emigration and suppression of invasive dispersal. The robust finding is that the sign of a passability intervention depends on background network resistance.
+
+\subsection{Interaction structure and native--invasive redistribution}
+
+The alternative-interaction experiment produced the largest structural contrast. The invasive-favouring matrix reduced pooled native biomass from approximately 50.2 to 5.1 model units, native richness from 2.42 to 0.15 species per site and trout biomass from approximately 548 to 313 units. In the matched cool-end, low-cost, baseline-passability contrast, native biomass changed from approximately 51.0 to 5.2 units and trout biomass from approximately 575 to 314 units. Invasive biomass increased from approximately 6.0 to 58.7 units, while total biomass changed comparatively little, from approximately 56.2 to 64.2 units.
+
+The interaction matrix accounted for SS = 0.998 of native biomass and SS = 0.982 of trout biomass in the alternative sweep. The confounded thermal-breadth contrast shifted native biomass downward by approximately 36.9--38.8\% and trout biomass by approximately 27.0--30.3\%, but these changes cannot be attributed to thermal breadth alone. Passability spans were interaction-dependent: trout spans were largest under the invasive-favouring matrix (mean span approximately 23.8 model units, versus 10.2 under the original matrix and 8.5 under the random placebo), while native-biomass spans were smallest under the invasive-favouring matrix (approximately 0.2 units, versus 1.3 and 1.4 under the original and random matrices) after native biomass had already collapsed. The primary obstacle-sweep sign reversal was not recovered consistently in the alternative sweep.
+
+\subsection{Other species and aggregate indicators}
+
+Warm-adapted native cyprinids and most invasive and migratory taxa changed little over the study horizon. Their empirical upper thermal limits were generally 25--30~$^\circ$C and were rarely exceeded, so the heat-stress mortality term was inactive. No warming-driven invasive expansion was detected. Invasive richness and total richness were effectively invariant across scenarios and the control, with final-year basin means of approximately 0.217 and 2.72, respectively.
+
+\section{Discussion}
+
+\subsection{Warming was weak at the aggregate scale but strong for a specialist}
+
+The climate ensemble sampled an early-warming interval. Approximately 1~$^\circ$C of warming by 2045 was insufficient to produce a large change in aggregate richness because most of the native assemblage was cold-marginal relative to its assigned optimum. This does not imply thermal safety. It reflects cancellation between warm-adapted dominant natives and a cold-water specialist moving away from its optimum.
+
+The trout response was supported by three convergent diagnostics: monotonic biomass decline across climate models, separation from the stationary control and increased exposure above the empirical upper thermal limit. Its magnitude remains conditional on the Gaussian niche, midpoint optimum and unvaried thermal breadth. No basin-scale extinction forecast should be inferred from this response.
+
+\subsection{Connectivity is context dependent}
+
+The passability sign reversal challenges a simple interpretation of connectivity restoration as uniformly beneficial to native biomass. At low upstream movement cost, blocking a link removed movement and reduced native biomass. At high cost, further blocking was associated with higher basin-average native biomass, plausibly because it restricted movement by competitively effective invasive taxa or reduced net losses from isolated native units. The present design cannot discriminate among these mechanisms.
+
+Barrier decisions should therefore be evaluated at reach and sub-catchment scales against background hydraulic resistance, species composition and invasive pressure. Basin means conceal local gains and losses. The positive aggregate effect at high cost was a spatial redistribution rather than a uniform improvement.
+
+\subsection{Interaction structure is a major structural uncertainty}
+
+The interaction matrix determined whether biomass was retained by native or invasive compartments in the deliberately perturbed experiment. This focus on interactions is consistent with broader work showing that climate sensitivity and invasion outcomes can depend strongly on biotic context \cite{Carosietal2023}. The invasive-favouring matrix is a bounding scenario, not an empirical uncertainty distribution. The random matrix is a placebo and its relative biomass ratios are uninterpretable because some species have near-zero burn-in baselines. Future inference should use empirically estimated interaction coefficients, uncertainty distributions and independent replication across interaction and thermal-parameter sets.
+
+\subsection{Monitoring and management implications}
+
+Monitoring based only on aggregate richness or biomass is unlikely to detect early thermal deterioration. Cold-water specialists should be monitored using species-level abundance, occupancy, upper-limit exceedance and thermal selection gradients. Brown trout is a useful sentinel because warming and restricted movement act in the same direction for a sparse, headwater-associated population.
+
+Connectivity interventions should combine local passability, upstream movement cost, species movement traits and invasive distributions. Barrier removal may provide demographic rescue in some reaches but may also facilitate invasive expansion or redistribute biomass away from vulnerable native units. Thermal refugia, especially high-elevation and headwater reaches, should be protected alongside connectivity improvements, consistent with adaptive river-management recommendations for uncertain futures \cite{tonkin2018preparing}.
+
+Before quantitative management forecasts are attempted, the model should be extended to represent discharge and drought dynamics, abstraction, flow-dependent habitat change, land-use degradation, age structure, harvesting, acclimation and evolution.
+
+\section{Limitations and Scope of Inference}
+
+\begin{enumerate}
+    \item The climate and sensitivity experiments are separate designs. Each sweep is internally balanced, but factors cannot be pooled into one orthogonal analysis.
+    \item The thermal-breadth contrast is confounded with interaction structure and burn-in duration and is not an isolated estimate of thermal-breadth sensitivity.
+    \item The random interaction matrix is a placebo; its relative biomass ratios are not ecologically interpretable.
+    \item The invasive-favouring matrix is deliberately extreme and should be treated as a bounding scenario rather than a forecast or probability distribution.
+    \item No formal significance tests or stochastic replicate simulations were performed. Biomass is expressed in model units and is not calibrated field biomass.
+    \item Thermal optima and breadths were derived heuristically from empirical ranges. The midpoint optimum was not varied, so response magnitudes and potentially the aggregate balance require an optimum-position sensitivity analysis.
+    \item The model assumes fixed, symmetric thermal niches and excludes evolution, acclimation and plasticity.
+    \item All sites received the same basin-scale warming anomaly; spatial differences in warming among elevation zones and reaches were not resolved.
+    \item Discharge, drought, abstraction, land-use change and flow-dependent habitat quality were not dynamically represented.
+    \item The richness-loss indicator is realised threshold-based loss, not an extinction probability. Trout quasi-extinction was near saturation (approximately 0.956--0.959 in the obstacle sweep and 0.935--0.972 in the alternative sweep) and was not a primary climate outcome. No warming-driven species extinction was demonstrated.
+    \item The 2026--2045 horizon cannot robustly rank emission pathways because climate-model spread overlaps pathway differences. Absolute temperature changes relative to 1986--2005 are not directly comparable across scenario products because of different pre-2026 offsets.
+    \item Of the 1,658 inventoried obstacles, 685 were not matched to a modelled segment and did not affect the simulated dispersal field.
+    \item The baseline retains a small internal cycle; control changes below approximately 1\% over 20 years are not interpretable as climate effects.
+    \item The classification of \textit{Alburnus alburnus} requires verification before invasive richness and biomass are used for policy inference.
+\end{enumerate}
+
+\section{Conclusions}
+
+For the Guadalquivir metacommunity and 2026--2045 horizon, aggregate native biomass and richness were controlled primarily by network hydraulics and interaction structure, not by the approximately 1~$^\circ$C of warming delivered by the climate ensemble. This weak aggregate response was not evidence of thermal safety; it resulted from cancellation between warm-adapted dominant natives and a cold-water specialist moving away from its optimum.
+
+Brown trout provided the clearest early-warning signal, with a reproducible 9--11\% climate-associated biomass decline and increased exposure to supra-optimal temperatures. Upstream movement cost was the main control of aggregate native biomass and richness, while climate was the main control of trout biomass. Passability effects were non-monotonic and changed sign with background upstream cost.
+
+The strongest structural contrast arose from the invasive-favouring interaction matrix, which shifted biomass from native to invasive compartments while approximately conserving total biomass. Because this contrast was deliberately extreme and confounded with other design changes, it identifies a priority for empirical uncertainty reduction rather than a direct forecast. A defensible management strategy combines species-level thermal monitoring, protection of cold-water refugia, spatially targeted connectivity assessment and invasive-species control.
+
+\section{Acknowledgements}
+
+Fish sampling and handling were conducted under the relevant Spanish regulatory framework. Funding, permits, institutional support and author-specific contributions should be completed before formal publication.
+
+\section{Data and Code Availability}
+
+The study is based on empirical fish-density and juvenile observations, site connectivity and environmental measurements, species trait data, qualitative interaction information, a 2026 obstacle inventory and daily downscaled water-temperature projections for the Guadalquivir basin. The final release should provide a persistent accession for model code, input data, scenario forcing, derived outputs and figure source data, together with the applicable licence and any restrictions on sensitive spatial data.
+
+\clearpage
+\section{Figures}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/fig01_thermal_niches.png}
+\caption{\textbf{Thermal niches and baseline temperatures.} The histogram shows the distribution of baseline site temperatures, while the overlaid curves show the Gaussian thermal suitability of each native species; vertical reference lines identify the basin mean and a representative warmed mean. Most dominant cyprinid optima lie to the warm side of the current temperature distribution, whereas \textit{S. trutta} (optimum 12.0~$^\circ$C) is already on the warm side of its optimum by approximately 1.5 thermal standard deviations. The figure provides the mechanistic explanation for the weak aggregate climate response: modest warming improves suitability for the abundant warm-adapted majority but reduces suitability for the cold-water sentinel.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/climate_scenarios_k1x_burnin/figures/summary_2045.png}
+\caption{\textbf{Final-year climate ensemble summary.} Points and uncertainty intervals summarise native richness, invasive richness, realised native richness loss, total biomass and mean water temperature at four nested reporting levels: sampling site, sub-catchment, water body and basin. Across the 44 climate scenarios, temperature is the only indicator that clearly separates emission pathways; aggregate richness and biomass overlap strongly and the no-warming control remains within the scenario spread. Consistency across spatial scales shows that aggregate insensitivity is not produced by a single noisy reporting level.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/climate_scenarios_k1x_burnin/figures/comparison/across_scenarios_basin.png}
+\caption{\textbf{Basin trajectories across emission pathways.} Annual basin trajectories from 2026 to 2045 are shown for each SSP, with lines representing ensemble means and bands representing across-climate-model variation; the no-warming control is shown separately. Temperature trajectories diverge as expected, but native richness, realised richness loss and total biomass remain nearly coincident across pathways and the control is nearly stationary. The temporal persistence of this pattern supports interpreting the flat aggregate climate slopes as a model result rather than a transient caused by incomplete equilibration.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/climate_scenarios_k1x_burnin/figures/diagnostics/forcing_and_response.png}
+\caption{\textbf{Climate forcing and aggregate response.} The six panels pair warming trajectories with native richness and total biomass trajectories, final-year relationships between realised temperature change and aggregate indicators, and the realised richness-loss trajectory. The imposed forcing is clearly separated among SSPs while aggregate biological responses overlap, demonstrating that the weak signal is not a failure to transmit climate forcing through the model. The lower panels use realised final-year temperature change, which differs from the imposed basin-mean warming axis used for the ordinary least-squares dose--response slopes; the richness-loss metric is a thresholded realised loss, not an extinction probability.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/sensitivity_obstacles/report_plots/fig_temperature_response.png}
+\caption{\textbf{Basin response versus warming.} Each point is one of the 44 climate-model--SSP runs, coloured by emission pathway; dashed lines show ordinary least-squares fits of final-year basin total biomass, native richness and realised richness loss against imposed basin-mean warming. The fitted slopes are $-0.120$ model units per $^\circ$C ($R^2=0.25$), $-0.00071$ species per site per $^\circ$C ($R^2=0.02$) and $+0.00015$ loss units per $^\circ$C ($R^2=0.01$), respectively. The warming range is approximately 0.28--1.37~$^\circ$C, and overlap among pathway colours shows why no SSP ranking is defensible over this horizon.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/sensitivity_obstacles/report_plots/fig_parameter_importance_ranked.png}
+\caption{\textbf{Factor importance.} The ranking panel orders factors by their mean rank across eight response metrics; the accompanying matrix displays standardised within-metric effect sizes based on median spans across matched factorial blocks. Interaction structure ranks first (mean rank 1.88; mean normalised effect 0.871), followed by upstream cost, thermal breadth, passability, the passability--cost interaction, the selected climate endpoint and passability--temperature interaction. The climate endpoint is an external reference axis rather than a full climate-model factor, and the apparent importance of passability for trout quasi-extinction is partly affected by the near-saturated threshold diagnostic.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/sensitivity_obstacles/report_plots/fig_tornado.png}
+\caption{\textbf{Signed factor effects.} Tornado panels show the signed median effect of each non-reference factor level relative to its reference level, expressed in run-set standard deviations across the eight response metrics. Increasing upstream movement cost consistently suppresses most biomass and richness indicators; passability effects change direction with upstream cost; and the invasive-favouring interaction matrix has a much larger and more asymmetric effect than the random placebo. The downward effect of the thermal-breadth multiplier is shown for completeness but is confounded with the alternative interaction sweep and its shorter burn-in.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/sensitivity_obstacles/report_plots/fig_passability_uc_heatmaps.png}
+\caption{\textbf{Passability by upstream-cost interaction.} Heatmaps show raw changes from the same-model, same-cost baseline-passability run across four passability states and four upstream costs, separately for the cool and warm climate endpoints. For native biomass, blocked minus baseline changes from $-0.349$ at cost 0.01 to $+0.442$ at cost 0.50 at the cool endpoint, with the warm endpoint showing the same reversal ($-0.336$ to $+0.453$). Reduced passability follows the same pattern, whereas improved passability is negative at every cost. The figure demonstrates context-dependent connectivity effects but cannot by itself distinguish reduced native rescue from suppressed invasive dispersal.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/sensitivity_obstacles/report_plots/fig_st_vs_upstream_cost.png}
+\caption{\textbf{Brown trout response to hydraulic structure.} The panels show final \textit{S. trutta} biomass and relative biomass change across upstream movement costs, with separate curves for baseline, improved, reduced and blocked passability and facets for the cool and warm climate endpoints. All passability curves are negative relative to the spun-up state, and the warm endpoint is uniformly more negative. At cost 0.05, baseline-to-blocked biomass changes from 803.9 to 770.9 units at the cool endpoint and from 725.0 to 704.2 units at the warm endpoint; the figure therefore shows a climate penalty superimposed on a smaller but non-negligible hydraulic penalty.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/sensitivity_obstacles/report_plots/fig_interaction_matrix_robustness.png}
+\caption{\textbf{Passability robustness across interaction matrices.} Horizontal spans quantify the range of trout and native biomass produced by the four passability states for each interaction matrix, climate endpoint and upstream cost. Trout passability spans are largest under the invasive-favouring matrix (mean approximately 23.8 units, versus 10.2 under the original matrix and 8.5 under the random placebo), whereas native-biomass spans are smallest after native biomass has collapsed under the invasive-favouring matrix (approximately 0.2 versus 1.3 and 1.4 units). The panel is a structural-uncertainty warning: both the magnitude and, in the confounded sweep, the sign of passability effects depend on interaction assumptions.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{../results/sensitivity_obstacles/report_plots/fig_subcatchment_waterbody_effects.png}
+\caption{\textbf{Spatial distribution of blockage effects.} Maps and distributions show blocked-minus-baseline native biomass at sub-catchment and water-body scales for the warm endpoint and high upstream-cost configuration. The basin-level positive effect at high cost is a net of local gains and losses: some units gain native biomass while others lose it. This spatial decomposition prevents the aggregate sign reversal from being interpreted as a uniform benefit of blocking and identifies the sub-catchment or water body as the more appropriate scale for management decisions.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/fig12_st_climate_response.png}
+\caption{\textbf{Brown trout climate dose--response.} The three panels relate imposed basin-mean warming across the 44 climate runs to trout relative biomass change, absolute final biomass and maximum thermal exposure. Trout relative biomass declines at approximately 9.2\% of baseline per $^\circ$C ($R^2=0.65$), while the no-warming control changes by only $-0.2\%$; maximum days above the 20~$^\circ$C upper limit increase from 131 in the control to 139--174 across scenarios, and squared exceedance energy also increases. The figure links a species-level abundance response to a physiological exposure mechanism while showing why the result should not be extrapolated to the whole assemblage.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/fig13_interaction_matrix_effects.png}
+\caption{\textbf{Interaction-matrix main effects.} Jittered points show run-level basin native biomass, invasive biomass, trout biomass, total biomass and native richness for the original, random and invasive-favouring matrices; bars show matrix means across climate endpoints and upstream costs. Relative to the original matrix, the invasive-favouring matrix shifts native biomass from approximately 50.2 to 5.1 units, trout biomass from 548 to 313, native richness from 2.42 to 0.15 and invasive biomass from 6.0 to 58.7, while total biomass changes comparatively little (56.2 to 64.2). The figure therefore shows redistribution between community compartments, but the extreme matrix, thermal-breadth multiplier and shorter burn-in make it a bounding scenario rather than a forecast.}
+\end{figure}
+
+\clearpage
+\section{Summary Tables}
+
+\begin{table}[H]
+\centering
+\caption{Climate-ensemble response at basin scale.}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.34\textwidth}YY}
+\toprule
+Quantity & No-warming control & Climate-ensemble response \\
+\midrule
+Added basin-mean warming by 2045 & 0.00~$^\circ$C & 0.74 (SSP1-2.6), 0.87 (SSP2-4.5), 0.88 (SSP3-7.0), 0.97 (SSP5-8.5)~$^\circ$C \\
+Total biomass change & +0.08\% & $-0.120$ model units per $^\circ$C; $R^2=0.25$ \\
+Native biomass change & +0.10\% & Weak negative response; no defensible pathway ranking \\
+Native richness change & $-0.57$\% & $-0.00071$ species per site per $^\circ$C; $R^2=0.02$ \\
+Native richness-loss indicator & $<1$\% & $+0.00015$ units per $^\circ$C; $R^2=0.01$; never above approximately 0.9\% \\
+Trout biomass change & $-0.2$\% & $-9.0$\% (SSP1-2.6) to $-10.9$\% (SSP5-8.5) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Principal within-experiment variance contributions.}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.25\textwidth}p{0.24\textwidth}p{0.14\textwidth}Y}
+\toprule
+Response & Dominant factor & SS & Other notable contributions \\
+\midrule
+Total biomass & Upstream cost & 0.961 & Climate endpoint: 0.006 \\
+Native biomass & Upstream cost & 0.578 & Passability $\times$ cost: 0.242; passability: 0.155; climate endpoint: 0.026 \\
+Native richness & Upstream cost & 0.947 & Climate endpoint: approximately zero \\
+Invasive biomass & Upstream cost & 0.970 & Interaction structure is also large in the alternative sweep \\
+Trout final biomass & Climate endpoint & 0.886 & Passability: 0.090; upstream cost: 0.011 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Data Sources}
+
+This final report is a synthesis of the current deterministic model outputs and empirical input collections. The principal data sources are fish-density and juvenile observations, site connectivity and environmental measurements, species thermal-trait data, qualitative interaction information, the 2026 obstacle inventory and daily downscaled water-temperature projections for the Guadalquivir basin. Persistent data/code accessions, licences and any restrictions on sensitive spatial data should be added in the submission version.
+
+\bibliographystyle{apalike}
+\bibliography{final_report_references}
+
+\end{document}

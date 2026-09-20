@@ -286,6 +286,111 @@ All paths are given relative to this document's directory (`docs/`). Every refer
 
 ## 5. Data, Methods & Provenance
 
+### 5.0 Modeling workflow
+
+The following diagram shows the complete scientific workflow from empirical inputs and scenario forcing to the model state, factorial experiments, reported indicators, and interpretation limits. It is intended as a methods overview; detailed equations and parameter definitions follow in the subsections below.
+
+```mermaid
+flowchart TB
+  subgraph INPUTS["1. Empirical and scenario inputs"]
+    I1["Fish observations<br/>densities and juveniles"]
+    I2["River network<br/>sites, elevation, distance"]
+    I3["Species traits<br/>thermal limits and rates"]
+    I4["Qualitative interaction<br/>matrix"]
+    I5["Obstacle inventory<br/>directional structures"]
+    I6["Daily water temperature<br/>11 climate models x 4 SSPs"]
+  end
+
+  subgraph PREP["2. Spatial and biological preparation"]
+    P1["775 sites and 774 water bodies<br/>dendritic connectivity"]
+    P2["24 species grouped as<br/>10 native, 10 invasive, 4 migratory"]
+    P3["Habitat index h and carrying<br/>capacity K from observations"]
+    P4["Thermal optimum and breadth<br/>from empirical ranges"]
+    P5["Directional dam and obstacle overlay<br/>973 of 1,658 matched"]
+  end
+
+  subgraph MODEL["3. Daily population-and-network model"]
+    M1["Local growth and logistic<br/>regulation by total biomass"]
+    M2["Gaussian thermal suitability<br/>plus upper-limit heat stress"]
+    M3["Asymmetric biotic interactions<br/>applied at each site"]
+    M4["Directional dispersal<br/>m = D x p / d"]
+    M5["Upstream cost<br/>x = 1 / (1 + c elevation gain)"]
+    M6["Numerical integration<br/>1 day per time unit"]
+  end
+
+  B["4. Seasonal baseline burn-in<br/>373 years for primary runs<br/>21 years per alternative matrix"]
+
+  subgraph EXP["5. Experiments, 2026-2045"]
+    E1["Climate ensemble<br/>44 scenarios + no-warming control"]
+    E2["Obstacle factorial<br/>2 climates x 4 costs x 4 passability states<br/>32 runs"]
+    E3["Interaction factorial<br/>3 matrices x 2 climates x 2 costs x 4 states<br/>48 runs"]
+  end
+
+  subgraph OUT["6. Outputs for interpretation"]
+    O1["Four reporting scales<br/>site, sub-catchment, water body, basin"]
+    O2["Richness and biomass<br/>native, invasive, total"]
+    O3["Trout sentinel<br/>biomass and thermal exposure"]
+    O4["Connectivity effects<br/>sign, magnitude, spatial redistribution"]
+    O5["Interaction effects<br/>native-invasive biomass balance"]
+  end
+
+  subgraph LIMITS["Interpretation limits"]
+    L1["Fixed symmetric thermal niches<br/>no acclimation or evolution"]
+    L2["Same basin-scale warming anomaly<br/>at all sites"]
+    L3["No dynamic discharge, drought,<br/>abstraction, habitat change, or exploitation"]
+    L4["Deterministic runs; alternative<br/>matrix and thermal breadth are confounded"]
+  end
+
+  I1 --> P2
+  I2 --> P1
+  I2 --> P3
+  I3 --> P2
+  I3 --> P4
+  I4 --> M3
+  I5 --> P5
+  I6 --> M2
+  P1 --> M4
+  P2 --> M1
+  P3 --> M1
+  P4 --> M2
+  P5 --> M4
+  M1 --> M6
+  M2 --> M1
+  M3 --> M1
+  M5 --> M4
+  M4 --> M6
+  M6 --> B
+  B --> E1
+  B --> E2
+  B --> E3
+  E1 --> O1
+  E1 --> O2
+  E1 --> O3
+  E2 --> O1
+  E2 --> O2
+  E2 --> O4
+  E3 --> O2
+  E3 --> O4
+  E3 --> O5
+  L1 -. bounds .-> M2
+  L2 -. bounds .-> E1
+  L3 -. bounds .-> M6
+  L4 -. bounds .-> E3
+
+  classDef input fill:#e8f3fb,stroke:#2d6c97,color:#102a3a
+  classDef prep fill:#eef8ed,stroke:#4d8749,color:#183318
+  classDef model fill:#f5eefb,stroke:#76519a,color:#27173d
+  classDef exp fill:#fff3dc,stroke:#b47721,color:#422600
+  classDef output fill:#f3f3f3,stroke:#555,color:#222
+  classDef limit fill:#fbeaea,stroke:#a84d4d,color:#411616
+  class I1,I2,I3,I4,I5,I6 input
+  class P1,P2,P3,P4,P5 prep
+  class M1,M2,M3,M4,M5,M6,B model
+  class E1,E2,E3 exp
+  class O1,O2,O3,O4,O5 output
+  class L1,L2,L3,L4 limit
+```
+
 ### 5.1 Modelling framework and system state
 
 The GuadeX model is a deterministic, spatially explicit metacommunity model of the fish assemblage of the Guadalquivir basin, implemented as a system of ordinary differential equations on a dendritic river network. The modelled domain is a single basin (`ES050`) represented by **775 sites** linked by the river network and aggregated into **774 water bodies** through a site-to-water-body crosswalk for nested reporting. The state variable is the density (biomass, model units) `u[i,s]` of species `s` at site `i` (`i = 1…775`, `s = 1…24`). The 24 species are partitioned into **10 native residents**, **10 invasive** and **4 migratory/diadromous** taxa; the partition is used for reporting and for constructing the interaction-matrix perturbation (§5.7), not for the dynamics themselves. Time is measured in days (1 model time unit = 1 day).
