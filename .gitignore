@@ -30,3 +30,57 @@ Thumbs.db
 
 # Results and figures
 results/
+
+# Core TeX engine auxiliary files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.glg
+*.glo
+*.gls
+*.idx
+*.ilg
+*.ind
+*.ist
+*.log
+*.out
+*.run.xml
+*.sbm
+*.sym
+*.toc
+*.xdv
+
+# SyncTeX (editor jump-to-code files)
+*.synctex
+*.synctex(busy)
+*.synctex.gz
+*.synctex.gz(busy)
+
+# Build directories & tool output
+build/
+_minted-*/
+*.acn
+*.acr
+*.alg
+*.ent
+*.lof
+*.lot
+*.maf
+*.mtc
+*.mtc0
+*.nav
+*.snm
+*.vrb
+
+# TeX / LaTeX editor specific files
+*.bak
+*.sav
+*.sav~
+*.kilepr
+*.cb
+*.cb2
+*.dvi
+*.ps
