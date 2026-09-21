@@ -71,6 +71,11 @@ export plot_avg_total_biomass, plot_avg_species_richness
 export plot_sites_map, plot_site_connectivity_map, plot_subcatchment_network
 export plot_combined_analysis, save_figure
 
+# Export the shared report-figure style (large fonts, panel letters, no titles)
+export report_theme!, panel_letter!, report_annotation!, trim_figure!, equal_panel_columns!
+export REPORT_BASE_FONTSIZE, REPORT_AXIS_LABEL_FONTSIZE, REPORT_TICK_FONTSIZE
+export REPORT_LEGEND_FONTSIZE, REPORT_PANEL_LETTER_FONTSIZE, REPORT_ANNOTATION_FONTSIZE
+
 # Export sensitivity visualization functions
 export plot_richness_change_per_site, plot_richness_change_per_subcatchment
 export plot_richness_timeseries_grid
@@ -83,6 +88,7 @@ include("spin_up.jl")
 include("data_preparation.jl")
 include("outputs.jl")
 include("visualization.jl")
+include("report_style.jl")
 include("climate_figures.jl")
 include("climate_diagnostics.jl")
 

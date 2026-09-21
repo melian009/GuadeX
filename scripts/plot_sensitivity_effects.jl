@@ -39,6 +39,12 @@ const ALT_INDEX = joinpath(ROOT, "alt_interactions", "runs_index.csv")
 const REPORT_DIR = joinpath(ROOT, "report_plots")
 mkpath(REPORT_DIR)
 
+function save_report(fig, path; size)
+    Makie.save(path, fig; size=size, px_per_unit=2)
+    trim_figure!(path)
+    println("Figure saved to: $path")
+end
+
 const METRICS = [
     "basin_total_biomass",
     "basin_native_biomass",
@@ -352,8 +358,35 @@ factor_color = Dict(
     "passability_x_temperature" => COL_PXT,
 )
 
+# Human-readable factor and level names so the tornado y-axis is not a list of
+# bare numbers (for example "0.1" or "0.3 vs 1.0").
+const FACTOR_DISPLAY = Dict(
+    "passability" => "Passability",
+    "upstream_cost" => "Upstream cost",
+    "climate_model" => "Climate endpoint",
+    "interaction_matrix" => "Interaction matrix",
+    "thermal_sigma" => "Thermal breadth",
+    "passability_x_upstream_cost" => "Passability × upstream cost",
+    "passability_x_temperature" => "Passability × temperature")
+
+const PASS_DISPLAY = Dict(
+    "improved_passability" => "Improved",
+    "reduced_passability" => "Reduced",
+    "blocked" => "Blocked")
+
+function tornado_level_label(factor, level)
+    factor == "passability" && return "$(get(PASS_DISPLAY, String(level), level)) − baseline"
+    factor == "upstream_cost" && return "Cost $(level) − 0.01"
+    factor == "climate_model" && return "Warm − cool endpoint"
+    factor == "interaction_matrix" && return String(level) == "random" ?
+        "Random − original" : "Invasive − original"
+    factor == "thermal_sigma" && return "Breadth ×0.3 − ×1.0"
+    return String(level)
+end
+
 # --- Tornado: signed median level contrasts per metric ---------------------
 function tornado_panels!(ax, metric)
+    report_theme!()
     rows = NamedTuple[]
     σ_main = std(Float64.(main[!, Symbol(metric)])); σ_main = σ_main > 0 ? σ_main : 1.0
     for (factor, col, levels, blocks) in [
@@ -365,7 +398,9 @@ function tornado_panels!(ax, metric)
         for lv in levels[2:end]
             vs = [v for r in recs for (l, v) in r.signed if l == lv && isfinite(v)]
             isempty(vs) && continue
-            push!(rows, (factor=factor, level=string(lv), val=median(vs)))
+            push!(rows, (factor=factor,
+                label="$(tornado_level_label(factor, lv))",
+                val=median(vs)))
         end
     end
     for (factor, col, levels, blocks) in [
@@ -376,7 +411,9 @@ function tornado_panels!(ax, metric)
         for lv in levels[2:end]
             vs = [v for r in recs for (l, v) in r.signed if l == lv && isfinite(v)]
             isempty(vs) && continue
-            push!(rows, (factor=factor, level=string(lv), val=median(vs) * σ_alt / σ_main))
+            push!(rows, (factor=factor,
+                label="$(tornado_level_label(factor, lv))",
+                val=median(vs) * σ_alt / σ_main))
         end
     end
     # thermal sigma (confounded): combined main (1.0) vs alt original (0.3)
@@ -386,66 +423,64 @@ function tornado_panels!(ax, metric)
         [:model, :upstream_cost, :passability_scenario])
     vs = [v for r in recs for (l, v) in r.signed if l == 0.3 && isfinite(v)]
     if !isempty(vs)
-        push!(rows, (factor="thermal_sigma", level="0.3 vs 1.0", val=median(vs) * σ_c / σ_main))
+        push!(rows, (factor="thermal_sigma",
+            label="$(tornado_level_label("thermal_sigma", 0.3))",
+            val=median(vs) * σ_c / σ_main))
     end
 
     sort!(rows, by=r -> r.val)
-    labels = [r.level for r in rows]
+    labels = [r.label for r in rows]
     ys = collect(1:length(rows))
     for (i, r) in enumerate(rows)
         hbar!(ax, i, 0.0, r.val; color=get(factor_color, r.factor, COL_GRAY))
     end
-    vlines!(ax, 0.0; color=:black, linewidth=0.8)
+    vlines!(ax, 0.0; color=:black, linewidth=1.0)
     ax.yticks = (ys, labels)
-    ax.yticklabelsize = 8
-    ax.xlabel = "signed median effect (σ units)"
-    ax.title = METRIC_LABELS[metric]
+    ax.xlabel = "Signed median effect (run-set σ units)"
+    panel_letter!(ax, "(" * string(Char(96 + findfirst(==(metric), METRICS))) * ")")
     xmax = maximum(abs.(getfield.(rows, :val))) * 1.25
     xmax = xmax > 0 ? xmax : 1.0
     xlims!(ax, -xmax, xmax)
 end
 
-fig = Figure(size=(2200, 2600))
-Label(fig[0, :], "Tornado: signed factor-level effects (median across matched blocks)", fontsize=18, font=:bold)
+fig = Figure(size=(2100, 1800))
 for (i, metric) in enumerate(METRICS)
     r, c = divrem(i - 1, 2)
-    ax = Axis(fig[r + 1, c + 1])
+    ax = Axis(fig[r + 1, c + 1]; width=520, height=360)
     tornado_panels!(ax, metric)
 end
 legend_factors = ["passability", "upstream_cost", "climate_model", "interaction_matrix",
                   "thermal_sigma"]
 Legend(fig[1:4, 3],
     [PolyElement(color=get(factor_color, f, COL_GRAY)) for f in legend_factors],
-    replace.(legend_factors, "_" => " ");
-    framevisible=false, title="factor", titlefontsize=11)
-save_figure(fig, joinpath(REPORT_DIR, "fig_tornado.png"); size=(2200, 2600))
+    [FACTOR_DISPLAY[f] for f in legend_factors];
+    framevisible=false, title="Factor", titlefontsize=REPORT_LEGEND_FONTSIZE)
+equal_panel_columns!(fig, 1, 1, 0.42)
+save_report(fig, joinpath(REPORT_DIR, "fig_tornado.png"); size=(2100, 1800))
 
 # --- Ranked contribution chart --------------------------------------------
-fig2 = Figure(size=(1900, 1000))
-Label(fig2[0, :], "Ranked parameter contribution (normalised within-metric effect size)",
-    fontsize=18, font=:bold)
+fig2 = Figure(size=(1500, 1750))
 
 ax_rank = Axis(fig2[1, 1];
-    xlabel="mean normalised effect (1 = largest within a metric)",
-    title="Overall ranking (lower mean rank = more important)")
+    xlabel="Mean normalised effect (1 = largest within a metric)")
+panel_letter!(ax_rank, "(a)")
 ys = collect(1:nrow(overall))
 for (i, r) in enumerate(eachrow(overall))
     hbar!(ax_rank, i, 0, r.mean_importance;
         color=get(factor_color, r.factor, COL_GRAY))
     text!(ax_rank, r.mean_importance + 0.02, i;
-        text=@sprintf("%.2f  (rank %.1f)", r.mean_importance, r.mean_rank),
-        align=(:left, :center), fontsize=10)
+        text=@sprintf("%.2f  (mean rank %.1f)", r.mean_importance, r.mean_rank),
+        align=(:left, :center), fontsize=REPORT_ANNOTATION_FONTSIZE)
 end
-ax_rank.yticks = (ys, replace.(overall.factor, "_" => " "))
-ax_rank.yticklabelsize = 11
-xlims!(ax_rank, 0, 1.25)
+ax_rank.yticks = (ys, [FACTOR_DISPLAY[f] for f in overall.factor])
+xlims!(ax_rank, 0, 1.45)
 
-ax_hm = Axis(fig2[1, 2];
-    xlabel="factor", ylabel="metric",
-    xticks=(1:length(RANK_FACTORS), replace.(RANK_FACTORS, "_" => " ")),
+ax_hm = Axis(fig2[2, 1];
+    xlabel="Factor", ylabel="Response metric",
+    xticks=(1:length(RANK_FACTORS), [FACTOR_DISPLAY[f] for f in RANK_FACTORS]),
     xticklabelrotation=π / 4,
-    yticks=(1:length(METRICS), [METRIC_LABELS[m] for m in METRICS]),
-    title="Normalised effect size per metric")
+    yticks=(1:length(METRICS), [METRIC_LABELS[m] for m in METRICS]))
+panel_letter!(ax_hm, "(b)")
 Mmat = fill(NaN, length(METRICS), length(RANK_FACTORS))
 for (j, f) in enumerate(RANK_FACTORS), (i, m) in enumerate(METRICS)
     sub = norm[(norm.factor .== f) .& (norm.metric .== m), :]
@@ -456,20 +491,22 @@ hm = heatmap!(ax_hm, 1:length(RANK_FACTORS), 1:length(METRICS), Mmat;
 for i in 1:length(METRICS), j in 1:length(RANK_FACTORS)
     isnan(Mmat[i, j]) && continue
     text!(ax_hm, j, i; text=@sprintf("%.2f", Mmat[i, j]),
-        align=(:center, :center), fontsize=8,
+        align=(:center, :center), fontsize=REPORT_ANNOTATION_FONTSIZE,
         color=Mmat[i, j] > 0.6 ? :white : :black)
 end
-Colorbar(fig2[1, 3], hm; label="normalised effect")
-save_figure(fig2, joinpath(REPORT_DIR, "fig_parameter_importance_ranked.png"); size=(1900, 1000))
+Colorbar(fig2[2, 2], hm; label="Normalised effect size")
+equal_panel_columns!(fig2, 1, 0.32)
+save_report(fig2, joinpath(REPORT_DIR, "fig_parameter_importance_ranked.png");
+    size=(1500, 1750))
 
 # --- Interaction-effect magnitude chart -----------------------------------
+report_theme!()
 inter_rank = rank[rank.factor .∈ Ref(["passability_x_upstream_cost", "passability_x_temperature"]), :]
-fig3 = Figure(size=(1600, 800))
-Label(fig3[0, :], "Interaction effects on parameter sensitivity", fontsize=18, font=:bold)
-ax_i = Axis(fig3[1, 1];
-    xlabel="median standardised effect (σ units)",
-    yticks=(1:length(METRICS), [METRIC_LABELS[m] for m in METRICS]),
-    title="Spread of the passability effect across upstream cost / climate model")
+fig3 = Figure(size=(1600, 1400))
+ax_i = Axis(fig3[1, 1]; width=950, height=1150,
+    xlabel="Median standardised effect (run-set σ units)",
+    yticks=(1:length(METRICS), [METRIC_LABELS[m] for m in METRICS]))
+panel_letter!(ax_i, "(a)")
 n = length(METRICS)
 for (i, m) in enumerate(METRICS)
     sub = inter_rank[inter_rank.metric .== m, :]
@@ -482,25 +519,25 @@ for (i, m) in enumerate(METRICS)
         color=COL_PXT, height=0.3)
 end
 Legend(fig3[1, 2], [PolyElement(color=COL_PXU), PolyElement(color=COL_PXT)],
-    ["passability × upstream cost", "passability × temperature"], framevisible=false)
-save_figure(fig3, joinpath(REPORT_DIR, "fig_interaction_effects.png"); size=(1600, 800))
+    ["passability × upstream cost", "passability × temperature"],
+    framevisible=false, title="Interaction", titlefontsize=REPORT_LEGEND_FONTSIZE)
+equal_panel_columns!(fig3, 1, 0.5)
+save_report(fig3, joinpath(REPORT_DIR, "fig_interaction_effects.png"); size=(1600, 1400))
 
 # --- Dashboard ------------------------------------------------------------
 dash_metric = "basin_native_biomass"
-fig4 = Figure(size=(2000, 900))
-Label(fig4[0, :], "Parameter importance dashboard — GuadeX obstacle sensitivity (2026–2045)",
-    fontsize=18, font=:bold)
+fig4 = Figure(size=(1800, 1400))
 ax_d = Axis(fig4[1, 1])
 tornado_panels!(ax_d, dash_metric)
-ax_r = Axis(fig4[1, 2]; xlabel="mean normalised effect",
-    title="Overall ranking")
+ax_r = Axis(fig4[1, 2];
+    xlabel="Mean normalised effect")
 for (i, r) in enumerate(eachrow(overall))
     hbar!(ax_r, i, 0, r.mean_importance; color=get(factor_color, r.factor, COL_GRAY))
 end
-ax_r.yticks = (collect(1:nrow(overall)), replace.(overall.factor, "_" => " "))
-ax_r.yticklabelsize = 10
+ax_r.yticks = (collect(1:nrow(overall)), [FACTOR_DISPLAY[f] for f in overall.factor])
 xlims!(ax_r, 0, 1.15)
-save_figure(fig4, joinpath(REPORT_DIR, "fig_parameter_importance_dashboard.png"); size=(2000, 900))
+equal_panel_columns!(fig4, 1, 0.65)
+save_report(fig4, joinpath(REPORT_DIR, "fig_parameter_importance_dashboard.png"); size=(1800, 1400))
 
 println("Parameter ranking: $(joinpath(REPORT_DIR, "parameter_effect_rank.csv"))")
 println("Variance decomposition: $(joinpath(REPORT_DIR, "variance_decomposition.csv"))")

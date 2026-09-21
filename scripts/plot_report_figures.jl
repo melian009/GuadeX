@@ -22,6 +22,10 @@ using Guadex
 #   results/sensitivity_obstacles/report_plots/
 #   results/sensitivity_obstacles/alt_interactions/report_plots/
 #
+# All figures use the shared report style (large fonts relative to the canvas,
+# no descriptive titles, panels lettered a, b, c ...).  The explanation of every
+# element lives in the LaTeX caption, not on the canvas.
+#
 # Runs 2026-2045, per-site daily water temperature, spin-up 373 yr, K=1x,
 # heat-stress k=3.7817692640400324e-5 (verified from run_metadata.json).
 # =============================================================================
@@ -45,14 +49,25 @@ const PASS_LABELS = Dict(
 
 const COOL_MODEL = "ssp126/IITM-ESM"
 const WARM_MODEL = "ssp245/UKESM1-0-LL"
+
+# Display names.  Units are part of the label so no axis is unitless.
 const METRIC_LABELS = Dict(
-    "basin_total_biomass" => "Basin total biomass",
-    "basin_native_biomass" => "Basin native biomass",
-    "basin_invasive_biomass" => "Basin invasive biomass",
-    "basin_native_richness" => "Basin native richness",
-    "basin_native_extinction_risk" => "Native extinction risk",
-    "st_final_biomass" => "ST final biomass",
-    "st_relative_biomass_change" => "ST relative biomass change")
+    "basin_total_biomass" => "Total biomass (units)",
+    "basin_native_biomass" => "Native biomass (units)",
+    "basin_invasive_biomass" => "Invasive biomass (units)",
+    "basin_native_richness" => "Native richness (sp.)",
+    "basin_native_extinction_risk" => "Richness loss (fraction)",
+    "st_final_biomass" => "Brown trout biomass (units)",
+    "st_relative_biomass_change" => "Brown trout change (fraction)")
+
+const COST_COLORS = Dict(0.01 => RGBAf(0.27, 0.45, 0.77, 0.95),
+    0.5 => RGBAf(0.90, 0.55, 0.10, 0.95))
+
+function save_report(fig, path; size)
+    Makie.save(path, fig; size=size, px_per_unit=2)
+    trim_figure!(path)
+    println("wrote $(basename(path))")
+end
 
 main = CSV.read(joinpath(ROOT, "runs_index.csv"), DataFrame)
 alt = CSV.read(joinpath(ALT_ROOT, "runs_index.csv"), DataFrame)
@@ -68,20 +83,32 @@ function hbar!(ax, y, x0, x1; color=RGBAf(0.27, 0.45, 0.77, 0.9), height=0.62)
                Point2f(xhi, y + height / 2), Point2f(xlo, y + height / 2)], color=color)
 end
 
+function horizontal_legend(fig, row, cols, handles, labels; title="")
+    Legend(fig[row, cols], handles, labels; orientation=:horizontal,
+        framevisible=false, title=title, titlefontsize=REPORT_LEGEND_FONTSIZE)
+end
+
 # =============================================================================
-# Figure 1 — ST (cold-water keystone) response vs upstream cost
+# Figure 9 — Brown trout response vs upstream cost (2 x 2, equal panel size)
 # =============================================================================
-function st_vs_uc_figure!(path; data=main, title="ST response to upstream cost and passability")
+function st_vs_uc_figure!(path; data=main)
+    report_theme!()
     uc_levels = sort(unique(Float64.(data.upstream_cost)))
     models = sort(unique(String.(data.model)))
     metrics = ["st_final_biomass", "st_relative_biomass_change"]
-    fig = Figure(size=(1500, 1150))
-    Label(fig[0, :], title, fontsize=17, font=:bold)
+    fig = Figure(size=(1500, 1600))
+    for (ci, model) in enumerate(models)
+        Label(fig[0, ci + 1], model; fontsize=REPORT_AXIS_LABEL_FONTSIZE, font=:bold)
+    end
+    for (mi, metric) in enumerate(metrics)
+        Label(fig[mi, 1], METRIC_LABELS[metric]; rotation=π / 2,
+            fontsize=REPORT_AXIS_LABEL_FONTSIZE, font=:bold, halign=:center)
+    end
     for (mi, metric) in enumerate(metrics), (ci, model) in enumerate(models)
-        ax = Axis(fig[mi, ci];
-            xlabel="Upstream cost", ylabel=mi == 1 ? METRIC_LABELS[metric] : "",
-            title=ci == 1 ? "$model" : "$model",
+        ax = Axis(fig[mi, ci + 1]; width=540, height=480,
+            xlabel = mi == length(metrics) ? "Upstream movement cost" : "",
             xticks=(1:length(uc_levels), string.(uc_levels)))
+        panel_letter!(ax, "(" * string(Char(96 + (mi - 1) * length(models) + ci)) * ")")
         for p in PASS_LEVELS
             xs = Float64[]; ys = Float64[]
             for (i, uc) in enumerate(uc_levels)
@@ -92,27 +119,37 @@ function st_vs_uc_figure!(path; data=main, title="ST response to upstream cost a
                 push!(xs, i); push!(ys, Float64(sel[1, Symbol(metric)]))
             end
             isempty(xs) && continue
-            scatterlines!(ax, xs, ys; color=PASS_COLORS[p], linewidth=2.2,
-                marker=:circle, markersize=10, label=PASS_LABELS[p])
+            scatterlines!(ax, xs, ys; color=PASS_COLORS[p], linewidth=2.8,
+                marker=:circle, markersize=13)
         end
-        mi == 1 && ci == 1 && axislegend(ax; position=:rt, framevisible=false, labelsize=10)
     end
-    save_figure(fig, path; size=(1500, 1150))
+    equal_panel_columns!(fig, 0.45, 1, 1)
+    horizontal_legend(fig, 3, 1:3,
+        [LineElement(color=PASS_COLORS[p], linewidth=3.0) for p in PASS_LEVELS],
+        [PASS_LABELS[p] for p in PASS_LEVELS]; title="Passability state")
+    save_report(fig, path; size=(1500, 1600))
 end
 
 st_vs_uc_figure!(joinpath(OUT, "fig_st_vs_upstream_cost.png"))
 
 # =============================================================================
-# Figure 2 — passability x upstream-cost heatmaps (Delta vs baseline), per model
+# Figure 8 — passability x upstream-cost heatmaps (Delta vs baseline)
 # =============================================================================
-function heatmap_effects!(path; data=main, metrics, title)
+function heatmap_effects!(path; data=main, metrics)
+    report_theme!()
     models = sort(unique(String.(data.model)))
     uc_levels = sort(unique(Float64.(data.upstream_cost)))
-    nrow_ = length(models); ncol = length(metrics)
-    fig = Figure(size=(430 * ncol + 260, 330 * nrow_ + 90))
-    Label(fig[0, 1:ncol], title, fontsize=17, font=:bold)
+    nrow_ = length(metrics); ncol = length(models)
+    fig = Figure(size=(1700, 2400))
+    for (ci, model) in enumerate(models)
+        Label(fig[0, ci + 1], model; fontsize=REPORT_AXIS_LABEL_FONTSIZE, font=:bold)
+    end
+    for (ri, metric) in enumerate(metrics)
+        Label(fig[ri, 1], METRIC_LABELS[metric]; rotation=π / 2,
+            fontsize=REPORT_AXIS_LABEL_FONTSIZE, font=:bold, halign=:center)
+    end
     hm = nothing
-    for (ri, model) in enumerate(models), (ci, metric) in enumerate(metrics)
+    for (ri, metric) in enumerate(metrics), (ci, model) in enumerate(models)
         M = fill(NaN, length(PASS_LEVELS), length(uc_levels))
         for (pi, p) in enumerate(PASS_LEVELS), (ui, uc) in enumerate(uc_levels)
             sel = data[(data.model .== model) .& (data.passability_scenario .== p) .&
@@ -124,108 +161,53 @@ function heatmap_effects!(path; data=main, metrics, title)
         end
         finite = filter(isfinite, vec(M))
         clim = isempty(finite) ? 1.0 : max(quantile(abs.(finite), 0.95), 1e-12)
-        ax = Axis(fig[ri, ci];
-            title=ci == 1 ? "$model" : "",
-            xlabel=ri == nrow_ ? "Upstream cost" : "",
-            ylabel=ci == 1 ? "Passability" : "",
+        ax = Axis(fig[ri, ci + 1]; width=560, height=460,
+            xlabel = ri == nrow_ ? "Upstream movement cost" : "",
+            ylabel = ci == 1 ? "Passability state" : "",
             xticks=(1:length(uc_levels), string.(uc_levels)),
             yticks=(1:length(PASS_LEVELS), [PASS_LABELS[p] for p in PASS_LEVELS]))
+        panel_letter!(ax, "(" * string(Char(96 + (ri - 1) * ncol + ci)) * ")")
         hm = heatmap!(ax, 1:length(uc_levels), 1:length(PASS_LEVELS), M ./ clim;
             colormap=:balance, colorrange=(-1, 1))
         for pi in 1:length(PASS_LEVELS), ui in 1:length(uc_levels)
             isnan(M[pi, ui]) && continue
             text!(ax, ui, pi; text=@sprintf("%.3g", M[pi, ui]),
-                align=(:center, :center), fontsize=8, color=:black,
-                strokecolor=:white, strokewidth=0.7)
+                align=(:center, :center), fontsize=REPORT_ANNOTATION_FONTSIZE,
+                color=:black, strokecolor=:white, strokewidth=0.8)
         end
     end
-    Colorbar(fig[nrow_, ncol + 1], hm;
-        label="Δ vs baseline (scaled by panel 95th pct)", width=16)
-    save_figure(fig, path; size=(430 * ncol + 260, 330 * nrow_ + 90))
+    Colorbar(fig[1:nrow_, ncol + 2], hm; label="Change vs baseline (scaled)")
+    equal_panel_columns!(fig, 0.45, 1, 1, 0.3)
+    save_report(fig, path; size=(1700, 2400))
 end
 
 heatmap_effects!(joinpath(OUT, "fig_passability_uc_heatmaps.png");
-    metrics=["basin_total_biomass", "basin_native_biomass", "basin_native_richness", "st_final_biomass"],
-    title="Passability × upstream cost — change vs baseline passability (obstacle sweep)")
-
-"""
-Facet passability x upstream-cost change grids by interaction matrix x model x
-metric.  The `random` matrix is kept for completeness but flagged: its
-near-zero burn-in baselines make the *absolute* changes large and the colour
-scaling per panel is robust (95th percentile).
-"""
-function matrix_heatmaps!(path)
-    matrices = ["original", "random", "invasive_favoring"]
-    models = sort(unique(String.(alt.model)))
-    metrics = ["st_final_biomass", "basin_native_biomass"]
-    uc_levels = sort(unique(Float64.(alt.upstream_cost)))
-    cols = [(m, met) for m in models for met in metrics]
-    fig = Figure(size=(380 * length(cols) + 200, 300 * length(matrices) + 220))
-    Label(fig[0, 1:length(cols)],
-        "Passability × upstream cost change by interaction matrix (σ=0.3 sweep) — " *
-        "colours scaled per panel (95th pct); numbers are raw Δ",
-        fontsize=14, font=:bold)
-    for (ci, (model, metric)) in enumerate(cols)
-        Label(fig[1, ci], "$model\n$(METRIC_LABELS[metric])"; fontsize=11, font=:bold)
-    end
-    hm = nothing
-    for (ri, mat) in enumerate(matrices), (ci, (model, metric)) in enumerate(cols)
-        M = fill(NaN, length(PASS_LEVELS), length(uc_levels))
-        for (pi, p) in enumerate(PASS_LEVELS), (ui, uc) in enumerate(uc_levels)
-            sel = alt[(alt.interaction_matrix .== mat) .& (alt.model .== model) .&
-                      (alt.passability_scenario .== p) .&
-                      (abs.(alt.upstream_cost .- uc) .< 1e-9), :]
-            bas = alt[(alt.interaction_matrix .== mat) .& (alt.model .== model) .&
-                      (alt.passability_scenario .== "baseline") .&
-                      (abs.(alt.upstream_cost .- uc) .< 1e-9), :]
-            (isempty(sel) || isempty(bas)) && continue
-            M[pi, ui] = Float64(sel[1, Symbol(metric)]) - Float64(bas[1, Symbol(metric)])
-        end
-        finite = filter(isfinite, vec(M))
-        clim = isempty(finite) ? 1.0 : max(quantile(abs.(finite), 0.95), 1e-12)
-        ax = Axis(fig[ri + 1, ci];
-            xlabel=ri == length(matrices) ? "Upstream cost" : "",
-            ylabel=ci == 1 ? replace(mat, "_" => " ") : "",
-            xticks=(1:length(uc_levels), string.(uc_levels)),
-            yticks=(1:length(PASS_LEVELS), [PASS_LABELS[p] for p in PASS_LEVELS]))
-        hm = heatmap!(ax, 1:length(uc_levels), 1:length(PASS_LEVELS), M ./ clim;
-            colormap=:balance, colorrange=(-1, 1))
-        for pi in 1:length(PASS_LEVELS), ui in 1:length(uc_levels)
-            isnan(M[pi, ui]) && continue
-            text!(ax, ui, pi; text=@sprintf("%.3g", M[pi, ui]),
-                align=(:center, :center), fontsize=7, color=:black,
-                strokecolor=:white, strokewidth=0.7)
-        end
-    end
-    Colorbar(fig[length(matrices) + 1, length(cols) + 1], hm;
-        label="Δ vs baseline (scaled by panel 95th pct)", width=16)
-    save_figure(fig, path; size=(380 * length(cols) + 200, 300 * length(matrices) + 220))
-end
-
-matrix_heatmaps!(joinpath(ALT_OUT, "fig_matrix_uc_heatmaps.png"))
+    metrics=["basin_total_biomass", "basin_native_biomass",
+             "basin_native_richness", "st_final_biomass"])
 
 # =============================================================================
-# Figure 3 — temperature effect across the 44-run climate ensemble
+# Figure 5 — temperature effect across the 44-run climate ensemble
 # =============================================================================
 function temperature_figure!(path)
+    report_theme!()
     d = clim[clim.scenario .!= "control", :]
-    metrics = ["basin_total_biomass", "basin_native_richness", "basin_native_extinction_risk"]
+    metrics = ["basin_total_biomass", "basin_native_richness",
+               "basin_native_extinction_risk"]
     scen_colors = Dict("ssp126" => RGBAf(0.11, 0.36, 0.60, 0.9),
         "ssp245" => RGBAf(0.20, 0.60, 0.35, 0.9),
         "ssp370" => RGBAf(0.90, 0.55, 0.10, 0.9),
         "ssp585" => RGBAf(0.70, 0.15, 0.15, 0.9))
-    fig = Figure(size=(2000, 560))
-    Label(fig[0, :], "Basin response vs end-of-century warming across 44 climate-model runs " *
-        "(k=1×, spin-up 373 yr, 2026–2045; sensitivity-sweep extremes marked)",
-        fontsize=16, font=:bold)
+    fig = Figure(size=(1500, 1600))
     for (mi, metric) in enumerate(metrics)
-        ax = Axis(fig[1, mi];
-            xlabel="End-of-century warming (°C)", ylabel=METRIC_LABELS[metric],
-            title=METRIC_LABELS[metric])
+        r, c = divrem(mi - 1, 2)
+        ax = Axis(fig[r + 1, c + 1]; width=560, height=480,
+            xlabel="Warming by 2045 (°C)",
+            ylabel=METRIC_LABELS[metric])
+        panel_letter!(ax, "(" * string(Char(96 + mi)) * ")")
         for sc in unique(String.(d.scenario))
             sub = d[d.scenario .== sc, :]
             scatter!(ax, Float64.(sub.warming_end_degc), Float64.(sub[!, Symbol(metric)]);
-                color=scen_colors[sc], markersize=11, label=sc, strokewidth=0)
+                color=scen_colors[sc], markersize=13, strokewidth=0)
         end
         x = Float64.(d.warming_end_degc); y = Float64.(d[!, Symbol(metric)])
         X = hcat(ones(length(x)), x)
@@ -234,45 +216,57 @@ function temperature_figure!(path)
         ss_tot = sum(abs2, y .- mean(y)); ss_res = sum(abs2, y .- yhat)
         r2 = ss_tot > 0 ? 1 - ss_res / ss_tot : 0.0
         xx = range(minimum(x), maximum(x); length=50)
-        lines!(ax, xx, β[1] .+ β[2] .* xx; color=:black, linewidth=1.6, linestyle=:dash)
-        text!(ax, 0.03, 0.96; space=:relative, align=(:left, :top), fontsize=11,
-            text=@sprintf("slope = %.3g /°C\nR² = %.2f", β[2], r2))
-        # Mark the two sensitivity-sweep extremes.
-        for (m, lab) in [(COOL_MODEL, "SSP126 / IITM-ESM (coolest)"),
-                         (WARM_MODEL, "SSP245 / UKESM1 (warmest)")]
+        lines!(ax, xx, β[1] .+ β[2] .* xx; color=:black, linewidth=2.0, linestyle=:dash)
+        report_annotation!(ax, @sprintf("OLS slope = %.3g per °C\nR² = %.2f", β[2], r2),
+            position=:lt)
+        # Mark the two sensitivity-sweep extremes used by the obstacle sweep.
+        for (m, lab) in [(COOL_MODEL, "Cool endpoint (SSP1-2.6 / IITM-ESM)"),
+                         (WARM_MODEL, "Warm endpoint (SSP2-4.5 / UKESM1)")]
             sub = d[d.model .== m, :]
             isempty(sub) && continue
             scatter!(ax, [Float64(sub.warming_end_degc[1])], [Float64(sub[1, Symbol(metric)])];
-                color=:magenta, marker=:star5, markersize=20, strokecolor=:black,
-                strokewidth=1.0, label=lab)
+                color=:magenta, marker=:star5, markersize=24, strokecolor=:black,
+                strokewidth=1.0)
         end
-        mi == 1 && axislegend(ax; position=:rb, framevisible=false, labelsize=9)
     end
-    save_figure(fig, path; size=(2000, 560))
+    handles = [MarkerElement(color=scen_colors[s], marker=:circle, markersize=14)
+               for s in ["ssp126", "ssp245", "ssp370", "ssp585"]]
+    push!(handles, MarkerElement(color=:magenta, marker=:star5, markersize=18,
+        strokecolor=:black, strokewidth=1.0))
+    labels = ["ssp126", "ssp245", "ssp370", "ssp585",
+              "Selected cool/warm\nendpoint (IITM-ESM, UKESM1)"]
+    equal_panel_columns!(fig, 1, 1)
+    Legend(fig[2, 2], handles, labels; framevisible=false,
+        title="Point = one GCM × SSP run", titlefontsize=REPORT_LEGEND_FONTSIZE)
+    save_report(fig, path; size=(1500, 1600))
 end
 
 temperature_figure!(joinpath(OUT, "fig_temperature_response.png"))
 
 # =============================================================================
-# Figure 4 — interaction-matrix robustness of the passability effect
+# Figure 10 — interaction-matrix robustness of the passability effect
 # =============================================================================
 function matrix_robustness2!(path)
+    report_theme!()
     metrics = ["st_final_biomass", "basin_native_biomass"]
     matrices = ["original", "random", "invasive_favoring"]
-    mcolors = Dict("original" => RGBAf(0.20, 0.45, 0.75, 0.9),
-                   "random" => RGBAf(0.55, 0.55, 0.55, 0.9),
-                   "invasive_favoring" => RGBAf(0.75, 0.30, 0.10, 0.9))
+    matrix_labels = Dict("original" => "Original", "random" => "Random placebo",
+        "invasive_favoring" => "Invasive-favouring")
     models = sort(unique(String.(alt.model)))
-    fig = Figure(size=(2000, 700))
-    Label(fig[0, 1:2], "Robustness of the passability effect across interaction matrices " *
-        "(span across passability levels; σ=0.3 sweep, two upstream costs per matrix)",
-        fontsize=15, font=:bold)
+    fig = Figure(size=(1600, 1500))
+    for (ci, model) in enumerate(models)
+        Label(fig[0, ci + 1], model; fontsize=REPORT_AXIS_LABEL_FONTSIZE, font=:bold)
+    end
+    for (ri, metric) in enumerate(metrics)
+        Label(fig[ri, 1], METRIC_LABELS[metric]; rotation=π / 2,
+            fontsize=REPORT_AXIS_LABEL_FONTSIZE, font=:bold, halign=:center)
+    end
     for (ri, metric) in enumerate(metrics), (ci, model) in enumerate(models)
-        ax = Axis(fig[ri, ci];
-            title="$(METRIC_LABELS[metric]) — $model",
-            xlabel=ri == length(metrics) ? "span across passability levels" : "",
-            ylabel=ci == 1 ? "interaction matrix" : "",
-            yticks=(1:length(matrices), replace.(matrices, "_" => " ")))
+        ax = Axis(fig[ri, ci + 1]; width=540, height=500,
+            xlabel = ri == length(metrics) ? "Span across passability states (model units)" : "",
+            ylabel = "Interaction matrix",
+            yticks=(1:length(matrices), [matrix_labels[m] for m in matrices]))
+        panel_letter!(ax, "(" * string(Char(96 + (ri - 1) * length(models) + ci)) * ")")
         for (mi, mat) in enumerate(matrices)
             for uc in sort(unique(Float64.(alt.upstream_cost)))
                 sub = alt[(alt.interaction_matrix .== mat) .& (alt.model .== model) .&
@@ -282,20 +276,22 @@ function matrix_robustness2!(path)
                 length(vals) < 2 && continue
                 span = maximum(vals) - minimum(vals)
                 off = uc < 0.3 ? -0.18 : 0.18
-                hbar!(ax, mi + off, 0, span; color=mcolors[mat], height=0.28)
+                hbar!(ax, mi + off, 0, span; color=get(COST_COLORS, uc, RGBAf(0.4, 0.4, 0.4, 0.9)),
+                    height=0.30)
             end
         end
     end
-    Legend(fig[1:2, 3], [PolyElement(color=mcolors[m]) for m in matrices],
-        [replace(m, "_" => " ") for m in matrices]; framevisible=false, title="matrix")
-    save_figure(fig, path; size=(2000, 700))
+    # No legend: the two bars per matrix are described in the caption (blue =
+    # low upstream cost 0.01, orange = high upstream cost 0.50).
+    equal_panel_columns!(fig, 0.45, 1, 1)
+    save_report(fig, path; size=(1600, 1500))
 end
 
 matrix_robustness2!(joinpath(OUT, "fig_interaction_matrix_robustness.png"))
 matrix_robustness2!(joinpath(ALT_OUT, "fig_interaction_matrix_robustness.png"))
 
 # =============================================================================
-# Figure 5 — per-subcatchment / per-water-body effect for the strongest signal
+# Figure 11 — per-subcatchment / per-water-body blockage effect
 # =============================================================================
 function read_final(run_dir, level, year)
     df = CSV.read(joinpath(run_dir, "export", "levels", "level_$(level).csv"), DataFrame)
@@ -303,6 +299,7 @@ function read_final(run_dir, level, year)
 end
 
 function subcatchment_waterbody_figure!(path; model=WARM_MODEL, uc=0.5, year=2045)
+    report_theme!()
     sub = main[(main.model .== model) .& (abs.(main.upstream_cost .- uc) .< 1e-9), :]
     isempty(sub) && (println("skip subcatchment figure: no run for $model uc=$uc"); return)
     base_dir = sub[sub.passability_scenario .== "baseline", :run_dir][1]
@@ -313,58 +310,46 @@ function subcatchment_waterbody_figure!(path; model=WARM_MODEL, uc=0.5, year=204
     wb_b = read_final(base_dir, "water_body", year)
     wb_k = read_final(block_dir, "water_body", year)
 
-    sc = innerjoin(select(sc_b, :subcatchment, :mean_native_biomass, :mean_total_biomass),
-        select(sc_k, :subcatchment, :mean_native_biomass, :mean_total_biomass);
+    sc = innerjoin(select(sc_b, :subcatchment, :mean_native_biomass),
+        select(sc_k, :subcatchment, :mean_native_biomass);
         on=:subcatchment, makeunique=true)
     sc.dnative = sc.mean_native_biomass_1 .- sc.mean_native_biomass
-    sc.dtotal = sc.mean_total_biomass_1 .- sc.mean_total_biomass
 
     wb = innerjoin(select(wb_b, :water_body, :mean_native_biomass),
         select(wb_k, :water_body, :mean_native_biomass);
         on=:water_body, makeunique=true)
     wb.dnative = wb.mean_native_biomass_1 .- wb.mean_native_biomass
 
-    fig = Figure(size=(2000, 700))
-    Label(fig[0, :], "Obstacle-overlay effect: blocked minus baseline passability " *
-        "($model, upstream cost=$uc, year $year)", fontsize=16, font=:bold)
-
-    ax1 = Axis(fig[1, 1]; title="Per subcatchment — Δ native biomass",
-        ylabel="Δ native biomass")
-    s = sort(sc, :dnative)
+    # Both panels show the 10 most negative and the 10 most positive units (20
+    # bars), so the two panels are the same size and the labels stay readable.
+    # The full sub-catchment / water-body distributions are summarised in the
+    # report text.
+    fig = Figure(size=(1400, 1900))
+    ax1 = Axis(fig[1, 1]; width=900, height=780, ylabel="Δ native biomass (units)")
+    panel_letter!(ax1, "(a)")
+    s = vcat(first(sort(sc, :dnative), 10), last(sort(sc, :dnative), 10)) |> unique
     yy = collect(1:nrow(s))
     for (i, r) in enumerate(eachrow(s))
         hbar!(ax1, i, 0, r.dnative; color=r.dnative < 0 ? RGBAf(0.75, 0.15, 0.15, 0.9) :
             RGBAf(0.13, 0.55, 0.30, 0.9), height=0.72)
     end
-    vlines!(ax1, 0.0; color=:black, linewidth=0.8)
-    ax1.yticks = (yy, string.(s.subcatchment)); ax1.yticklabelsize = 7
+    vlines!(ax1, 0.0; color=:black, linewidth=1.0)
+    ax1.yticks = (yy, string.(s.subcatchment))
 
-    ax2 = Axis(fig[1, 2]; title="Per water body — Δ native biomass",
-        ylabel="Δ native biomass")
-    w = sort(wb, :dnative)
-    # show the 25 most negative and 25 most positive
-    w = vcat(first(w, 25), last(w, 25)) |> unique
+    ax2 = Axis(fig[2, 1]; width=900, height=780,
+        xlabel="Δ native biomass (units)", ylabel="Water body")
+    panel_letter!(ax2, "(b)")
+    w = vcat(first(sort(wb, :dnative), 10), last(sort(wb, :dnative), 10)) |> unique
     yy2 = collect(1:nrow(w))
     for (i, r) in enumerate(eachrow(w))
         hbar!(ax2, i, 0, r.dnative; color=r.dnative < 0 ? RGBAf(0.75, 0.15, 0.15, 0.9) :
             RGBAf(0.13, 0.55, 0.30, 0.9), height=0.72)
     end
-    vlines!(ax2, 0.0; color=:black, linewidth=0.8)
-    ax2.yticks = (yy2, [length(string(x)) > 22 ? string(x)[1:22] * "…" : string(x)
-                        for x in w.water_body]); ax2.yticklabelsize = 6
-
-    ax3 = Axis(fig[1, 3]; title="Distribution of Δ native biomass",
-        ylabel="Δ native biomass", xticks=(1:2, ["Subcatchments", "Water bodies"]))
-    for (i, v) in enumerate([sc.dnative, wb.dnative])
-        vals = filter(isfinite, Float64.(v))
-        isempty(vals) && continue
-        scatter!(ax3, fill(i, length(vals)), vals; color=RGBAf(0.3, 0.3, 0.3, 0.35),
-            markersize=7, strokewidth=0)
-        lines!(ax3, [i - 0.22, i + 0.22], fill(median(vals), 2);
-            color=:black, linewidth=2.5)
-    end
-    hlines!(ax3, 0.0; color=:red, linestyle=:dash, linewidth=1.0)
-    save_figure(fig, path; size=(2000, 700))
+    vlines!(ax2, 0.0; color=:black, linewidth=1.0)
+    ax2.yticks = (yy2, [length(string(x)) > 26 ? string(x)[1:26] * "…" : string(x)
+                        for x in w.water_body])
+    save_report(fig, path; size=(1400, 1900))
+    return (sc=sc, wb=wb)
 end
 
 subcatchment_waterbody_figure!(joinpath(OUT, "fig_subcatchment_waterbody_effects.png"))

@@ -87,16 +87,14 @@ In the deliberately strong invasive-favouring scenario, native biomass fell by a
 
 \begin{figure}[H]
 \centering
-\begin{minipage}[t]{0.48\textwidth}
+\includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]{../results/sensitivity_obstacles/report_plots/fig_passability_uc_heatmaps.png}
+\caption{\textbf{How a barrier effect depends on the surrounding network.} Change in each response metric caused by altering obstacle passability, measured against the baseline-passability run for the same model and upstream cost. Within every panel the rows are the four passability states (baseline, improved, reduced, blocked) and the columns are the four upstream movement costs (0.01, 0.05, 0.10, 0.50). Panels are arranged as four rows of metrics and two columns of climate endpoints: (a) cool and (b) warm for total biomass, (c) cool and (d) warm for native biomass, (e) cool and (f) warm for native richness, and (g) cool and (h) warm for brown-trout (ST) final biomass. The cool endpoint is SSP1-2.6/IITM-ESM and the warm endpoint is SSP2-4.5/UKESM1. Each cell states the raw difference in model units (the baseline row is zero by construction); its colour is that difference divided by the panel's 95th percentile, so colours compare within a panel but not between panels. In the native-biomass row (c, d), blocking and reducing passability move from negative at low cost to positive at high cost, whereas improving passage is negative at every cost. This supports site-specific assessment; it does not identify barrier construction as a conservation action.}
+\end{figure}
+
+\begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{../results/sensitivity_obstacles/report_plots/fig_passability_uc_heatmaps.png}
-\captionof{figure}{\textbf{Barrier context.} The native-biomass effect of blocking changes sign with background upstream cost. The figure supports site-specific assessment; it does not identify barrier construction as a conservation action.}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}
-\centering
-\includegraphics[width=\textwidth]{figures/fig12_st_climate_response.png}
-\captionof{figure}{\textbf{Warming sentinel.} Brown trout declines consistently with warming while thermal exposure rises. Species-level monitoring detects change that aggregate richness misses.}
-\end{minipage}
+\includegraphics[width=\textwidth,height=0.72\textheight,keepaspectratio]{../results/climate_scenarios_k1x_burnin/figures/report_plots/fig12_st_climate_response.png}
+\caption{\textbf{Warming sentinel: brown trout.} Each point is one climate-model/pathway run (11 GCMs $\times$ 4 pathways) plotted against the imposed basin-mean warming by 2045; the black diamond is the no-warming control. Panel (a): relative change in basin brown trout (ST) biomass as a percentage of its spun-up baseline, with the dashed ordinary-least-squares fit of about $-9.2$\% per $^\circ$C ($R^2=0.65$). Panel (b): absolute final ST biomass in model units. Panel (c): maximum number of days per year above the species' 20~$^\circ$C upper thermal limit, with the control value (131 days) as a dotted reference line. Brown trout declines consistently with warming while thermal exposure rises, so species-level monitoring detects change that aggregate richness misses.}
 \end{figure}
 
 \clearpage
@@ -106,8 +104,8 @@ The positive basin-level effect of blocking at high upstream cost is not uniform
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../results/sensitivity_obstacles/report_plots/fig_subcatchment_waterbody_effects.png}
-\captionof{figure}{\textbf{Local gains and losses hidden by the basin average.} The blocked-minus-baseline native-biomass effect contains both positive and negative sub-catchment and water-body responses. A positive basin mean must not be interpreted as a uniform benefit to native fish.}
+\includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]{../results/sensitivity_obstacles/report_plots/fig_subcatchment_waterbody_effects.png}
+\caption{\textbf{Local gains and losses hidden by the basin average.} Blocked-minus-baseline change in native biomass (model units) for the warm endpoint, high upstream cost and year 2045. Panel (a) shows the 10 most negative and 10 most positive of the 77 sub-catchments (20 bars); panel (b) shows the 10 most negative and 10 most positive of the 289 water bodies (20 bars). Bars are sorted from most negative to most positive; red bars are losses and green bars are gains. The basin-mean effect is a net of both signs, so a positive average must not be read as a uniform benefit to native fish; decisions belong at sub-catchment or water-body scale.}
 \end{figure}
 
 \begin{center}

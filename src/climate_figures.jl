@@ -68,6 +68,18 @@ const SCENARIO_COLORS = Dict(
     "ssp585" => :firebrick,
 )
 
+# Compact axis labels for the report figures.  Long labels are the main
+# constraint on how small a panel can be made, and a smaller canvas means
+# larger apparent text when the figure is scaled to the report column width.
+# Units are stated in the LaTeX captions.
+const CLIMATE_REPORT_LABELS = Dict(
+    :native_richness => "Native richness (sp./site)",
+    :invasive_richness => "Invasive richness (sp./site)",
+    :native_extinction_risk => "Richness loss (fraction)",
+    :total_biomass => "Total biomass (units/site)",
+    :temperature_c => "Water temp. (°C)",
+)
+
 scenario_color(scenario::AbstractString) = get(SCENARIO_COLORS, String(scenario), :gray30)
 
 function _check_level(level::Symbol)
@@ -481,6 +493,7 @@ end
 function _save_climate_figure(fig, path::AbstractString; px_per_unit::Real=2.0)
     mkpath(dirname(path))
     Makie.save(path, fig; px_per_unit=px_per_unit)
+    trim_figure!(path)
     println("Figure saved to: $path")
     return path
 end
@@ -571,77 +584,123 @@ end
 """
     plot_across_scenarios_figure(level, scenario_runs, output_path)
 
-Across-scenario comparison for one level: five metric panels, one mean line per
-scenario with a light 10-90% band.  Each run contributes its mean across units,
-so nested levels show the aggregate trend rather than a modal-unit flat line.
+Across-scenario comparison for one level: five metric panels arranged in a
+3 x 2 grid, one mean line per scenario with a light 10-90% band, and the
+scenario legend in its own (sixth) cell so it never covers the data.  Panels are
+lettered ``(a)`` ... ``(e)``; the shared scenario colours are defined by
+[`scenario_color`](@ref).  Each run contributes its mean across units, so nested
+levels show the aggregate trend rather than a modal-unit flat line.
 """
 function plot_across_scenarios_figure(level::Symbol,
         scenario_runs::AbstractDict, output_path::AbstractString)
     _check_level(level)
+    report_theme!()
     scenarios = sort(collect(keys(scenario_runs)))
-    fig = Figure(size=(2000, 520))
+    fig = Figure(size=(1500, 1850))
     drew = false
-    legend_ax = nothing
     for (ci, (metric, label, unit)) in enumerate(CLIMATE_METRICS)
-        ax = Axis(fig[1, ci]; title="$label ($unit)", titlesize=12,
-            xlabel="Year", ylabel=ci == 1 ? LEVEL_LABELS[level] : "")
+        r, c = divrem(ci - 1, 2)
+        ax = Axis(fig[r + 1, c + 1]; width=520, height=430,
+            xlabel = r + 1 == 3 ? "Year" : "",
+            ylabel = CLIMATE_REPORT_LABELS[metric])
+        panel_letter!(ax, "(" * string(Char(96 + ci)) * ")")
         for scenario in scenarios
             stats = ensemble_level_stats(scenario_runs[scenario], level, metric)
             (isempty(stats.years) || all(isnan, stats.mean)) && continue
             drew = true
             color = scenario_color(scenario)
             band!(ax, stats.years, stats.p10, stats.p90; color=(color, 0.10))
-            lines!(ax, stats.years, stats.mean; color=color, linewidth=2.2, label=scenario)
+            lines!(ax, stats.years, stats.mean; color=color, linewidth=2.4)
         end
-        ci == 1 && (legend_ax = ax)
     end
     drew || return nothing
-    legend_ax === nothing || axislegend(legend_ax; position=:rb, nbanks=2, fontsize=10)
-    Label(fig[0, :], "Across-scenario comparison — $(LEVEL_LABELS[level]) " *
-        "(line: mean across GCMs of the level mean; band: 10-90% across GCMs)",
-        fontsize=15, font=:bold)
+    equal_panel_columns!(fig, 1, 1)
+    Legend(fig[3, 2],
+        [LineElement(color=scenario_color(s), linewidth=3.0) for s in scenarios],
+        scenarios; framevisible=false, title="SSP pathway / control",
+        titlefontsize=REPORT_LEGEND_FONTSIZE, nbanks=1)
     return _save_climate_figure(fig, output_path)
 end
 
 """
+    CLIMATE_LEVEL_COLORS
+
+Fixed colour per reporting level, used by the final-year summary so that the
+four spatial scales can be compared inside a single metric panel.
+"""
+const CLIMATE_LEVEL_COLORS = Dict(
+    :site => RGBAf(0.12, 0.45, 0.70, 1.0),
+    :subcatchment => RGBAf(0.20, 0.62, 0.35, 1.0),
+    :water_body => RGBAf(0.90, 0.55, 0.10, 1.0),
+    :basin => RGBAf(0.65, 0.15, 0.15, 1.0),
+)
+
+const CLIMATE_LEVEL_SHORT_LABELS = Dict(
+    :site => "Sampling point",
+    :subcatchment => "Sub-basin",
+    :water_body => "Water body",
+    :basin => "Whole basin",
+)
+
+"""
     plot_final_year_summary(scenario_runs, output_path; year)
 
-Final-year summary: rows are levels, columns are metrics; every scenario is a
-point (mean across GCMs of the level mean) with 25-75 (thick) and 10-90 (thin)
-spreads across GCMs.
+Final-year summary in a 3 x 2 grid: one panel per metric (columns are not
+repeated by level).  Inside each panel the x-axis is the emission pathway and
+the four spatial reporting levels are drawn as coloured points with thin
+10-90% and thick 25-75% spreads across GCMs.  Putting the levels in one panel
+gives them a common y-axis, which is what makes the level-to-level comparison
+possible; the sixth cell holds the level legend.  Panels are lettered
+``(a)`` ... ``(e)``.
 """
 function plot_final_year_summary(scenario_runs::AbstractDict,
         output_path::AbstractString; year::Int)
+    report_theme!()
     scenarios = sort(collect(keys(scenario_runs)))
     isempty(scenarios) && return nothing
-    fig = Figure(size=(440 * length(CLIMATE_METRICS) + 140,
-        310 * length(CLIMATE_LEVELS) + 70))
+    fig = Figure(size=(1500, 1850))
     drew = false
-    for (ri, level) in enumerate(CLIMATE_LEVELS)
-        for (ci, (metric, label, unit)) in enumerate(CLIMATE_METRICS)
-            ax = Axis(fig[ri, ci]; title="$label ($unit)", titlesize=10,
-                xlabel=ri == length(CLIMATE_LEVELS) ? "Scenario" : "",
-                ylabel=ci == 1 ? LEVEL_LABELS[level] : "",
-                xticks=(1:length(scenarios), scenarios), xticklabelrotation=0.25)
+    for (mi, (metric, label, unit)) in enumerate(CLIMATE_METRICS)
+        r, c = divrem(mi - 1, 2)
+        ax = Axis(fig[r + 1, c + 1]; width=520, height=430,
+            xlabel = r + 1 == 3 ? "Emission pathway" : "",
+            ylabel = CLIMATE_REPORT_LABELS[metric],
+            xticks = (1:length(scenarios), scenarios),
+            xticklabelrotation = π / 4)
+        panel_letter!(ax, "(" * string(Char(96 + mi)) * ")")
+        xlims!(ax, 0.5, length(scenarios) + 0.5)
+        for (li, level) in enumerate(CLIMATE_LEVELS)
+            offset = (li - (length(CLIMATE_LEVELS) + 1) / 2) * 0.17
+            color = CLIMATE_LEVEL_COLORS[level]
+            xs = Float64[]; ys = Float64[]
+            p10 = Float64[]; p90 = Float64[]; p25 = Float64[]; p75 = Float64[]
             for (si, scenario) in enumerate(scenarios)
                 stats = ensemble_level_stats(scenario_runs[scenario], level, metric)
                 idx = findfirst(==(year), stats.years)
                 (idx === nothing || isnan(stats.mean[idx])) && continue
                 drew = true
-                color = scenario_color(scenario)
-                lines!(ax, [si, si], [stats.p10[idx], stats.p90[idx]];
-                    color=color, linewidth=1.2)
-                lines!(ax, [si, si], [stats.p25[idx], stats.p75[idx]];
-                    color=color, linewidth=4)
-                scatter!(ax, [si], [stats.mean[idx]]; color=color,
-                    marker=:circle, markersize=8)
+                push!(xs, si + offset); push!(ys, stats.mean[idx])
+                push!(p10, stats.p10[idx]); push!(p90, stats.p90[idx])
+                push!(p25, stats.p25[idx]); push!(p75, stats.p75[idx])
             end
+            isempty(xs) && continue
+            for i in eachindex(xs)
+                lines!(ax, [xs[i], xs[i]], [p10[i], p90[i]];
+                    color=color, linewidth=1.2)
+                lines!(ax, [xs[i], xs[i]], [p25[i], p75[i]];
+                    color=color, linewidth=5.0)
+            end
+            scatter!(ax, xs, ys; color=color, marker=:circle, markersize=12,
+                strokecolor=:white, strokewidth=1.2)
         end
     end
     drew || return nothing
-    Label(fig[0, :],
-        "Year $year summary — mean with 25-75% and 10-90% spreads across GCMs",
-        fontsize=14, font=:bold)
+    equal_panel_columns!(fig, 1, 1)
+    Legend(fig[3, 2],
+        [LineElement(color=CLIMATE_LEVEL_COLORS[l], linewidth=5.0) for l in CLIMATE_LEVELS],
+        [CLIMATE_LEVEL_SHORT_LABELS[l] for l in CLIMATE_LEVELS];
+        framevisible=false, title="Reporting level", titlefontsize=REPORT_LEGEND_FONTSIZE,
+        nbanks=1)
     return _save_climate_figure(fig, output_path)
 end
 

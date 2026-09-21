@@ -369,7 +369,7 @@ The strongest structural contrast arose from the invasive-favouring interaction 
 
 **Figure 1. Thermal niches and baseline temperatures.** The histogram shows the distribution of baseline site temperatures, while the overlaid curves show the Gaussian thermal suitability of each native species; vertical reference lines identify the basin mean and a representative warmed mean. Most dominant cyprinid optima lie to the warm side of the current temperature distribution, whereas *S. trutta* (optimum 12.0 $^\circ$C) is already on the warm side of its optimum by approximately 1.5 thermal standard deviations. The figure provides the mechanistic explanation for the weak aggregate climate response: modest warming improves suitability for the abundant warm-adapted majority but reduces suitability for the cold-water sentinel.
 
-![Figure 1. Thermal niches and baseline temperatures.](figures/fig01_thermal_niches.png)
+![Figure 1. Thermal niches and baseline temperatures.](../results/climate_scenarios_k1x_burnin/figures/report_plots/fig01_thermal_niches.png)
 
 **Figure 2. Final-year climate ensemble summary.** Points and uncertainty intervals summarise native richness, invasive richness, realised native richness loss, total biomass, and mean water temperature at four nested reporting levels: sampling site, sub-catchment, water body, and basin. Across the 44 climate scenarios, temperature is the only indicator that clearly separates emission pathways; the aggregate richness and biomass indicators overlap strongly and the no-warming control remains within the scenario spread. The consistency across spatial scales shows that the aggregate insensitivity is not produced by a single noisy level of aggregation.
 
@@ -413,11 +413,11 @@ The strongest structural contrast arose from the invasive-favouring interaction 
 
 **Figure 12. Trout climate dose--response.** The three panels relate imposed basin-mean warming across the 44 climate runs to trout relative biomass change, absolute final biomass, and maximum thermal exposure. Trout relative biomass declines at approximately 9.2% of baseline per $^\circ$C ($R^2=0.65$), while the no-warming control changes by only $-0.2\%$; maximum days above the 20 $^\circ$C upper limit increase from 131 in the control to 139--174 across scenarios, and squared exceedance energy also increases. The figure links a species-level abundance response to a physiological exposure mechanism while showing why the result should not be extrapolated to the whole assemblage.
 
-![Figure 12. Trout climate dose--response.](figures/fig12_st_climate_response.png)
+![Figure 12. Trout climate dose--response.](../results/climate_scenarios_k1x_burnin/figures/report_plots/fig12_st_climate_response.png)
 
 **Figure 13. Interaction-matrix main effects.** Jittered points show run-level basin native biomass, invasive biomass, trout biomass, total biomass, and native richness for the original, random, and invasive-favouring matrices; bars show matrix means across climate endpoints and upstream costs. Relative to the original matrix, the invasive-favouring matrix shifts native biomass from approximately 50.2 to 5.1 units, trout biomass from 548 to 313, native richness from 2.42 to 0.15, and invasive biomass from 6.0 to 58.7, while total biomass changes comparatively little (56.2 to 64.2). The figure therefore shows redistribution between community compartments, but the extreme matrix, thermal-breadth multiplier, and shorter burn-in make it a bounding scenario rather than a forecast.
 
-![Figure 13. Interaction-matrix main effects.](figures/fig13_interaction_matrix_effects.png)
+![Figure 13. Interaction-matrix main effects.](../results/sensitivity_obstacles/alt_interactions/report_plots/fig13_interaction_matrix_effects.png)
 
 ## 8. Data and Code Availability
 

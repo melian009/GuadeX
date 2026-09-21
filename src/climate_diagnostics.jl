@@ -167,101 +167,87 @@ end
 """
     plot_climate_forcing_response(runs, output_path)
 
-Six-panel diagnostic: warming trajectories, basin richness and biomass
-trajectories, the final-year warming-response scatter and the (near-zero)
-extinction-risk trajectory.  Richness scenarios are distinguished by the
-canonical [`scenario_color`](@ref).
+Forcing-versus-response diagnostic in a 3 x 2 grid, with the SSP legend in its
+own row below the panels.  `forcing` is the imposed basin-mean warming anomaly
+(`delta_temperature_c`, relative to the 1986-2005 baseline): it is the driver
+that the climate ensemble adds on top of the observed seasonal climatology, and
+it is shown explicitly in panel (a) because the report otherwise plots only
+absolute water temperature.  Panels (a)-(c) are annual trajectories (median
+across the GCMs, 10-90% band); panels (d)-(f) are the final-year response
+plotted against the *realised* warming of each run, which is the quantity used
+to separate runs along the forcing axis.  Each point is one GCM x SSP run.
 """
 function plot_climate_forcing_response(runs::AbstractVector{<:ClimateBasinSeries},
         output_path::AbstractString)
+    report_theme!()
     isempty(runs) && return nothing
     scenarios = sort(unique(run.scenario for run in runs))
     warming = _series_envelope(runs, :delta_temperature_c, scenarios)
     richness = _series_envelope(runs, :native_richness, scenarios)
     biomass = _series_envelope(runs, :total_biomass, scenarios)
-    risk = _series_envelope(runs, :native_extinction_risk, scenarios)
 
-    fig = Figure(size=(1680, 1000))
+    fig = Figure(size=(1500, 1950))
 
-    function _trajectory_axis(row, col, title, ylabel, envelope)
-        ax = Axis(fig[row, col]; title=title, xlabel="Year", ylabel=ylabel,
-            titlesize=12)
+    function _trajectory_axis(row, col, letter, ylabel, envelope)
+        ax = Axis(fig[row, col]; width=520, height=430, xlabel="Year", ylabel=ylabel)
+        panel_letter!(ax, letter)
         for scenario in scenarios
             env = envelope[scenario]
             (isempty(env.years) || all(isnan, env.median)) && continue
             color = scenario_color(scenario)
             band!(ax, env.years, env.lo, env.hi; color=(color, 0.12))
-            lines!(ax, env.years, env.median; color=color, linewidth=2.2, label=scenario)
+            lines!(ax, env.years, env.median; color=color, linewidth=2.4)
         end
         return ax
     end
 
-    ax1 = _trajectory_axis(1, 1, "Forcing: water-temperature change", "ΔT (°C)", warming)
-    ax2 = _trajectory_axis(1, 2, "Response: mean native richness", "species / site", richness)
-    ax3 = _trajectory_axis(1, 3, "Response: mean total biomass", "biomass / site", biomass)
-    axislegend(ax1; position=:lt, nbanks=2, fontsize=9)
+    ax1 = _trajectory_axis(1, 1, "(a)", "Warming anomaly ΔT (°C)", warming)
+    ax2 = _trajectory_axis(1, 2, "(b)", "Native richness (sp./site)", richness)
+    ax3 = _trajectory_axis(2, 1, "(c)", "Total biomass (units/site)", biomass)
     # The four SSP trajectories are almost identical in the response panels; say
     # so explicitly, otherwise it looks like only one scenario was plotted.
     for ax in (ax2, ax3)
-        text!(ax, 0.04, 0.06; space=:relative, text="all SSPs overlap",
-            align=(:left, :bottom), fontsize=11, color=(:black, 0.65))
+        report_annotation!(ax, "all SSPs overlap", position=:lb, color=(:black, 0.65))
     end
 
     # Final-year warming response across all runs.
     final_warming = [_final_value(run, :delta_temperature_c) for run in runs]
     final_richness = [_final_value(run, :native_richness) for run in runs]
     final_biomass = [_final_value(run, :total_biomass) for run in runs]
+    final_risk = [_final_value(run, :native_extinction_risk) for run in runs]
+    run_scenario = [run.scenario for run in runs]
+    # The no-warming control is plotted (it is a useful reference point) but it
+    # is excluded from the correlations so they describe the 44 warming runs,
+    # matching the dose-response analysis elsewhere in the report.
+    scenario_mask = [run.scenario != "control" for run in runs]
 
-    ax4 = Axis(fig[2, 1]; title="Final-year native richness vs warming",
-        xlabel="ΔT by end of horizon (°C)", ylabel="mean native richness / site",
-        titlesize=12)
-    for scenario in scenarios
-        idx = findall(==(scenario), [run.scenario for run in runs])
-        xs = final_warming[idx]
-        ys = final_richness[idx]
-        x, y = _pairwise_finite(xs, ys)
-        isempty(x) && continue
-        scatter!(ax4, x, y; color=(scenario_color(scenario), 0.85), markersize=9,
-            label=scenario)
-    end
-    xr, yr = _pairwise_finite(final_warming, final_richness)
-    r_rich = _pearson(xr, yr)
-    isfinite(r_rich) && text!(ax4, 0.04, 0.94; space=:relative,
-        text="Pearson r = $(round(r_rich, digits=3))", align=(:left, :top), fontsize=11)
-
-    ax5 = Axis(fig[2, 2]; title="Final-year total biomass vs warming",
-        xlabel="ΔT by end of horizon (°C)", ylabel="mean total biomass / site",
-        titlesize=12)
-    for scenario in scenarios
-        idx = findall(==(scenario), [run.scenario for run in runs])
-        x, y = _pairwise_finite(final_warming[idx], final_biomass[idx])
-        isempty(x) && continue
-        scatter!(ax5, x, y; color=(scenario_color(scenario), 0.85), markersize=9)
-    end
-    xb, yb = _pairwise_finite(final_warming, final_biomass)
-    r_bio = _pearson(xb, yb)
-    isfinite(r_bio) && text!(ax5, 0.04, 0.94; space=:relative,
-        text="Pearson r = $(round(r_bio, digits=3))", align=(:left, :top), fontsize=11)
-
-    ax6 = Axis(fig[2, 3]; title="Extinction-risk metric (1 - richness / initial richness)",
-        xlabel="Year", ylabel="mean relative richness loss", titlesize=12)
-    for scenario in scenarios
-        env = risk[scenario]
-        (isempty(env.years) || all(isnan, env.median)) && continue
-        lines!(ax6, env.years, env.median; color=scenario_color(scenario), linewidth=2.2)
-    end
-    risk_hi = 0.0
-    for scenario in scenarios
-        for value in risk[scenario].hi
-            isfinite(value) && (risk_hi = max(risk_hi, value))
+    function _response_axis(row, col, letter, ylabel, ys, rlabel)
+        ax = Axis(fig[row, col]; width=520, height=430,
+            xlabel = "Realised ΔT by 2045 (°C)", ylabel = ylabel)
+        panel_letter!(ax, letter)
+        for scenario in scenarios
+            idx = findall(==(scenario), run_scenario)
+            x, y = _pairwise_finite(final_warming[idx], ys[idx])
+            isempty(x) && continue
+            scatter!(ax, x, y; color=(scenario_color(scenario), 0.85),
+                markersize=11, strokewidth=0)
         end
+        xr, yr = _pairwise_finite(final_warming[scenario_mask], ys[scenario_mask])
+        r = _pearson(xr, yr)
+        isfinite(r) && report_annotation!(ax, rlabel * " r = $(round(r, digits=3))",
+            position=:lt)
+        return ax
     end
-    ylims!(ax6, 0.0, max(0.05, risk_hi))
 
-    Label(fig[0, :],
-        "Climate diagnostics — forcing vs community response (median across " *
-        "$(length(runs)) runs; bands are 10-90% across GCMs)",
-        fontsize=15, font=:bold)
+    _response_axis(2, 2, "(d)", "Native richness (sp./site)", final_richness, "Pearson")
+    _response_axis(3, 1, "(e)", "Total biomass (units/site)", final_biomass, "Pearson")
+    _response_axis(3, 2, "(f)", "Richness loss (fraction)", final_risk, "Pearson")
+    equal_panel_columns!(fig, 1, 1)
+
+    Legend(fig[4, 1:2],
+        [LineElement(color=scenario_color(s), linewidth=3.0) for s in scenarios],
+        scenarios; orientation=:horizontal, framevisible=false,
+        title="SSP pathway", titlefontsize=REPORT_LEGEND_FONTSIZE)
     return _save_climate_figure(fig, output_path)
 end
 

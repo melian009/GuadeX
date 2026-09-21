@@ -136,7 +136,7 @@ All paths are given relative to this document's directory (`docs/`). Every refer
 
 ### 4.1 Figure 1 — Thermal niches versus available temperature
 
-![Native thermal niches against the site-temperature distribution.](figures/fig01_thermal_niches.png)
+![Native thermal niches against the site-temperature distribution.](../results/climate_scenarios_k1x_burnin/figures/report_plots/fig01_thermal_niches.png)
 
 **Title.** Native thermal niches versus available water temperature in the Guadalquivir metacommunity.
 **Methodology / Data Source.** Replotted for this report by `scripts/plot_integrated_report_figures.jl` from the same read-only inputs as `src/climate_diagnostics.jl`: species optima and σ from the empirical trait table (`range/6` convention), and the baseline site-temperature distribution from the 2026 sampling-point table of the no-warming control run (`results/climate_scenarios_k1x_burnin/control/baseline/`). The only change from the original diagnostic is layout: the legend occupies its own figure column so it cannot overlap the curves or the histogram. Grey bars are the relative frequency of baseline site temperatures; coloured curves are the Gaussian suitability of the native species (identical optima grouped); the dotted lines mark the basin mean (≈16.0 °C) and the mean after the median ensemble warming (+0.81 °C → 16.8 °C).
@@ -246,7 +246,7 @@ All paths are given relative to this document's directory (`docs/`). Every refer
 
 ### 4.12 Figure 12 — Cold-water sentinel response across the climate ensemble
 
-![ST relative biomass change, final biomass and thermal exposure versus warming across the 44-run climate ensemble.](figures/fig12_st_climate_response.png)
+![ST relative biomass change, final biomass and thermal exposure versus warming across the 44-run climate ensemble.](../results/climate_scenarios_k1x_burnin/figures/report_plots/fig12_st_climate_response.png)
 
 **Title.** ST (brown trout) basin biomass change, final biomass and thermal exposure versus end-of-century warming across the 44-run climate ensemble.
 **Methodology / Data Source.** New synthesis figure generated for this report by `scripts/plot_integrated_report_figures.jl` from read-only exports: the ST row of each run's `export/levels/quasi_extinction_summary.csv` (relative and absolute final biomass) and the ST rows of `export/levels/exposure_sites.csv` (maximum over sites and years of days above the 20 °C upper limit and of squared exceedance energy), joined to `results/climate_scenarios_k1x_burnin/runs_index.csv` for the warming axis. Points are individual runs coloured by SSP; the black diamond is the no-warming control; the dashed line is an ordinary least-squares fit.
@@ -255,7 +255,7 @@ All paths are given relative to this document's directory (`docs/`). Every refer
 
 ### 4.13 Figure 13 — Interaction-matrix main effects at the community level
 
-![Basin native, invasive and ST biomass and native richness by interaction matrix.](figures/fig13_interaction_matrix_effects.png)
+![Basin native, invasive and ST biomass and native richness by interaction matrix.](../results/sensitivity_obstacles/alt_interactions/report_plots/fig13_interaction_matrix_effects.png)
 
 **Title.** Main effects of the interaction matrix on basin native biomass, invasive biomass, ST final biomass and native richness.
 **Methodology / Data Source.** New synthesis figure generated for this report by `scripts/plot_integrated_report_figures.jl` from `results/sensitivity_obstacles/alt_interactions/runs_index.csv` (48 runs, 16 per matrix, spanning both climate ends and both upstream costs); each point is one run (horizontally jittered), the black bar is the matrix mean.
@@ -266,7 +266,7 @@ All paths are given relative to this document's directory (`docs/`). Every refer
 
 | # | Figure (relative path from `docs/`) | Stream | Role in the synthesis |
 |---|---|---|---|
-| 1 | `figures/fig01_thermal_niches.png` | Climate (corrected) | Mechanism: community maladaptation; legend moved outside the plot |
+| 1 | `../results/climate_scenarios_k1x_burnin/figures/report_plots/fig01_thermal_niches.png` | Climate (corrected) | Mechanism: community maladaptation; legend moved outside the plot |
 | 2 | `../results/climate_scenarios_k1x_burnin/figures/summary_2045.png` | Climate | Flat aggregates across 4 levels × 5 indicators; only ΔT separates |
 | 3 | `../results/climate_scenarios_k1x_burnin/figures/comparison/across_scenarios_basin.png` | Climate | Temporal overlap; stationary control |
 | 4 | `../results/climate_scenarios_k1x_burnin/figures/diagnostics/forcing_and_response.png` | Climate | Forcing separated vs response flat; final-year scatter (Pearson r) |
@@ -277,8 +277,8 @@ All paths are given relative to this document's directory (`docs/`). Every refer
 | 9 | `../results/sensitivity_obstacles/report_plots/fig_st_vs_upstream_cost.png` | Obstacle | ST sentinel: warming + barrier penalties superposed |
 | 10 | `../results/sensitivity_obstacles/report_plots/fig_interaction_matrix_robustness.png` | Alt | Dominant-but-confoundable interaction axis; placebo caution |
 | 11 | `../results/sensitivity_obstacles/report_plots/fig_subcatchment_waterbody_effects.png` | Obstacle | Spatial decomposition of the blockage effect |
-| 12 | `figures/fig12_st_climate_response.png` | Climate (new) | ST sentinel dose–response: abundance, absolute biomass, thermal exposure |
-| 13 | `figures/fig13_interaction_matrix_effects.png` | Alt (new) | Matrix main effects: native/invasive/ST/richness redistribution |
+| 12 | `../results/climate_scenarios_k1x_burnin/figures/report_plots/fig12_st_climate_response.png` | Climate (new) | ST sentinel dose–response: abundance, absolute biomass, thermal exposure |
+| 13 | `../results/sensitivity_obstacles/alt_interactions/report_plots/fig13_interaction_matrix_effects.png` | Alt (new) | Matrix main effects: native/invasive/ST/richness redistribution |
 
 *Excluded as redundant: `fig_parameter_importance_dashboard.png`, `fig_subcatchment_waterbody_effects_cool.png`, `alt_interactions/report_plots/fig_matrix_uc_heatmaps.png` (the matrix-faceted expansion of Figure 8's grid), `alt_interactions/report_plots/fig_interaction_matrix_robustness.png` (the same figure written from the same alt-sweep data), `fig_interaction_effects.png`, and the per-run/ensemble climate figure series not discussed in the text.*
 
@@ -531,7 +531,7 @@ Species-level sentinel metrics (ST final biomass, relative change and quasi-exti
 | Per-run provenance | `<run_dir>/export/run_metadata.json` and `<run_dir>/simulation_output.jld2` |
 | Drivers | `run_climate_scenarios.jl`, `run_sensitivity_report.jl`, `run_alt_interactions.jl`, `sensitivity_core.jl` |
 | Figure scripts (read-only inputs) | `scripts/plot_report_figures.jl`, `scripts/plot_sensitivity_effects.jl`, `scripts/plot_climate_diagnostics.jl` |
-| Synthesis-figure script (new) | `scripts/plot_integrated_report_figures.jl` → `docs/figures/fig01_thermal_niches.png`, `fig12_st_climate_response.png`, `fig13_interaction_matrix_effects.png` |
+| Synthesis-figure script (new) | `scripts/plot_integrated_report_figures.jl` → `results/climate_scenarios_k1x_burnin/figures/report_plots/fig01_thermal_niches.png`, `.../fig12_st_climate_response.png`, `results/sensitivity_obstacles/alt_interactions/report_plots/fig13_interaction_matrix_effects.png` |
 | Interactive explorer | `viz/` (browser app); viewer-ready inputs in `<run_dir>/export/viewer/` (`guadex_results_native_extinction_risk.json`, `guadex_results_metrics.json`, `guadex_results_timeseries.csv`, `level_*_timeseries.json`); usage documented in §5.12 |
 
 ### 5.12 Interactive exploration with the GuadeX visualization engine (`viz/`)
@@ -575,7 +575,7 @@ and the engine exposes `window.GuadeX.setResults(obj)`, `window.GuadeX.loadResul
 
 ### 5.13 Execution statement
 
-No simulation was run for this report, and no file under `results/` was created, modified or deleted. The report and the ten run-produced figures are derived exclusively from the existing exported CSVs, JSON metadata and PNG figures, and the methodological descriptions in §§5.1–5.11 were reconstructed from the model source, the entry scripts, `parameters.toml` and the per-run `run_metadata.json` files listed above, not from new runs. Three figures were newly generated for the report by `scripts/plot_integrated_report_figures.jl`, which reads only the existing CSV exports and writes to `docs/figures/`: Figure 1 (an unchanged-content replot of the existing thermal-niche diagnostic with the legend moved outside the plotting area, because the original legend obscured the curves) and Figures 12 and 13 (new syntheses that fill genuine gaps — the ST climate dose–response and the interaction-matrix main-effect levels). No `results/` artefact was touched by this script.
+No simulation was run for this report. The report and the ten run-produced figures are derived exclusively from the existing exported CSVs, JSON metadata and PNG figures, and the methodological descriptions in §§5.1–5.11 were reconstructed from the model source, the entry scripts, `parameters.toml` and the per-run `run_metadata.json` files listed above, not from new runs. Three figures were newly generated for the report by `scripts/plot_integrated_report_figures.jl`, which reads only the existing CSV exports and writes to the corresponding `results/.../report_plots/` directory: Figure 1 (an unchanged-content replot of the existing thermal-niche diagnostic with the legend moved outside the plotting area, because the original legend obscured the curves) and Figures 12 and 13 (new syntheses that fill genuine gaps — the ST climate dose–response and the interaction-matrix main-effect levels). Those three PNG files are the only `results/` artefacts created by this script.
 
 ---
 
