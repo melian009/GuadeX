@@ -63,8 +63,16 @@ function read_st_exposure(run_dir)
         max_energy = maximum(Float64.(sub.exceedance_energy)))
 end
 
-function save_report(fig, path; size)
-    Makie.save(path, fig; size=size, px_per_unit=2)
+# Axes here use explicit width/height, so the requested Figure size can be
+# smaller than the space the panels plus their labels, legends and titles
+# occupy; Makie then clips the overflow at the canvas edge.  `resize_to_layout!`
+# grows the scene to the tight bounding box of the layout, including every
+# protrusion, so no content is cut off while font sizes and panel dimensions
+# stay as authored.  `size` is kept for call-site compatibility but no longer
+# overrides the fitted size.
+function save_report(fig, path; size=nothing)
+    resize_to_layout!(fig)
+    Makie.save(path, fig; px_per_unit=2)
     trim_figure!(path)
     println("wrote $(path)")
 end

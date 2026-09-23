@@ -63,8 +63,17 @@ const METRIC_LABELS = Dict(
 const COST_COLORS = Dict(0.01 => RGBAf(0.27, 0.45, 0.77, 0.95),
     0.5 => RGBAf(0.90, 0.55, 0.10, 0.95))
 
-function save_report(fig, path; size)
-    Makie.save(path, fig; size=size, px_per_unit=2)
+# The axes below are built with explicit width/height, so the size requested
+# from `Figure(size = ...)` can be smaller than the space the panels plus their
+# tick labels, axis labels, legends and colourbars actually occupy.  Makie then
+# clips the overflowing content at the canvas edge (which is why some report
+# figures were cut off).  `resize_to_layout!` grows the scene to the tight
+# bounding box of the layout, including every protrusion, so nothing is lost
+# while font sizes and panel dimensions stay exactly as authored.  `size` is
+# accepted for call-site compatibility but no longer overrides the fitted size.
+function save_report(fig, path; size=nothing)
+    resize_to_layout!(fig)
+    Makie.save(path, fig; px_per_unit=2)
     trim_figure!(path)
     println("wrote $(basename(path))")
 end

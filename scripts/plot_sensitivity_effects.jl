@@ -39,8 +39,17 @@ const ALT_INDEX = joinpath(ROOT, "alt_interactions", "runs_index.csv")
 const REPORT_DIR = joinpath(ROOT, "report_plots")
 mkpath(REPORT_DIR)
 
-function save_report(fig, path; size)
-    Makie.save(path, fig; size=size, px_per_unit=2)
+# Axes in this script have explicit width/height, so the requested Figure size
+# can be smaller than the space the panels plus their labels, legends and
+# colourbars actually occupy.  Makie then clips the overflowing content at the
+# canvas edge (the cause of the tornado figure being cut off top and bottom).
+# `resize_to_layout!` grows the scene to the tight bounding box of the layout,
+# including every protrusion, so nothing is lost while font sizes and panel
+# dimensions stay exactly as authored.  `size` is accepted for call-site
+# compatibility but no longer overrides the fitted size.
+function save_report(fig, path; size=nothing)
+    resize_to_layout!(fig)
+    Makie.save(path, fig; px_per_unit=2)
     trim_figure!(path)
     println("Figure saved to: $path")
 end
