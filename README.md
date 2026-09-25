@@ -1,5 +1,19 @@
 # GuadeX: Assessing Extinction Dynamics in Changing Metacommunities of the Guadalquivir River Basin
 
+## Table of Contents
+
+- [Project Summary](#project-summary)
+- [Research Gaps and Objectives (Aims)](#research-gaps-and-objectives-aims)
+- [Methodology](#methodology)
+  - [1. Extinction Probability Curve Analysis](#1-extinction-probability-curve-analysis)
+  - [2. Dynamic Simulations of Threats on extinction probabilities](#2-dynamic-simulations-of-threats-on-extinction-probabilities)
+- [Data Sources and Files](#data-sources-and-files)
+- [Platform for Knowledge Transfer and Reproducibility](#platform-for-knowledge-transfer-and-reproducibility)
+  - [Simulation entry points, four-level outputs and viewer](#simulation-entry-points-four-level-outputs-and-viewer)
+  - [Using the viewer](#using-the-viewer)
+  - [Core Team:](#core-team)
+  - [Key Activities (Timeline):](#key-activities-timeline)
+- [Original sources](#original-sources)
 
 ## Project Summary
 
