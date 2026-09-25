@@ -141,7 +141,7 @@ function metricContext() {
         activeKey: key,
         label: `${model.name}${key != null ? ` · ${key}` : ''}`,
         unit: model.unit ?? '',
-        stats: model.stats.get(key),
+        stats: model.globalStats ?? model.stats.get(key),
         get: (s) => model.values.get(s.id)?.[key],
         categorical: false,
       }

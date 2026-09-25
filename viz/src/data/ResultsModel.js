@@ -101,6 +101,18 @@ function finiteStats(model) {
       categorical: !sawNumber && sawOther,
     })
   }
+  // A single quantity sampled across steps shares one scale, so moving the
+  // time slider shows the temporal change instead of re-normalising each step.
+  if (model.singleSeries) {
+    let gmin = Infinity, gmax = -Infinity
+    for (const { key } of model.keys) {
+      const st = model.stats.get(key)
+      if (st && st.min != null) { if (st.min < gmin) gmin = st.min; if (st.max > gmax) gmax = st.max }
+    }
+    model.globalStats = gmin <= gmax
+      ? { min: gmin, max: gmax, mean: null, count: 0, unique: [], categorical: false }
+      : { min: null, max: null, mean: null, count: 0, unique: [], categorical: false }
+  }
   return model
 }
 
@@ -145,7 +157,7 @@ function fromJson(payload, source) {
     }
     values.set(siteId, rec)
   }
-  return finiteStats({ name, unit, description, source, mode: sawArray ? 'timeseries' : 'metrics', steps, keys: keys.map((k) => ({ key: k, label: k, unit: '' })), values, stats: new Map(), raw: payload })
+  return finiteStats({ name, unit, description, source, mode: sawArray ? 'timeseries' : 'metrics', singleSeries: sawArray, steps, keys: keys.map((k) => ({ key: k, label: k, unit: '' })), values, stats: new Map(), raw: payload })
 }
 
 function fromCsv(text, source) {
@@ -185,7 +197,7 @@ function fromCsv(text, source) {
       values.set(id, rec)
     }
   }
-  return finiteStats({ name: source ?? 'CSV results', unit: '', description: '', source, mode: stepCol ? 'timeseries' : 'metrics', keys: keys.map((k) => ({ key: k, label: k, unit: '' })), values, stats: new Map(), raw: { rows: rows.length, headers } })
+  return finiteStats({ name: source ?? 'CSV results', unit: '', description: '', source, mode: stepCol ? 'timeseries' : 'metrics', singleSeries: stepCol != null && numericCols.length === 1, keys: keys.map((k) => ({ key: k, label: k, unit: '' })), values, stats: new Map(), raw: { rows: rows.length, headers } })
 }
 
 export function normaliseResults(input, source) {

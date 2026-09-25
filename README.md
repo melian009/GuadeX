@@ -93,6 +93,34 @@ Every run writes four reporting levels — sampling point (`CODIGO`), sub-basin
 for the level definitions, temperature-scenario construction, output layout and
 limitations. `scripts/export_run_outputs.jl` re-exports an existing JLD2 result.
 
+### Using the viewer
+
+The published viewer lives at <https://melian009.github.io/GuadeX/> and works with two kinds of data.
+
+**Site attributes (static).** The 1,037 sampling sites already carry the full field-survey
+attribute set from the GIS archive — native, exotic and total species richness, species
+presence and densities, the ZIC/BCC/VA indices, altitude, and habitat and water-quality
+fields. These are static (they describe the sampled communities) and need no upload. In the
+**Data** tab, leave **Source = Site attributes** and pick a **Variable**; the 3-D columns and
+the catchment choropleth then encode it, and clicking a site opens its full attribute card.
+
+**Simulation results (upload).** Any per-site model output can be mapped onto the same sites.
+In the **Data** tab under **Simulation results**, choose or drag-and-drop a JSON or CSV file
+keyed by site code (`CODIGO`, e.g. `"1.1.2"`). Two shapes are detected automatically:
+
+* **Time series** — a JSON object with `steps` plus one array of values per site, or a long
+  CSV (`CODIGO,step,value`). A **time / scenario slider** appears, and moving it re-colours
+  and re-scales the basin so change over time is visible.
+* **Per-site metrics** — a JSON object of key/value metrics per site, or a wide CSV
+  (`CODIGO,metricA,metricB`). Each key becomes a selectable variable; non-numeric keys are
+  treated as categories.
+
+Uploads are processed entirely in the browser and last for the session only (nothing is sent
+to a server; refreshing clears them). Two clearly labelled synthetic demo files are built in
+(**Load demo (time series)** and **Load demo (metrics)**) for trying the pipeline. See
+**[viz/README.md](viz/README.md)** for the exact file formats, deep links and the
+`window.GuadeX` programmatic API.
+
 ### Core Team:
 *   Dr. Carlos Fernandez Delgado (Universidad de Córdoba, Spain)
 *   Dr. Lucía Galvez Bravo (Liverpool John Moores University, UK)
