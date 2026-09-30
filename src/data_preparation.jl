@@ -1774,16 +1774,72 @@ function extract_habitat_suitability(site_df::DataFrame, sites::Vector{String})
     return suitability
 end
 
+# =============================================================================
+# Explicit, opt-in biological-assumption options (E13-E16, E18).
+#
+# Every option below defaults to the behaviour the model had before the option
+# existed, so the legacy outputs and the test suite are reproduced exactly.  The
+# options are read from the `[biological_options]` section of the parameter file
+# (see `parameters.jl`) and exposed through [`prepare_ode_data`](@ref).
+# =============================================================================
+
+# E16: species documented with `REPRODU_WITHIN_THE_BASIN = no` yet given a
+# local literature growth rate.  With `nonreproducing_local_growth = :zero`
+# their local r is set to zero; recruitment is to be represented later as
+# estuarine immigration.
+const NONREPRODUCING_SPECIES = Set(["AA", "LR", "MC"])
+
+# E16: the Guadiato cluster (subcatchment 14) holds the four documented eel
+# records from a fish farm that the density README says must not be used for the
+# native/alien calculations.  `exclude_fishfarm_eel_records = true` zeroes their
+# AA_DEN before any downstream builder reads the density table.
+const FISHFARM_EEL_SUBCATCHMENT = "14.0"
+
+# E15: capacity assigned to a `SIN_PECES = DIFICIL` site under
+# `fishless_dificil_capacity = :near_zero`.  Matches the ODE's own internal
+# capacity floor (`max(K, 1e-6)`), so the site behaves as a transit-only node:
+# the logistic term saturates immediately and no local population can establish.
+const NEAR_ZERO_CARRYING_CAPACITY = 1.0e-6
+
+# E18: minimum site conductivity (uS/cm) for a strictly brackish species under
+# `salinity_envelope = true`.  1000 uS/cm is the conventional freshwater/brackish
+# boundary; the site `CONDUCTIVIDAD` column is used as the salinity proxy.
+const SALINITY_BRACKISH_MIN_CONDUCTIVITY_US_CM = 1000.0
+
 """
-    build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vector{String}, sites::Vector{String})
+    build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vector{String}, sites::Vector{String}, species_chars_df::DataFrame;
+        seasonal_rates::AbstractDict=Dict{String,Float64}(),
+        absence_growth_fraction::Real=0.1,
+        nonreproducing_local_growth::Symbol=:legacy)
 
 Build intrinsic growth rates matrix from density data.
 Uses literature-derived daily intrinsic growth rates for each species.
 
+# Rate conversion (minor #4)
+The default keeps the historical, tested behaviour: **every** species' annual
+rate is converted as `r_daily = r_annual / 365`; absent species receive
+`absence_growth_fraction · r_daily`.  The previously documented seasonal
+conversion `r_daily = log1p(r_seasonal) / 183` is now offered as an *explicit,
+opt-in* option: pass a species→rate mapping as `seasonal_rates` (e.g.
+`Dict("GH" => 4.0)`) and the listed species use the seasonal formula while all
+others keep `r_annual / 365`.  The default (`seasonal_rates` empty) is
+unchanged, so existing runs and results are reproduced exactly.
+
+# E13 — absence growth fraction
+`absence_growth_fraction` is the fraction of the local daily rate given to a
+species observed absent at a site (default `0.1`, the historical value).  Setting
+it to `1.0` removes the presence-based penalty entirely, so temperature and
+habitat alone decide where a species can establish (the review's recommendation);
+the default is deliberately **not** changed.  Set it to `0.0` to forbid local
+growth at absent sites.
+
+# E16 — non-reproducing species
+`nonreproducing_local_growth = :zero` sets the local `r` of the species with
+`REPRODU_WITHIN_THE_BASIN = no` (`AA`, `LR`, `MC`) to zero; the default
+(`:legacy`) keeps their literature rate.  This is opt-in and reversible.
+
 # Literature Sources
 - References are based on empirical studies from the Guadalquivir River Basin
-- Annual rates are converted to daily rates using: r_daily = r_annual / 365
-- For seasonal rates (e.g., Gambusia), converted using: r_daily = log(1 + r_seasonal) / 183
 
 # Species and Citations
 Native species:
@@ -1816,7 +1872,15 @@ Other species:
 - ST (Salmo trutta): r_annual ≈ 0.3-0.5 /year (typical for salmonids)
 """
 function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vector{String},
-                                       sites::Vector{String}, species_chars_df::DataFrame)
+                                       sites::Vector{String}, species_chars_df::DataFrame;
+                                       seasonal_rates::AbstractDict=Dict{String,Float64}(),
+                                       absence_growth_fraction::Real=0.1,
+                                       nonreproducing_local_growth::Symbol=:legacy)
+
+    absence_growth_fraction >= 0 ||
+        error("absence_growth_fraction must be non-negative (got $absence_growth_fraction)")
+    nonreproducing_local_growth in (:legacy, :zero) ||
+        error("nonreproducing_local_growth must be :legacy or :zero (got :$(nonreproducing_local_growth))")
 
     n_sites = length(sites)
     n_species = length(species_codes)
@@ -1867,11 +1931,22 @@ function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vect
         # Get annual growth rate from literature (use midpoint of ranges)
         r_annual = get(annual_growth_rates, sp_code, 0.5)  # default 0.5 if unknown
 
-        # Convert annual rate to daily instantaneous rate
-        # r_daily = r_annual / 365
-        # This assumes continuous exponential growth, which is appropriate for
-        # fish populations with overlapping generations
-        r_daily = r_annual / 365.0
+        # Convert to a daily instantaneous rate.  Default (minor #4): the
+        # historical `r_annual / 365` for every species.  Opt-in seasonal
+        # conversion for species explicitly listed in `seasonal_rates`:
+        # `log1p(r_seasonal) / 183`, matching the documented Gambusia formula.
+        r_daily = if haskey(seasonal_rates, sp_code)
+            log1p(Float64(seasonal_rates[sp_code])) / 183.0
+        else
+            r_annual / 365.0
+        end
+
+        # E16: opt-in zeroing of the local rate for species that do not reproduce
+        # within the basin.  Applied before the absence branch so both present and
+        # absent cells are zero.
+        if nonreproducing_local_growth == :zero && sp_code in NONREPRODUCING_SPECIES
+            r_daily = 0.0
+        end
 
         for (site_idx, site) in enumerate(sites)
             if haskey(site_to_row, site)
@@ -1886,7 +1961,9 @@ function build_intrinsic_growth_rates(density_df::DataFrame, species_codes::Vect
                     if density > 0
                         growth_rates[site_idx, s_idx] = r_daily
                     else
-                        growth_rates[site_idx, s_idx] = r_daily * 0.1
+                        # E13: fraction of the local rate at an observed absence
+                        # (legacy default 0.1).
+                        growth_rates[site_idx, s_idx] = r_daily * Float64(absence_growth_fraction)
                     end
                 end
             end
@@ -1914,18 +1991,43 @@ convention.  A minimum-capacity floor of 5.0 observed-density units (10th percen
 of non-zero observations when larger) is multiplied by the same `scaling`, so the
 effective multiplier against observed density is `scaling` for every site.
 
+# E14 — isolated-pool capacity
+`pool_capacity_mode` controls how sites flagged `EN_POZAS = Si` (isolated pools)
+enter the capacity estimate.  `:legacy` (default) uses their raw observed density;
+`:cap` clips a pool site's capacity at the **non-pool median**; `:exclude`
+replaces it with that median, so a single-visit pool sample cannot set the
+capacity at all.  The 84 pool sites hold ~56% of total density, so this choice
+strongly affects the reported high-K tail.
+
+# E15 — fishless DIFICIL capacity
+`fishless_dificil_capacity = :near_zero` sets K to
+`NEAR_ZERO_CARRYING_CAPACITY` at sites with `SIN_PECES = DIFICIL` (the field team
+judged them unable to hold fish), making them transit-only nodes.  The default
+`:legacy` keeps their observed capacity.  This interacts with E13: raising
+`absence_growth_fraction` while zeroing K at these sites pulls establishment in
+opposite directions.
+
 # Arguments
 - `density_df`: DataFrame with species density data (from load_species_density_data)
-- `site_df`: DataFrame with site data
+- `site_df`: DataFrame with site data (must carry `EN_POZAS` / `SIN_PECES` for the
+  corresponding non-legacy options)
 - `sites`: Vector of site codes in order
 - `species_codes`: Vector of species codes
 - `scaling`: factor applied to the observed total density (default 10.0)
+- `pool_capacity_mode`: `:legacy` (default), `:exclude` or `:cap`
+- `fishless_dificil_capacity`: `:legacy` (default) or `:near_zero`
 
 # Returns
 - Vector of carrying capacities for each site
 """
-function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String}; scaling::Real=10.0)
+function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, sites::Vector{String}, species_codes::Vector{String}; scaling::Real=10.0,
+        pool_capacity_mode::Symbol=:legacy, fishless_dificil_capacity::Symbol=:legacy)
     println("Building site-specific carrying capacities from density data...")
+
+    pool_capacity_mode in (:legacy, :exclude, :cap) ||
+        error("pool_capacity_mode must be :legacy, :exclude or :cap (got :$(pool_capacity_mode))")
+    fishless_dificil_capacity in (:legacy, :near_zero) ||
+        error("fishless_dificil_capacity must be :legacy or :near_zero (got :$(fishless_dificil_capacity))")
 
     site_to_idx = Dict{String, Int}()
     for (rownum, row) in enumerate(eachrow(density_df))
@@ -1936,6 +2038,32 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
 
     K_scaling = Float64(scaling)
     K_scaling > 0 || error("carrying-capacity scaling must be > 0")
+
+    # Site-attribute lookups for the E14/E15 options.  A missing column is only an
+    # error when the corresponding option is actually requested, so the legacy
+    # call works with a bare `site_df`.
+    if pool_capacity_mode != :legacy
+        hasproperty(site_df, :EN_POZAS) ||
+            error("pool_capacity_mode=:$(pool_capacity_mode) requires an EN_POZAS column in site_df")
+    end
+    if fishless_dificil_capacity != :legacy
+        hasproperty(site_df, :SIN_PECES) ||
+            error("fishless_dificil_capacity=:$(fishless_dificil_capacity) requires a SIN_PECES column in site_df")
+    end
+    row_lookup = Dict{String, Int}()
+    for (rownum, row) in enumerate(eachrow(site_df))
+        row_lookup[string(row.CODIGO)] = rownum
+    end
+    function site_flag(site, column)
+        hasproperty(site_df, column) || return ""
+        idx = get(row_lookup, string(site), 0)
+        idx == 0 && return ""
+        return _normalise_obstacle_status(site_df[idx, column])
+    end
+    is_pool = pool_capacity_mode == :legacy ? falses(length(sites)) :
+        [site_flag(site, :EN_POZAS) == "SI" for site in sites]
+    is_dificil = fishless_dificil_capacity == :legacy ? falses(length(sites)) :
+        [site_flag(site, :SIN_PECES) == "DIFICIL" for site in sites]
 
     raw_capacities = Float64[]
     for site in sites
@@ -1971,6 +2099,32 @@ function build_carrying_capacity(density_df::DataFrame, site_df::DataFrame, site
     carrying_capacity = Float64[]
     for cap in raw_capacities
         push!(carrying_capacity, max(cap, K_floor))
+    end
+
+    # E14: post-process ONLY the isolated-pool sites against the non-pool median,
+    # so every non-pool site keeps the legacy capacity exactly.
+    if pool_capacity_mode != :legacy
+        nonpool = [carrying_capacity[i] for i in eachindex(carrying_capacity) if !is_pool[i]]
+        isempty(nonpool) &&
+            error("pool_capacity_mode=:$(pool_capacity_mode) requires at least one non-pool site")
+        nonpool_reference = median(nonpool)
+        for i in eachindex(carrying_capacity)
+            is_pool[i] || continue
+            carrying_capacity[i] = pool_capacity_mode == :cap ?
+                min(carrying_capacity[i], nonpool_reference) : nonpool_reference
+        end
+        println("Isolated-pool capacity mode :$(pool_capacity_mode): $(count(is_pool)) pool " *
+                "site(s) adjusted to the non-pool median $(nonpool_reference)")
+    end
+
+    # E15: post-process the fishless DIFICIL sites after the floor so a
+    # transit-only node is genuinely near-zero rather than raised to K_floor.
+    if fishless_dificil_capacity == :near_zero
+        for i in eachindex(carrying_capacity)
+            is_dificil[i] && (carrying_capacity[i] = NEAR_ZERO_CARRYING_CAPACITY)
+        end
+        println("Fishless DIFICIL capacity mode :near_zero: $(count(is_dificil)) site(s) set to " *
+                "K = $(NEAR_ZERO_CARRYING_CAPACITY)")
     end
 
     println("Carrying capacity range: $(minimum(carrying_capacity)) - $(maximum(carrying_capacity))")
@@ -2088,6 +2242,148 @@ function build_dispersal_scaling(species_codes::Vector{String})
 end
 
 """
+    observed_density_matrix(density_df, sites, species)
+
+Build the observed initial-state matrix (`n_sites × n_species`, in `sites`
+order) from the observed density table, aligning rows to model sites **by site
+code** (`CODIGO`) rather than by row position (minor #3).
+
+This is deliberately robust to a re-ordered or shuffled density table and to a
+density table that carries extra sites: an `innerjoin` on `CODIGO` with
+`order=:left` reindexes the density rows into `sites` order.  It errors loudly
+when a modelled site has no density row (rather than silently shifting states
+between sites), when duplicate `CODIGO` rows are present, or when a required
+`<sp>_DEN` column is missing.  `NaN` entries are replaced by `0.0` and negative
+densities are clamped to zero.
+"""
+function observed_density_matrix(density_df::DataFrame, sites::AbstractVector,
+        species::AbstractVector)
+    density_cols = [Symbol("$(sp)_DEN") for sp in species]
+    missing_cols = [c for c in density_cols if !hasproperty(density_df, c)]
+    isempty(missing_cols) ||
+        error("density table is missing required column(s): $(missing_cols)")
+
+    keyed = DataFrame(CODIGO=String.(density_df.CODIGO))
+    for col in density_cols
+        values = Float64[]
+        for v in density_df[!, col]
+            push!(values, ismissing(v) ? NaN : Float64(v))
+        end
+        keyed[!, col] = values
+    end
+
+    code_counts = Dict{String,Int}()
+    for code in keyed.CODIGO
+        code_counts[code] = get(code_counts, code, 0) + 1
+    end
+    duplicated = [code for (code, n) in code_counts if n > 1]
+    isempty(duplicated) ||
+        error("density table has duplicate CODIGO row(s): $(sort(duplicated))")
+
+    target = DataFrame(CODIGO=String.(sites))
+    joined = innerjoin(target, keyed; on=:CODIGO, order=:left)
+    nrow(joined) == length(sites) ||
+        error("observed density table has no row for $(length(sites) - nrow(joined)) " *
+              "model site(s): $(sort(setdiff(String.(sites), String.(joined.CODIGO))))")
+
+    matrix = Matrix{Float64}(joined[:, density_cols])
+    replace!(matrix, NaN => 0.0)
+    return max.(matrix, 0.0)
+end
+
+"""
+    drop_fishfarm_eel_records(density_df, site_df;
+                              subcatchment=FISHFARM_EEL_SUBCATCHMENT)
+        -> (density_df, dropped_sites)
+
+E16: return a copy of `density_df` with `AA_DEN` zeroed at the sites in the
+Guadiato fish-farm cluster (subcatchment `14.0`).  The density README documents
+four eel records there as fish-farm escapes that must not enter the native/alien
+calculations.  Records at every other site are untouched; the function is a no-op
+(and returns an empty `dropped_sites`) when there is nothing to drop.  Opt-in via
+`exclude_fishfarm_eel_records = true`; reversible because the input table is not
+mutated.
+"""
+function drop_fishfarm_eel_records(density_df::DataFrame, site_df::DataFrame;
+        subcatchment::AbstractString=FISHFARM_EEL_SUBCATCHMENT)
+    hasproperty(density_df, :AA_DEN) ||
+        error("exclude_fishfarm_eel_records requires an AA_DEN column in the density table")
+
+    site_subcatchment = Dict{String, String}()
+    if hasproperty(site_df, :CODIGO_S)
+        for row in eachrow(site_df)
+            site_subcatchment[string(row.CODIGO)] = string(row.CODIGO_S)
+        end
+    end
+
+    out = copy(density_df)
+    dropped = String[]
+    for i in axes(out, 1)
+        site = string(out.CODIGO[i])
+        value = out[i, :AA_DEN]
+        (value === missing || !(value isa Real) || !(Float64(value) > 0)) && continue
+        get(site_subcatchment, site, "") == string(subcatchment) || continue
+        out[i, :AA_DEN] = 0.0
+        push!(dropped, site)
+    end
+    return (out, sort!(dropped))
+end
+
+"""
+    apply_salinity_envelope(growth_rates, species_codes, species_chars_df, site_df,
+                            sites; min_conductivity=SALINITY_BRACKISH_MIN_CONDUCTIVITY_US_CM)
+        -> (growth_rates, n_filtered)
+
+E18: multiply the local growth of **strictly brackish** species by zero at sites
+whose `CONDUCTIVIDAD` (the salinity proxy) is below `min_conductivity`.  Species
+whose trait is `brackish/freshwater` (euryhaline) and freshwater species are left
+unchanged, because the observed data place them across the conductivity range.
+Sites without a finite conductivity value are left unchanged ("where the data
+support it").  The envelope is a local growth multiplier, mathematically
+equivalent to a per-species habitat-suitability factor, so the ODE is unchanged.
+
+Returns the filtered growth matrix (a copy) and the number of site × species cells
+set to zero.
+"""
+function apply_salinity_envelope(growth_rates, species_codes, species_chars_df,
+        site_df::DataFrame, sites::Vector{String};
+        min_conductivity::Real=SALINITY_BRACKISH_MIN_CONDUCTIVITY_US_CM)
+    salinity_trait = Dict{String, String}()
+    if hasproperty(species_chars_df, :SP) && hasproperty(species_chars_df, :SALINITY)
+        for row in eachrow(species_chars_df)
+            salinity_trait[lowercase(string(row.SP))] = lowercase(string(row.SALINITY))
+        end
+    end
+    function strictly_brackish(code)
+        trait = get(salinity_trait, lowercase(string(code)), "")
+        return occursin("brackish", trait) && !occursin("freshwater", trait)
+    end
+
+    conductivity = Dict{String, Float64}()
+    if hasproperty(site_df, :CONDUCTIVIDAD)
+        for row in eachrow(site_df)
+            value = row.CONDUCTIVIDAD
+            (value === missing || !(value isa Real) || isnan(Float64(value))) && continue
+            conductivity[string(row.CODIGO)] = Float64(value)
+        end
+    end
+
+    filtered = copy(growth_rates)
+    n_filtered = 0
+    for (s_idx, code) in enumerate(species_codes)
+        strictly_brackish(code) || continue
+        for (i, site) in enumerate(sites)
+            cond = get(conductivity, string(site), NaN)
+            if !isnan(cond) && cond < Float64(min_conductivity) && filtered[i, s_idx] != 0.0
+                filtered[i, s_idx] = 0.0
+                n_filtered += 1
+            end
+        end
+    end
+    return (filtered, n_filtered)
+end
+
+"""
     prepare_ode_data(;
         connectivity_file::String = "data/ConnectivityUTM.csv",
         density_file::String = "data/BIOTIC/FishDensity_and_Juveniles_Matrix.csv",
@@ -2147,6 +2443,26 @@ Prepare all data needed for the ODE metacommunity model.
   `"TEMP_MEDIA_SC"`) used only when the corrected baseline is disabled or (with
   `require_water_temperature=false`) incomplete; `nothing` uses the elevation estimate.
 
+## Explicit biological-assumption options (E13-E16, E18)
+All default to the legacy behaviour; none is applied unless requested.  See
+`docs/climate_scenarios.md`.
+- `absence_growth_fraction` (E13, default `0.1`): fraction of the local rate
+  given to a species observed absent at a site.  `1.0` lets temperature/habitat
+  decide establishment; `0.0` forbids local growth at absent sites.
+- `pool_capacity_mode` (E14, default `:legacy`): `:exclude` / `:cap` adjust the
+  carrying capacity of `EN_POZAS = Si` isolated-pool sites against the non-pool
+  median (a post-processing step inside [`build_carrying_capacity`](@ref)).
+- `fishless_dificil_capacity` (E15, default `:legacy`): `:near_zero` sets K to
+  `NEAR_ZERO_CARRYING_CAPACITY` at `SIN_PECES = DIFICIL` sites.
+- `nonreproducing_local_growth` (E16, default `:legacy`): `:zero` sets the local
+  `r` of `AA`, `LR`, `MC` to zero.
+- `exclude_fishfarm_eel_records` (E16, default `false`): drop the four documented
+  Guadiato fish-farm eel records before any builder reads the density table.
+- `salinity_envelope` (E18, default `false`): when `true`, zero the local growth
+  of strictly brackish species at sites below
+  `SALINITY_BRACKISH_MIN_CONDUCTIVITY_US_CM`.  No elevation envelope is provided,
+  deliberately: a static elevation envelope would block upslope range shifts.
+
 ## Returns a NamedTuple with:
 - params: MetacommunityParams struct
 - sites: Vector of site codes
@@ -2170,6 +2486,9 @@ Prepare all data needed for the ODE metacommunity model.
   are the E12 interface for rebuilding dam/obstacle passability on the
   corrected network.
 - cedex_var_df, cedex_esc_uts_df, obstacles_df: Optional loaded updated inputs
+- biological_options: the resolved E13-E16/E18 option values actually applied
+- fishfarm_eel_records_dropped: site codes whose AA record was dropped (E16)
+- salinity_envelope_filtered_cells: site x species growth cells zeroed (E18)
 """
 function prepare_ode_data(;
     connectivity_file::String = "data/ConnectivityUTM.csv",
@@ -2197,6 +2516,12 @@ function prepare_ode_data(;
     water_temperature_file::Union{Nothing,String} = DEFAULT_WATER_TEMPERATURE_FILE,
     require_water_temperature::Bool = true,
     legacy_temperature_column::Union{Nothing,String} = nothing,
+    absence_growth_fraction::Float64 = 0.1,
+    nonreproducing_local_growth::Symbol = :legacy,
+    exclude_fishfarm_eel_records::Bool = false,
+    pool_capacity_mode::Symbol = :legacy,
+    fishless_dificil_capacity::Symbol = :legacy,
+    salinity_envelope::Bool = false
 )
     println("="^60)
     println("Preparing data for ODE metacommunity model")
@@ -2212,6 +2537,17 @@ function prepare_ode_data(;
     obstacle_mode in (:legacy, :overlay) || error("obstacle_mode must be :legacy or :overlay")
     connectivity_method in (:legacy, :on_path) ||
         error("connectivity_method must be :legacy or :on_path (got :$(connectivity_method))")
+    # E13-E16/E18 opts.  `build_intrinsic_growth_rates` /
+    # `build_carrying_capacity` re-validate, but checking here fails before any
+    # expensive data preparation.
+    absence_growth_fraction >= 0 ||
+        error("absence_growth_fraction must be non-negative (got $absence_growth_fraction)")
+    nonreproducing_local_growth in (:legacy, :zero) ||
+        error("nonreproducing_local_growth must be :legacy or :zero (got :$(nonreproducing_local_growth))")
+    pool_capacity_mode in (:legacy, :exclude, :cap) ||
+        error("pool_capacity_mode must be :legacy, :exclude or :cap (got :$(pool_capacity_mode))")
+    fishless_dificil_capacity in (:legacy, :near_zero) ||
+        error("fishless_dificil_capacity must be :legacy or :near_zero (got :$(fishless_dificil_capacity))")
 
     # Optional updated inputs are loaded explicitly and kept separate from the
     # legacy site/environment tables.  This avoids silently changing the model
@@ -2225,6 +2561,15 @@ function prepare_ode_data(;
     density_df, species_codes = load_species_density_data(density_file)
     n_species = length(species_codes)
     println("Found $n_species species: $species_codes")
+
+    # E16: optionally drop the four documented Guadiato fish-farm eel records
+    # before ANY downstream builder (growth, capacity, initial state) sees them.
+    fishfarm_eel_records_dropped = String[]
+    if exclude_fishfarm_eel_records
+        density_df, fishfarm_eel_records_dropped = drop_fishfarm_eel_records(density_df, site_df)
+        println("E16 exclude_fishfarm_eel_records: dropped $(length(fishfarm_eel_records_dropped)) " *
+                "fish-farm eel record(s): $(join(fishfarm_eel_records_dropped, ", "))")
+    end
 
     # 3. Load species characteristics
     println("\n[3/12] Loading species characteristics...")
@@ -2366,7 +2711,20 @@ function prepare_ode_data(;
 
     # 9. Build intrinsic growth rates
     println("\n[9/12] Building intrinsic growth rates...")
-    intrinsic_growth_rates = build_intrinsic_growth_rates(density_df, species_codes, sites, species_chars_df)
+    intrinsic_growth_rates = build_intrinsic_growth_rates(density_df, species_codes, sites, species_chars_df;
+        absence_growth_fraction=absence_growth_fraction,
+        nonreproducing_local_growth=nonreproducing_local_growth)
+
+    # E18: opt-in salinity envelope.  Applied multiplicatively to the local growth
+    # matrix (equivalent to a per-species habitat factor), so the ODE is untouched.
+    salinity_envelope_filtered_cells = 0
+    if salinity_envelope
+        intrinsic_growth_rates, salinity_envelope_filtered_cells = apply_salinity_envelope(
+            intrinsic_growth_rates, species_codes, species_chars_df, site_df, sites)
+        println("E18 salinity envelope: zeroed $(salinity_envelope_filtered_cells) site x species " *
+                "growth cell(s) for strictly brackish species below " *
+                "$(SALINITY_BRACKISH_MIN_CONDUCTIVITY_US_CM) uS/cm")
+    end
 
     # 10. Build species dispersal scaling factors
     println("\n[10/12] Building species dispersal scaling factors...")
@@ -2377,7 +2735,9 @@ function prepare_ode_data(;
     # 11. Build carrying capacities from observed density data
     println("\n[11/12] Building carrying capacities...")
     carrying_capacity = build_carrying_capacity(density_df, site_df, sites, species_codes;
-        scaling=carrying_capacity_base_scaling)
+        scaling=carrying_capacity_base_scaling,
+        pool_capacity_mode=pool_capacity_mode,
+        fishless_dificil_capacity=fishless_dificil_capacity)
     println("Carrying capacity base scaling (observed-density multiplier): $(carrying_capacity_base_scaling)x")
     if carrying_capacity_scaling != 1.0
         carrying_capacity = carrying_capacity .* carrying_capacity_scaling
@@ -2443,7 +2803,19 @@ function prepare_ode_data(;
         cedex_esc_uts_df = cedex_esc_uts_df,
         site_df = site_df,
         species_chars_df = species_chars_df,
-        density_df = density_df
+        density_df = density_df,
+        # E13-E16/E18: the resolved option values actually applied, for metadata
+        # and the parameter digest.
+        biological_options = (
+            absence_growth_fraction = absence_growth_fraction,
+            pool_capacity_mode = pool_capacity_mode,
+            fishless_dificil_capacity = fishless_dificil_capacity,
+            nonreproducing_local_growth = nonreproducing_local_growth,
+            exclude_fishfarm_eel_records = exclude_fishfarm_eel_records,
+            salinity_envelope = salinity_envelope
+        ),
+        fishfarm_eel_records_dropped = fishfarm_eel_records_dropped,
+        salinity_envelope_filtered_cells = salinity_envelope_filtered_cells
     )
 end
 

@@ -1,22 +1,67 @@
 # =============================================================================
-# GuadeX simulation parameters
+# GuadeX parameters — CORRECTED climate re-run configuration
 #
-# This is the single source of truth for run settings across the maintained
-# entry scripts:
+# THIS is the configuration that drives the CORRECTED re-run (post the
+# C1/C2/C5/C7/E4 fixes).  It is a copy of the September
+# `legacy/parameters_climate_scenarios_k1x_burnin.toml` with the legacy stop rule and
+# PINNED heat-stress slope replaced by the corrected settings:
 #
-#   scripts/run_model.jl
-#   scripts/run_sensitivity.jl
-#   run_sensitivity_report.jl
-#   run_alt_interactions.jl
+#   [run_climate_scenarios]  daily per-GCM forcing, K = 1x observed, control run,
+#                            C3 interim projection route (observed start + short
+#                            spin-up, reported as scenario-control deltas),
+#                            output_dir = results/climate_scenarios_corrected
+#   [obstacle_sensitivity]   the C3 interim projection route (observed start +
+#                            short fixed spin-up) shared with the climate run,
+#                            and NEW output directories, so the obstacle and
+#                            interaction sweeps initialise from the SAME
+#                            corrected state as the climate ensemble and do not
+#                            overwrite the legacy September sweep outputs
+#   [temperature_stress]     heat stress enabled and CALIBRATED from the
+#                            corrected baseline (`calibrate = true`)
+#   [biological_options]     the six TEAM-CHOSEN values (E13-E16, E18); the
+#                            generic `parameters.toml` keeps the legacy defaults
 #
-# Library defaults in src/data_preparation.jl are intentionally unchanged;
-# the scripts read their values from this file instead.
+# Under the C3 interim route the [run_climate_scenarios] E4 stop-rule keys above
+# are NOT used (they apply to `projection_route = "full_burnin"`, the default for
+# every other configuration).  The [obstacle_sensitivity] section below selects
+# the SAME interim route for the sweeps, so its E4 stop-rule keys are likewise
+# inactive there and are retained only for a `full_burnin` re-run.
 #
-# To change an experiment, edit this file.  For a fully tracked experiment,
-# copy it (e.g. parameters_2026_09_experiment_a.toml), edit the copy, and run
-# with GUADEX_PARAMETERS_FILE=<path>.  Individual values can still be
-# overridden per run with the GUADEX_* environment variables documented in
-# docs/updated_inputs_simulations.md.
+# The corrected climate runs write to `results/climate_scenarios_corrected`, and
+# the corrected sweeps to `results/sensitivity_obstacles_corrected` and
+# `results/alt_interactions_corrected` — all NEW directories, so the
+# pre-correction September artifacts under `results/climate_scenarios` and
+# `results/sensitivity_obstacles` are preserved for comparison (a digest mismatch
+# would otherwise overwrite them).
+#
+# E4 robust composition criterion: the 95th percentile of |Δ log N| is taken over
+# the site × species cells whose density exceeds 0.1 density units (the project's
+# presence threshold) in at least one of the two compared years, so near-extinct
+# or flickering cells cannot dominate it.  `spin_up_composition_tol = 1e-2` was
+# chosen from the real burn-in trajectory (the robust statistic crosses 1e-2 at
+# ~yr 423, within the 600-year cap; the raw all-cells statistic plateaus near
+# 1.4e-2 and never reaches 1e-3).  Both diagnostics are recorded in metadata.
+#
+# The corrected per-site water-temperature source
+# (`guadex_tw/outputs/tables/water_temp_baseline_guadex_sites.csv`, exact column
+# `tw_baseline_mean`) and the corrected interaction form
+# (`interaction_inside_growth = true`) are CODE DEFAULTS with no configuration
+# opt-in, so this file uses them by construction and cannot select the legacy
+# alternatives.
+#
+# Run it with:
+#   GUADEX_PARAMETERS_FILE=parameters_climate_scenarios_corrected.toml \
+#     julia --project=. run_climate_scenarios.jl
+# and, for the matching obstacle/interaction sweeps:
+#   GUADEX_PARAMETERS_FILE=parameters_climate_scenarios_corrected.toml \
+#     julia --project=. run_sensitivity_report.jl
+#   GUADEX_PARAMETERS_FILE=parameters_climate_scenarios_corrected.toml \
+#     julia --project=. run_alt_interactions.jl
+#
+# Do NOT use `legacy/parameters_climate_scenarios_k1x_burnin.toml` for corrected
+# results: that file deliberately reproduces the September 2026 ensemble with
+# the legacy `basin` stop rule and the pinned September slope, and must be used
+# only to reproduce that legacy result.
 # =============================================================================
 
 [general]
@@ -55,18 +100,20 @@ upstream_passability = 0.1
 # site.  Reduced but more accessible than upstream.
 downstream_passability = 0.5
 
+# Barrier passability is currently modelled using a uniform structural
+# assumption (0.1 upstream, 0.5 downstream) pending full standardisation of the
+# regional obstacle inventory's qualitative passability index (IF).
+
 # ---------------------------------------------------------------------------
-# Dispersal-graph construction (issue C4).
-#
-# "legacy" keeps the original within-sub-catchment chaining plus elevation
-# outlet chain (the default, so existing results are reproduced unchanged).
-# "on_path" rebuilds a dendritic tree from the network-distance matrix with the
-# on-path parent rule and an MST join of the roots.
+# C4: dispersal-graph construction.  The corrected re-run selects the
+# river-network tree rebuilt from the network-distance matrix (on-path parent
+# rule + MST root join); `"legacy"` reproduces the artificial sub-catchment
+# chaining used before the correction.
 # ---------------------------------------------------------------------------
-# "on_path" uses the code defaults rtol = 0.02, atol = 200 m for the on-path
-# test |D(i,k) - (d(i) - d(k))| <= rtol*D(i,k) + atol (see prepare_ode_data).
+# Tolerance uses the code defaults (rtol = 0.02, atol = 200 m); see
+# prepare_ode_data(on_path_rtol, on_path_atol).
 [connectivity]
-method = "legacy"
+method = "on_path"
 
 # ---------------------------------------------------------------------------
 # Species groups used to classify simulation outputs.
@@ -85,53 +132,30 @@ invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
 migratory = ["AA", "AAL", "LR", "MC"]
 
 # ---------------------------------------------------------------------------
-# Explicit, opt-in biological-assumption options (E13-E16, E18).
+# Biological-assumption options (E13-E16, E18) -- TEAM DECISIONS.
 #
-# EVERY option defaults to the behaviour the model had before the option existed,
-# so the shipped configuration and the test suite reproduce the historical
-# results exactly.  These are decision options for the team, not calibrated
-# values; see docs/climate_scenarios.md for the trade-offs.  Changing any value
-# changes the parameter digest, so cached burn-ins and completed runs are
-# invalidated rather than silently reused.
+# These are the values the team chose for the corrected re-run.  They are made
+# explicit here so the run metadata and the parameter digest record the resolved
+# values.  `parameters.toml` deliberately RETAINS the safe legacy defaults, so
+# the historical/legacy reproduction and the default test suite are unchanged;
+# only a config that sets these keys (this file) opts in.  Rationale and
+# trade-offs for each option are in docs/climate_scenarios.md.
 # ---------------------------------------------------------------------------
 
 [biological_options]
-# E13 — fraction of the local growth rate given to a species observed ABSENT at
-# a site (build_intrinsic_growth_rates).  0.1 is the historical default.  1.0
-# removes the presence penalty so temperature/habitat decide establishment (the
-# review's recommendation); 0.0 forbids local growth at absent sites.  Note the
-# interaction with E15/E16 below.
-absence_growth_fraction = 0.1
-
-# E14 — carrying capacity at isolated pools (EN_POZAS = Si; 84 sites holding
-# ~56% of total density).  "legacy" uses their raw observed density; "cap" clips
-# a pool site's K at the non-pool median; "exclude" replaces it with that median
-# so a single-visit pool sample cannot set the capacity.  The choice strongly
-# affects the reported high-K tail.
-pool_capacity_mode = "legacy"
-
-# E15 — carrying capacity at sites the field team judged unable to hold fish
-# (SIN_PECES = DIFICIL; 56 sites).  "legacy" keeps their observed capacity;
-# "near_zero" sets K = 1e-6 (the ODE's own floor), making them transit-only.
-fishless_dificil_capacity = "legacy"
-
-# E16 — local growth of species documented as not reproducing within the basin
-# (AA, LR, MC with REPRODU_WITHIN_THE_BASIN = no).  "legacy" keeps their
-# literature r; "zero" sets local r = 0, with recruitment to be represented
-# later as estuarine immigration.
-nonreproducing_local_growth = "legacy"
-
-# E16 — drop the four documented Guadiato fish-farm eel records (subcatchment
-# 14.0) before any builder reads the density table.  Default false keeps them.
-exclude_fishfarm_eel_records = false
-
-# E18 — apply a brackish/freshwater envelope for strictly brackish species
-# (AB, LR, MC) using the site CONDUCTIVIDAD as a salinity proxy: their local
-# growth is zeroed below 1000 uS/cm.  Euryhaline brackish/freshwater species
-# (AA, GH, CC, CG) are left unchanged because the observed data place them
-# across the conductivity range.  No elevation envelope is provided on purpose:
-# a static elevation envelope would block upslope range shifts under warming.
-salinity_envelope = false
+# E13 = 1.0: temperature/habitat decide establishment (no absent-site penalty).
+absence_growth_fraction = 1.0
+# E14 = "cap": clip the 84 isolated (EN_POZAS) pool sites at the non-pool median.
+pool_capacity_mode = "cap"
+# E15 = "near_zero": the 56 SIN_PECES = DIFICIL sites become transit-only (K=1e-6).
+fishless_dificil_capacity = "near_zero"
+# E16 = "zero": AA, LR, MC get local r = 0 (to be represented as immigration later).
+nonreproducing_local_growth = "zero"
+# E16 = true: drop the four documented Guadiato fish-farm eel records.
+exclude_fishfarm_eel_records = true
+# E18 = true: zero strictly brackish AB/LR/MC below the conductivity threshold.
+# NO elevation envelope (deliberately omitted; see docs/climate_scenarios.md).
+salinity_envelope = true
 
 # ---------------------------------------------------------------------------
 # Modelled subcatchments.  Exploitation and passability scenarios apply one
@@ -218,38 +242,42 @@ thermal_optima_fraction = 0.5
 spin_up = true
 spin_up_max_years = 600
 spin_up_tol = 5.0e-5
-# E4 stop rule: require BOTH the basin-total change (below `spin_up_tol`) and the
-# robust composition change (95th percentile of |Δ log N| over the site × species
-# cells whose density exceeds the 0.1-unit presence floor in at least one of the
-# two compared years, below `spin_up_composition_tol`) for at least
-# `spin_up_min_years` years.  The raw all-cells statistic is recorded as a
-# diagnostic but is not used by the stop rule.
+# E4 corrected stop rule: require BOTH the basin-total change and the robust
+# active-cell composition change, as in [run_climate_scenarios].
 spin_up_criterion = "both"
-# 1e-2: measured robust statistic on real baseline data crosses this at ~yr 423
-# (<600 cap); the raw all-cells statistic plateaus near 1.4e-2 and never reaches
-# 1e-3, so it cannot be used as the stop tolerance.
 spin_up_composition_tol = 1.0e-2
 spin_up_min_years = 10
 spin_up_progress_every = 50
+# C3: use the SAME interim projection route as [run_climate_scenarios] (observed
+# start + `interim_spin_up_years` baseline years, E4 stop rule bypassed), so the
+# sweeps initialise from the corrected climate run's state instead of a 600-year
+# burn-in.  Absent, the sweeps keep the full-burnin default, so nothing else
+# changes.  These two keys are read by `sensitivity_core.load_sensitivity_settings`.
+projection_route = "interim_observed"
+interim_spin_up_years = 3
 heat_stress_enabled = true
 heat_stress_calibrate = true
 heat_stress_max_loss = 0.05
 quasi_extinction_q = 0.1
 quasi_extinction_persistence = 3
 upstream_cost = 0.05
-output_dir = "results/sensitivity_obstacles"
+# Corrected obstacle sweep output root, distinct from the legacy September
+# `results/sensitivity_obstacles` so those artifacts are preserved.
+output_dir = "results/sensitivity_obstacles_corrected"
 
 # The two temperature extremes of the 44-run climate ensemble, used as the
 # background climate for every obstacle/passability combination.  Each entry is
 # a scenario x GCM pair; the per-GCM daily files are read directly.
 #
-# C7: these are the fallback pair.  Re-derive them from the realised forcing on
-# the next re-run with `Guadex.select_climate_endpoints(runs_index)` (see
-# docs/climate_scenarios.md) and update this list; the function falls back to
-# this pair only when the realised columns are absent.
+# C7 re-selection on the CORRECTED realised forcing
+# (`select_climate_endpoints` on `realised_warming_2036_2045_mean_degc` in
+# results/climate_scenarios_corrected/runs_index.csv) confirms this pair is still
+# the coolest and warmest run: 0.180 degC (ssp126/IITM-ESM) and 1.292 degC
+# (ssp245/UKESM1-0-LL).  The digits in the inline comments are the max-over-sites
+# `warming_end_degc` proxy by 2045, kept for continuity with the September table.
 climate_models = [
-    { scenario = "ssp126", gcm = "IITM-ESM" },     # coolest run (0.28 degC by 2045)
-    { scenario = "ssp245", gcm = "UKESM1-0-LL" },  # warmest run (1.37 degC by 2045)
+    { scenario = "ssp126", gcm = "IITM-ESM" },     # coolest run (0.28 degC proxy by 2045)
+    { scenario = "ssp245", gcm = "UKESM1-0-LL" },  # warmest run (1.37 degC proxy by 2045)
 ]
 
 # ---------------------------------------------------------------------------
@@ -275,105 +303,11 @@ passability_scenarios = ["baseline", "improved_passability", "reduced_passabilit
 thermal_sigma_multiplier = 0.3
 upstream_costs = [0.01, 0.5]
 passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
-
-# ---------------------------------------------------------------------------
-# E7 — Global sensitivity (Latin hypercube + Sobol indices).
-#
-# Complements the within-design factor ranking in
-# `scripts/plot_sensitivity_effects.jl` (which is valid only inside one balanced
-# full-factorial sweep).  This block defines the *global* design over documented
-# parameter ranges; the within-design ranking is kept unchanged alongside it.
-#
-# The ranges below are the DEFAULT PROPOSAL assembled from the correction plan
-# and the source data's own uncertainty.  The team must confirm them before the
-# production index is quoted: they are an interpretation of the literature /
-# data uncertainty, not calibrated posteriors.  See
-# docs/global_sensitivity_methods_note.md for the rationale, the estimator
-# validation against Ishigami, and the production compute estimate
-# (N*(2D+2) model runs with D = 8).
-#
-# This section is read only by scripts/global_sensitivity_sobol.jl; every
-# existing entry script ignores it, so no existing default changes.
-# ---------------------------------------------------------------------------
-
-[global_sensitivity]
-# Production defaults (labelled PILOT when overridden smaller by the runner).
-# The number of base samples N; the Saltelli design needs N*(2D+2) evaluations.
-# N = 512 with D = 8 is 9216 model runs — plan compute accordingly.
-n_samples = 512
-bootstrap = 1000
-seed = 20261001
-threshold = 0.1
-# Base heat-stress slope k used by the global-sensitivity runner (the sampled
-# `heat_stress_k_multiplier` scales it).  This is the WP3-calibrated value
-# recorded by the corrected obstacle-sensitivity runs
-# (results/sensitivity_obstacles_corrected/.../run_metadata.json:
-# heat_stress_k = 3.81183578844573e-05).  Override with GUADEX_GS_HEAT_K, or
-# recompute from the daily forcing with GUADEX_GS_CALIBRATE_HEAT=1.
-heat_stress_k_base = 3.81183578844573e-05
-metric_names = [
-    "basin_native_biomass",
-    "basin_native_richness",
-    "basin_realised_richness_loss",
-]
-# Reduced configuration used by `GUADEX_GS_MODE=pilot` (a few minutes, clearly
-# not the production index): fewer sites, one year, a small N.
-pilot_n_samples = 128
-pilot_bootstrap = 200
-pilot_max_sites = 80
-pilot_sim_years = 1
-
-# --- Agreed-range proposal (team to confirm) -------------------------------
-# Each entry: name, lower, upper, default, rationale.  The `name` selects the
-# transform applied by the driver (see scripts/global_sensitivity_sobol.jl).
-[[global_sensitivity.parameters]]
-name = "growth_multiplier"
-lower = 0.75
-upper = 1.25
-default = 1.0
-rationale = "Global multiplier on every local intrinsic growth rate r. The literature r-values (Fish Growth and Dispersal Data Request) span roughly +/-25% across source populations; a symmetric multiplier braces that uncertainty without re-fitting each species."
-[[global_sensitivity.parameters]]
-name = "carrying_capacity_scaling"
-lower = 0.5
-upper = 2.0
-default = 1.0
-rationale = "Multiplier on the observed-density carrying capacity K. The E14 isolated-pool distortion (84 pools, ~56% of basin density, max K ~95,333) means the capacity level is the least certain state variable; 0.5x-2x brackets the realistic range around the k1x baseline."
-[[global_sensitivity.parameters]]
-name = "interaction_strength_multiplier"
-lower = 0.5
-upper = 1.5
-default = 1.0
-rationale = "Multiplier on every pairwise interaction coefficient alpha. The interaction matrix is qualitative (displaces=-0.8, predation=-0.5, competition=-0.3); a 0.5x-1.5x factor propagates that coding uncertainty without changing any sign."
-[[global_sensitivity.parameters]]
-name = "thermal_optimum_shift_c"
-lower = -2.0
-upper = 2.0
-default = 0.0
-rationale = "Uniform shift (degC) added to every species' thermal optimum. Trait-table optima are range midpoints; C6 notes the baseline sites are all <= 18.37 degC, so a +/-2 degC shift covers the physiological-niche uncertainty under warming."
-[[global_sensitivity.parameters]]
-name = "thermal_breadth_multiplier"
-lower = 0.6
-upper = 1.4
-default = 1.0
-rationale = "Multiplier on every thermal sigma. Sigma is approximated as range/6 from the trait table (C6); 0.6x-1.4x brackets the curvature/width uncertainty of the Gaussian thermal filter."
-[[global_sensitivity.parameters]]
-name = "dispersal_multiplier"
-lower = 0.5
-upper = 2.0
-default = 1.0
-rationale = "Multiplier on the precomputed dispersal matrix (all species together). Species dispersal rates carry order-of-magnitude literature ranges (E17); the base matrix uses the median species rate, so this factor spans the credible turnover-speed range."
-[[global_sensitivity.parameters]]
-name = "upstream_cost"
-lower = 0.01
-upper = 0.5
-default = 0.05
-rationale = "Upstream movement cost c in the dispersal kernel 1/(1 + c*delevation). The existing obstacle sweep uses exactly the grid {0.01, 0.05, 0.1, 0.5}; the global design treats it continuously over that same agreed interval."
-[[global_sensitivity.parameters]]
-name = "heat_stress_k_multiplier"
-lower = 0.0
-upper = 2.0
-default = 1.0
-rationale = "Multiplier on the calibrated heat-stress slope k (0 disables the term). k is calibrated to a max_annual_loss = 0.05 assumption (WP3); 0x-2x propagates that calibration choice, including the disable case."
+# Corrected alt-interaction output root, distinct from the legacy September
+# `results/sensitivity_obstacles/alt_interactions` so those artifacts are
+# preserved.  Absent, the legacy path (under the obstacle output root) is kept;
+# `GUADEX_ALT_OUTPUT_DIR` still overrides.
+output_dir = "results/alt_interactions_corrected"
 
 # ---------------------------------------------------------------------------
 # Climate-driven runs (run_climate_scenarios.jl).
@@ -395,8 +329,10 @@ presence_threshold = 0.1
 upstream_cost = 0.05
 # Generate the four-level / ensemble figures after the run (env GUADEX_CLIMATE_PLOT=0 disables).
 make_figures = true
-# Output root for the runs (env GUADEX_CLIMATE_OUTPUT_DIR overrides).
-output_dir = "results/climate_scenarios"
+# Output root for the corrected runs (env GUADEX_CLIMATE_OUTPUT_DIR overrides).
+# Deliberately distinct from the pre-correction September `results/climate_scenarios`
+# so the September artifacts are preserved for comparison.
+output_dir = "results/climate_scenarios_corrected"
 temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
 scenarios = ["ssp126", "ssp245", "ssp370", "ssp585"]
 gcms = [
@@ -408,33 +344,51 @@ gcms = [
 # --- WP2: forcing mode -----------------------------------------------------
 # "annual_mean" reproduces the historical annual-node warming curve (default);
 # "daily" uses a per-site daily water-temperature forcing file (WP1).
-forcing_mode = "annual_mean"
+forcing_mode = "daily"
 daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"
 # Use the per-(scenario, GCM) wide files (<base>_<scenario>_<gcm>.csv) so the
 # ensemble carries GCM spread instead of the ensemble-median product.
-daily_forcing_per_gcm = false
+daily_forcing_per_gcm = true
 # Baseline period for daily anomalies (PNACC convention).
 baseline_period_start = 1986
 baseline_period_end = 2005
 # Add a no-warming control run (baseline climatology over the horizon) so
 # scenario effects can be reported relative to it (WP4).
-control_run = false
+control_run = true
+
+# --- C3: projection route ---------------------------------------------------
+# The team chose the C3 INTERIM route: start projections from the OBSERVED
+# community with only a short spin-up and report every scenario relative to the
+# matched no-warming control, rather than from a long model-generated burn-in.
+#
+#   "full_burnin"      (default) integrate to the E4 convergence criteria below
+#                      (basin + robust composition).  This remains the default
+#                      when the key is absent, so other configs are unaffected.
+#   "interim_observed" start from the observed snapshot, integrate exactly
+#                      `interim_spin_up_years` baseline years, and report deltas
+#                      against the control.  `control_run = true` is MANDATORY
+#                      for this route (the runner errors otherwise).
+projection_route = "interim_observed"
+# Short relaxation from the observed snapshot (allowed 0-5 yr).  3 yr lets the
+# fastest local/compositional transients relax while the state stays anchored to
+# the observations; the residual common transient cancels in scenario-control.
+interim_spin_up_years = 3
 
 # --- WP4: spun-up initial conditions / carrying-capacity sensitivity --------
-spin_up = false
-spin_up_max_years = 50
-spin_up_tol = 1.0e-6
-# Stop rule for the burn-in (E4): "both" (default, strictest) requires the
-# basin-total change below `spin_up_tol` AND the robust composition change below
-# `spin_up_composition_tol`; "basin" reproduces the legacy basin-only rule;
-# "q95"/"max" are the legacy per-site total-change rules.
+# Corrected re-run: stop only when BOTH the basin-total relative change (below
+# `spin_up_tol`) and the robust composition change (95th percentile of |Δ log N|
+# over site × species cells above the 0.1-unit presence floor in at least one of
+# the two compared years, below `spin_up_composition_tol`) hold for at least
+# `spin_up_min_years` one-year blocks (E4).
+spin_up = true
+spin_up_max_years = 600
+spin_up_tol = 5.0e-5
+# Stop rule for the burn-in: "both" = basin + robust composition (corrected, E4);
+# "basin" reproduces the legacy September rule.
 spin_up_criterion = "both"
-# Composition tolerance: robust 95th percentile of |Δ log N| over the ACTIVE
-# site × species cells (density above the 0.1-unit presence floor in at least one
-# of the two compared years).  The floor excludes near-extinct/flickering cells
-# that otherwise dominate the percentile; see src/spin_up.jl.
+# 1e-2: robust statistic crosses this at ~yr 423 on real data (<600 cap); the raw
+# all-cells statistic plateaus near 1.4e-2 and never reaches 1e-3.
 spin_up_composition_tol = 1.0e-2
-# Minimum number of one-year blocks before convergence may be declared.
 spin_up_min_years = 10
 # Print a burn-in progress line every N year-blocks (0 disables).
 spin_up_progress_every = 50
@@ -442,7 +396,7 @@ spin_up_progress_every = 50
 # (build_carrying_capacity).  10.0 = legacy "10x observed"; 1.0 = the observed
 # snapshot is the capacity level.  The effective multiplier is
 # carrying_capacity_base_scaling * carrying_capacity_scaling.
-carrying_capacity_base_scaling = 10.0
+carrying_capacity_base_scaling = 1.0
 carrying_capacity_scaling = 1.0
 # WP3 optimum sweep: 0.0 = cold edge, 0.5 = midpoint (default), 1.0 = warm edge.
 thermal_optima_fraction = 0.5
@@ -463,7 +417,12 @@ quasi_extinction_persistence = 3
 # ---------------------------------------------------------------------------
 
 [temperature_stress]
-enabled = false
+# Corrected re-run: heat stress enabled and the shared slope derived from the
+# corrected per-site water-temperature baseline and the empirical upper limits
+# (`calibrate = true`), so it is consistent with the corrected temperature
+# series.  The September run pinned this slope for exact reproduction; see
+# `legacy/parameters_climate_scenarios_k1x_burnin.toml`.
+enabled = true
 k = 0.0
 calibrate = true
 max_annual_loss = 0.05
@@ -497,8 +456,7 @@ k_scaling_grid = [1.0, 3.0, 10.0]
 optimum_fractions = [0.0, 0.25, 0.5, 0.75, 1.0]
 spin_up_max_years = 50
 spin_up_tol = 1.0e-6
-# E4 stop rule for the staged driver: "both" (basin + robust composition) is the
-# stricter default; set "basin" to reproduce the pre-E4 single-criterion rule.
+# E4 corrected stop rule for the staged driver (basin + robust composition).
 spin_up_criterion = "both"
 spin_up_composition_tol = 1.0e-2
 spin_up_min_years = 10

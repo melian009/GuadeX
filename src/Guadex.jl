@@ -72,6 +72,8 @@ export build_elevation_vector, build_dam_passability_matrix
 export build_site_coordinate_matrix, build_obstacle_passability_matrix
 export extract_site_temperatures, extract_habitat_suitability
 export load_site_water_temperature_baseline
+export build_intrinsic_growth_rates, observed_density_matrix
+export drop_fishfarm_eel_records, apply_salinity_envelope, build_carrying_capacity
 
 # Export visualization functions
 export plot_ode_solution, plot_total_biomass, plot_species_richness
@@ -81,11 +83,13 @@ export plot_combined_analysis, save_figure
 
 # Export stable run-identity digests (E9/E10)
 export stable_digest, code_version, file_fingerprint, parameter_digest
+
 # Export global sensitivity toolkit (E7): Latin hypercube + Sobol indices
 export GlobalSensitivityRNG, latin_hypercube, lhs_samples, rescale_columns, rescale_row
 export SaltelliDesign, saltelli_design, saltelli_sample_matrix, n_model_runs
 export sobol_indices_from_outputs, sobol_analyze
 export scale_intrinsic_growth_rate, scale_dispersal, basin_response_metrics
+
 # Export the shared report-figure style (large fonts, panel letters, no titles)
 export report_theme!, panel_letter!, report_annotation!, trim_figure!, equal_panel_columns!
 export REPORT_BASE_FONTSIZE, REPORT_AXIS_LABEL_FONTSIZE, REPORT_TICK_FONTSIZE

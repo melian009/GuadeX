@@ -732,6 +732,52 @@ end
         r_gh_daily = 4.0 / 365.0
         @test growth[1, 2] ≈ r_gh_daily       # site1, GH (present)
         @test growth[2, 2] ≈ r_gh_daily        # site2, GH (present)
+
+        # minor #4: the documented seasonal conversion is opt-in and only
+        # applies to the species listed in `seasonal_rates`; the default above
+        # is unchanged (annual / 365 for every species).
+        growth_seasonal = Guadex.build_intrinsic_growth_rates(
+            density_df, species_codes, sites, species_chars_df;
+            seasonal_rates=Dict("GH" => 4.0))
+        r_gh_seasonal = log1p(4.0) / 183.0
+        @test growth_seasonal[1, 2] ≈ r_gh_seasonal
+        @test growth_seasonal[2, 2] ≈ r_gh_seasonal
+        @test growth_seasonal[1, 2] != r_gh_daily
+        # AH is not listed → still the annual / 365 conversion.
+        @test growth_seasonal[1, 1] ≈ 1.0 / 365.0
+        @test growth_seasonal[2, 1] ≈ 1.0 / 365.0 * 0.1
+    end
+
+    @testset "observed_density_matrix aligns by site code (minor #3)" begin
+        # Rows are shuffled and hold an extra site; a NaN and a negative value
+        # must be sanitised rather than shift the mapping.
+        density = DataFrame(
+            CODIGO = ["s2", "s3", "sX", "s1"],
+            AB_DEN = [20.0, 30.0, 999.0, 10.0],
+            GH_DEN = [NaN, 0.0, 999.0, -5.0]
+        )
+        sites = ["s1", "s2", "s3"]
+        mat = Guadex.observed_density_matrix(density, sites, ["AB", "GH"])
+        @test size(mat) == (3, 2)
+        @test mat[1, :] == [10.0, 0.0]   # s1: NaN? no — GH = -5 clamped to 0
+        @test mat[2, :] == [20.0, 0.0]   # s2: GH NaN → 0
+        @test mat[3, :] == [30.0, 0.0]   # s3
+
+        # Reordering the model sites reorders rows but not the per-site values.
+        mat2 = Guadex.observed_density_matrix(density, ["s3", "s1", "s2"], ["AB", "GH"])
+        @test mat2[1, :] == [30.0, 0.0]
+        @test mat2[2, :] == [10.0, 0.0]
+        @test mat2[3, :] == [20.0, 0.0]
+
+        # A model site with no density row must error, not silently shift.
+        @test_throws ErrorException Guadex.observed_density_matrix(
+            density, ["s1", "s_missing"], ["AB"])
+        # Duplicate CODIGO rows must error.
+        @test_throws ErrorException Guadex.observed_density_matrix(
+            vcat(density, density[1:1, :]), sites, ["AB"])
+        # A required density column must exist.
+        @test_throws ErrorException Guadex.observed_density_matrix(
+            density, sites, ["ZZ"])
     end
 
     @testset "prepare_ode_data (smoke test)" begin
@@ -789,5 +835,204 @@ end
             @test isfile(joinpath(tmpdir, "interaction_matrix.csv"))
             @test isfile(joinpath(tmpdir, "growth_rates.csv"))
         end
+    end
+end
+
+# =============================================================================
+# 3. Explicit biological-assumption options (E13-E16, E18)
+#
+# Each option is tested on small synthetic data for both the legacy default and
+# the alternative, plus a real-data regression that the defaults are unchanged.
+# =============================================================================
+@testset "Explicit biological options (E13-E16, E18)" begin
+
+    @testset "E13 absence_growth_fraction" begin
+        density_df = DataFrame(CODIGO=["s1", "s2"], AH_DEN=[10.0, 0.0])
+        chars = DataFrame(SP=["Ah"], thermal_optimum=[19.0], thermal_sigma=[3.67],
+            elevation_optimum=[450.0], max_size_mm=[100.0])
+        sites = ["s1", "s2"]
+        species = ["AH"]
+        r_ah = 1.0 / 365.0
+
+        # Default (legacy 0.1) and explicit default are identical.
+        legacy = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars)
+        explicit = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars;
+            absence_growth_fraction=0.1)
+        @test legacy[1, 1] ≈ r_ah
+        @test legacy[2, 1] ≈ r_ah * 0.1
+        @test legacy == explicit
+
+        # 1.0 removes the absence penalty; 0.0 forbids local growth at absences.
+        full = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars;
+            absence_growth_fraction=1.0)
+        @test full[1, 1] ≈ r_ah
+        @test full[2, 1] ≈ r_ah
+        none = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars;
+            absence_growth_fraction=0.0)
+        @test none[2, 1] == 0.0
+        @test none[1, 1] ≈ r_ah
+
+        @test_throws ErrorException Guadex.build_intrinsic_growth_rates(
+            density_df, species, sites, chars; absence_growth_fraction=-0.1)
+    end
+
+    @testset "E14 pool_capacity_mode" begin
+        density_df = DataFrame(CODIGO=["s1", "s2", "s3"], SP_DEN=[5.0, 100.0, 15.0])
+        site_df = DataFrame(CODIGO=["s1", "s2", "s3"], EN_POZAS=["NO", "SI", "NO"])
+        sites = ["s1", "s2", "s3"]
+        species = ["SP"]
+
+        legacy = Guadex.build_carrying_capacity(density_df, site_df, sites, species; scaling=1.0)
+        @test legacy[2] == 100.0
+        nonpool_reference = median([legacy[1], legacy[3]])
+
+        cap = Guadex.build_carrying_capacity(density_df, site_df, sites, species;
+            scaling=1.0, pool_capacity_mode=:cap)
+        exclude = Guadex.build_carrying_capacity(density_df, site_df, sites, species;
+            scaling=1.0, pool_capacity_mode=:exclude)
+        # Only the pool site moves, and it lands on the non-pool median.
+        @test cap[2] ≈ nonpool_reference
+        @test exclude[2] ≈ nonpool_reference
+        @test cap[1] == legacy[1] && cap[3] == legacy[3]
+        @test exclude[1] == legacy[1] && exclude[3] == legacy[3]
+        @test cap != legacy && exclude != legacy
+
+        # A cap below the pool value is a no-op on an already-small pool.
+        low_pool = DataFrame(CODIGO=["s1", "s2"], SP_DEN=[50.0, 1.0])
+        low_site = DataFrame(CODIGO=["s1", "s2"], EN_POZAS=["NO", "SI"])
+        capped = Guadex.build_carrying_capacity(low_pool, low_site, ["s1", "s2"], ["SP"];
+            scaling=1.0, pool_capacity_mode=:cap)
+        uncapped = Guadex.build_carrying_capacity(low_pool, low_site, ["s1", "s2"], ["SP"];
+            scaling=1.0)
+        @test capped[2] == uncapped[2]
+
+        # Non-legacy modes require the EN_POZAS column.
+        @test_throws ErrorException Guadex.build_carrying_capacity(density_df,
+            DataFrame(CODIGO=["s1", "s2", "s3"]), sites, species;
+            pool_capacity_mode=:cap)
+    end
+
+    @testset "E15 fishless_dificil_capacity" begin
+        density_df = DataFrame(CODIGO=["s1", "s2", "s3"], SP_DEN=[5.0, 100.0, 15.0])
+        site_df = DataFrame(CODIGO=["s1", "s2", "s3"], SIN_PECES=["", "DIFICIL", "PODRIA"])
+        sites = ["s1", "s2", "s3"]
+        species = ["SP"]
+
+        legacy = Guadex.build_carrying_capacity(density_df, site_df, sites, species; scaling=1.0)
+        near_zero = Guadex.build_carrying_capacity(density_df, site_df, sites, species;
+            scaling=1.0, fishless_dificil_capacity=:near_zero)
+        @test near_zero[2] == Guadex.NEAR_ZERO_CARRYING_CAPACITY
+        @test near_zero[1] == legacy[1] && near_zero[3] == legacy[3]
+
+        @test_throws ErrorException Guadex.build_carrying_capacity(density_df,
+            DataFrame(CODIGO=["s1", "s2", "s3"]), sites, species;
+            fishless_dificil_capacity=:near_zero)
+    end
+
+    @testset "E16 nonreproducing_local_growth" begin
+        density_df = DataFrame(CODIGO=["s1", "s2"],
+            AA_DEN=[1.0, 0.0], LR_DEN=[1.0, 0.0], MC_DEN=[1.0, 0.0], AH_DEN=[1.0, 0.0])
+        chars = DataFrame(SP=["Aa", "Lr", "Mc", "Ah"], thermal_optimum=fill(19.0, 4),
+            thermal_sigma=fill(3.67, 4), elevation_optimum=fill(450.0, 4),
+            max_size_mm=fill(100.0, 4))
+        sites = ["s1", "s2"]
+        species = ["AA", "LR", "MC", "AH"]
+
+        legacy = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars)
+        @test legacy[1, 1] ≈ 0.1 / 365.0     # AA
+        @test legacy[1, 2] ≈ 0.3 / 365.0     # LR
+        @test legacy[1, 3] ≈ 0.3 / 365.0     # MC
+
+        zeroed = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars;
+            nonreproducing_local_growth=:zero)
+        @test all(==(0.0), zeroed[:, 1:3])
+        # AH is not in NONREPRODUCING_SPECIES and keeps its rate.
+        @test zeroed[1, 4] ≈ 1.0 / 365.0
+        @test zeroed[2, 4] ≈ 1.0 / 365.0 * 0.1
+
+        @test_throws ErrorException Guadex.build_intrinsic_growth_rates(
+            density_df, species, sites, chars; nonreproducing_local_growth=:nonsense)
+    end
+
+    @testset "E16 exclude_fishfarm_eel_records" begin
+        density_df = DataFrame(CODIGO=["1.14.2", "1.14.19", "1.21.8", "1.37.29"],
+            AA_DEN=[0.37, 0.85, 0.44, 1.06])
+        site_df = DataFrame(CODIGO=["1.14.2", "1.14.19", "1.21.8", "1.37.29"],
+            CODIGO_S=["14.0", "14.0", "21.0", "37.0"])
+
+        # Default (no call) keeps every record; the helper only drops the
+        # documented Guadiato (subcatchment 14.0) records.
+        filtered, dropped = Guadex.drop_fishfarm_eel_records(density_df, site_df)
+        @test dropped == ["1.14.19", "1.14.2"]
+        @test count(>(0), filtered.AA_DEN) == 2
+        @test filtered.AA_DEN[3] == 0.44 && filtered.AA_DEN[4] == 1.06
+        # The input table is not mutated (reversible).
+        @test count(>(0), density_df.AA_DEN) == 4
+
+        # A table with no subcatchment-14 records is unchanged.
+        other_site = DataFrame(CODIGO=["1.14.2", "1.21.8"], CODIGO_S=["21.0", "21.0"])
+        unchanged, none_dropped = Guadex.drop_fishfarm_eel_records(
+            DataFrame(CODIGO=["1.14.2", "1.21.8"], AA_DEN=[0.0, 0.44]), other_site)
+        @test isempty(none_dropped)
+        @test unchanged.AA_DEN == [0.0, 0.44]
+
+        @test_throws ErrorException Guadex.drop_fishfarm_eel_records(
+            DataFrame(CODIGO=["x"]), site_df)
+    end
+
+    @testset "E18 salinity_envelope" begin
+        # One strictly brackish species, one euryhaline and one freshwater.
+        chars = DataFrame(SP=["Ab", "Lr", "Aa", "St"],
+            SALINITY=["brackish", "brackish/freshwater", "brackish/freshwater", "freshwater"])
+        species = ["AB", "LR", "AA", "ST"]
+        sites = ["s1", "s2", "s3"]
+        site_df = DataFrame(CODIGO=sites, CONDUCTIVIDAD=[500.0, 2000.0, 5000.0])
+        growth = ones(3, 4)
+
+        filtered, n_filtered = Guadex.apply_salinity_envelope(
+            growth, species, chars, site_df, sites)
+        # s1 (500 uS/cm) is below the 1000 uS/cm brackish threshold; only the
+        # strictly brackish species there is zeroed.
+        @test filtered[1, 1] == 0.0
+        @test filtered[2, 1] == 1.0
+        @test all(filtered[2:3, :] .== 1.0)
+        # Euryhaline / freshwater species are untouched even at s1.
+        @test filtered[1, 2] == 1.0 && filtered[1, 3] == 1.0 && filtered[1, 4] == 1.0
+        @test n_filtered == 1
+        @test growth == ones(3, 4)   # input matrix not mutated
+
+        # An explicit threshold changes which sites are filtered.
+        wider, n_wider = Guadex.apply_salinity_envelope(growth, species, chars, site_df, sites;
+            min_conductivity=3000.0)
+        @test n_wider == 2
+        @test wider[2, 1] == 0.0 && wider[3, 1] == 1.0
+
+        # Missing conductivity column: no-op, data would not support the envelope.
+        _, n_missing = Guadex.apply_salinity_envelope(growth, species, chars,
+            DataFrame(CODIGO=sites), sites)
+        @test n_missing == 0
+    end
+
+    @testset "E13-E16/E18 regression: default outputs byte-identical" begin
+        density_df, species = Guadex.load_species_density_data(DENSITY_FILE)
+        site_df = Guadex.load_site_data(CONNECTIVITY_FILE, ENVIRONMENTAL_FILE)
+        sites = String.(site_df.CODIGO)
+        chars = Guadex.load_species_characteristics(SPECIES_CHARS_FILE)
+
+        growth = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars)
+        capacity = Guadex.build_carrying_capacity(density_df, site_df, sites, species)
+        digest(values) = Guadex.stable_digest(join(repr.(vec(values)), ","))
+
+        # Golden digests captured from the pre-option code on the committed data.
+        @test digest(growth) == "5597ef3692463b83"
+        @test digest(capacity) == "89461070aa07870f"
+
+        # Explicitly listing the legacy defaults reproduces the same arrays.
+        growth_legacy = Guadex.build_intrinsic_growth_rates(density_df, species, sites, chars;
+            absence_growth_fraction=0.1, nonreproducing_local_growth=:legacy)
+        capacity_legacy = Guadex.build_carrying_capacity(density_df, site_df, sites, species;
+            pool_capacity_mode=:legacy, fishless_dificil_capacity=:legacy)
+        @test growth_legacy == growth
+        @test capacity_legacy == capacity
     end
 end
