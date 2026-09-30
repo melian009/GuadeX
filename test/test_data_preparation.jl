@@ -677,8 +677,16 @@ end
             interaction_file=INTERACTION_FILE,
             upstream_cost=0.01
         )
-        @test data.distance_matrix !== nothing
-        @test nnz(data.distance_matrix) >= 0
+        dm = data.distance_matrix
+        n = length(data.sites)
+        @test size(dm) == (n, n)
+        # A usable river-distance matrix is non-empty, has no self-loops on the
+        # diagonal, and holds finite positive distances where present.
+        @test nnz(dm) > 0
+        @test all(iszero, diag(dm))
+        kept = [dm[i, j] for i in 1:n, j in 1:n if !iszero(dm[i, j])]
+        @test all(isfinite, kept)
+        @test all(>(0), kept)
     end
 
     @testset "build_dam_passability_matrix" begin

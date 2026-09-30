@@ -66,6 +66,22 @@ const cw = normaliseResults(csvWide, 'wide.csv')
 check('csv wide -> metrics', cw.mode === 'metrics' && cw.keys.length === 2)
 check('csv wide values', cw.values.get('1.1.2').risk === 0.31 && cw.values.get('1.1.2').population === 4200)
 
+// --- species-level and site-expanded aggregate time series ---------
+const speciesTs = normaliseResults(
+  { name: 'AB density', unit: '', steps: ['2026', '2027'],
+    data: { '1.1.2': [1, 2], '1.1.3': [0, 0.5] } },
+  'species_AB_density_timeseries.json')
+check('species-level timeseries mode', speciesTs.mode === 'timeseries')
+check('species-level series keyed by site', speciesTs.values.get('1.1.2')['2027'] === 2)
+
+const aggTs = normaliseResults(
+  { name: 'level basin native_richness', unit: '', steps: ['2026', '2027'],
+    data: { '1.1.2': [3, 3], '1.1.3': [3, 3] } },
+  'level_basin_mean_native_richness_by_site_timeseries.json')
+check('by-site aggregate is renderable',
+  aggTs.mode === 'timeseries' && aggTs.values.size === 2,
+  `(${aggTs.values.size} sites)`)
+
 // --- categorical JSON ---------------------------------------------
 const cat = normaliseResults({ name: 'status', data: { a: 'high', b: 'low', c: 'high' } }, 'cat')
 check('categorical detected', cat.stats.get('value').categorical === true)

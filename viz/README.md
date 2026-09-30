@@ -1,8 +1,10 @@
 # GuadeX · Guadalquivir Basin 3-D Site Explorer
 
 An interactive, browser-based 3-D view of the whole Guadalquivir river basin and the
-**1,037 GuadeX sampling sites**, built so that *any* per-site data — including future
-simulation outputs — can be attached, explored and compared by users.
+**1,037 GuadeX sampling sites** in the GIS archive, built so that *any* per-site data —
+including future simulation outputs — can be attached, explored and compared by users.
+Note that the simulation model uses the **775** of those sites that have complete
+network/forcing data; simulation results keyed by the other site codes are ignored.
 
 This lives in its own directory (`viz/`) and is independent of the Julia analysis code.
 
@@ -102,8 +104,8 @@ Three shapes are supported and normalised into one model.
 
 ```json
 {
-  "name": "Native extinction risk",
-  "unit": "probability",
+  "name": "Realised richness loss",
+  "unit": "fraction",
   "steps": ["2026", "2050", "2100"],
   "data": {
     "1.1.2": [0.11, 0.24, 0.61],
@@ -139,7 +141,7 @@ Values may also be scalar numbers; a single `value` key is created.
 window.GuadeX.setResults(jsonObjectOrCsvString)
 await window.GuadeX.loadResults('./data/my_results.json')
 window.GuadeX.selectSite('1.1.2')
-window.GuadeX.setMetric('extinction_risk', 'results')
+window.GuadeX.setMetric('realised_richness_loss', 'results')
 window.GuadeX.setRamp('turbo')
 window.GuadeX.clearResults()
 window.GuadeX.store.sites        // full site array
@@ -149,7 +151,7 @@ window.GuadeX.viewer             // SceneManager (Three.js)
 ### Shareable deep links
 
 ```
-?results=./data/results.demo-timeseries.json&metric=extinction_risk&site=1.1.2&ramp=turbo
+?results=./data/results.demo-timeseries.json&metric=realised_richness_loss&site=1.1.2&ramp=turbo
 ```
 
 `GUADEX_READY` is announced via `window.dispatchEvent(new CustomEvent('guadex:ready'))`.
@@ -163,16 +165,23 @@ generated from exotic richness, elevation and a hash of the site code — replac
 The Julia pipeline writes viewer-ready files for every run (see
 `docs/climate_scenarios.md`). A run's `export/viewer/` directory contains:
 
-* `guadex_results_timeseries.csv` — all metrics at every year, keyed by `CODIGO`
-  (the explorer detects the `step` column and builds one time series per metric);
-* `guadex_results_native_extinction_risk.json` — canonical single-variable time
+* `guadex_results_<metric>_timeseries.csv` — **one metric per file**
+  (`CODIGO,step,value`), so each slider spans the 20 years of a single metric
+  rather than mixing every metric × year in one control;
+* `guadex_results_realised_richness_loss.json` — canonical single-variable time
   series (`{name, unit, steps, data}`), directly loadable through `?results=`;
 * `guadex_results_metrics.json` — per-site metrics at the final year;
-* `level_<level>_<metric>_timeseries.json` — the same shape aggregated to
-  sub-basin, water body or the whole basin (for a future level selector).
+* `level_<level>_mean_<metric>_timeseries.json` — aggregates by sub-basin,
+  water body or the whole basin, keyed by group id;
+* `level_<level>_mean_<metric>_by_site_timeseries.json` — the same aggregates
+  repeated onto their member sites, so the existing site layer can render them
+  directly through `?results=`;
+* `species_<sp>_<metric>_timeseries.json` — one site-keyed series per metric per
+  species (`density`, `relative_density`, `present`, `quasi_extinct`), so the
+  viewer can show species-level projections.
 
 To publish a run, copy its viewer files into `public/data/` and deep-link, e.g.
-`?results=./data/guadex_results_native_extinction_risk.json&metric=native_extinction_risk`.
+`?results=./data/guadex_results_realised_richness_loss.json&metric=realised_richness_loss`.
 
 ---
 

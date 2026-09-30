@@ -99,6 +99,48 @@ end
 end
 
 # =============================================================================
+# 2b. Dispersal operator: mass conservation and structure (minor #13)
+# =============================================================================
+@testset "dispersal operator: mass conservation and structure" begin
+    n_sites, n_species = 3, 2
+    distances = [0.0 1000.0 2500.0; 1000.0 0.0 1500.0; 2500.0 1500.0 0.0]
+    elevations = [10.0, 60.0, 25.0]
+    D_daily = 10.0 / 365.0
+    dispersal = Guadex.precompute_dispersal_matrix(
+        n_sites, distances, elevations, 0.01, ones(n_sites, n_sites), D_daily)
+
+    # Structure: no self-loops, non-negative rates, and exactly the off-diagonal
+    # pairs the builder is supposed to produce (6 of them for a dense 3×3).
+    @test all(iszero, diag(dispersal))
+    @test all(>=(0), nonzeros(dispersal))
+    @test nnz(dispersal) == 6
+    # Downstream movement (to a lower elevation) is unpenalised; upstream
+    # movement is reduced by 1/(1 + c·Δz).
+    @test dispersal[1, 3] ≈ D_daily * 1.0 / 2.5
+    @test dispersal[2, 1] ≈ D_daily * (1.0 / (1.0 + 0.01 * 50.0)) / 1.0
+    @test dispersal[3, 2] ≈ D_daily * 1.0 / 1.5
+
+    # Mass conservation: switch off growth, interactions and heat stress so the
+    # RHS is the dispersal operator alone, and verify total mass is invariant.
+    params = Guadex.MetacommunityParams(
+        n_sites, n_species,
+        zeros(n_species, n_species),   # no species interactions
+        dispersal,
+        [1.0, 1.0],                    # dispersal scaling
+        zeros(n_sites, n_species),     # no growth
+        fill(20.0, n_sites),           # temperatures
+        ones(n_sites),                 # habitat suitability
+        fill(20.0, n_species),         # thermal optima
+        fill(5.0, n_species),          # thermal sigmas
+        fill(100.0, n_sites))          # carrying capacity
+    u = [3.0, 1.0, 4.0, 1.0, 5.0, 9.0]
+    du = zeros(length(u))
+    Guadex.metacommunity_ode!(du, u, params, 0.0)
+    @test sum(du) ≈ 0.0 atol=1e-12
+    @test any(!iszero, du)             # dispersal is actually redistributing mass
+end
+
+# =============================================================================
 # 3. MetacommunityParams construction
 # =============================================================================
 @testset "MetacommunityParams" begin

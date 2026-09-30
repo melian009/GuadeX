@@ -7,6 +7,7 @@ using DifferentialEquations
 using LinearAlgebra
 using Statistics
 using Graphs
+using Makie
 
 # Shared constants for test files
 const DATA_DIR = joinpath(@__DIR__, "../data")

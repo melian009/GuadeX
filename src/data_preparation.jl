@@ -8,11 +8,11 @@ All functions are designed to handle large files efficiently by reading
 them in chunks or using streaming approaches.
 """
 
-# Species codes mapping (from density matrix columns)
-const SPECIES_CODES = [
-  "SA", "LS", "ST", "SP", "IL", "PW", "CP", "AA", "AH", "LR", "MC", "AB", "IO",  # Native
-  "OM", "LG", "GH", "AA", "CG", "CC", "MS", "AM", "TT", "EL", "GL"  # Exotic + others
-]
+# NOTE (minor #13): the old `SPECIES_CODES` constant was unused (nothing in the
+# package or scripts referenced it; `scripts/serialize_data.jl` keeps its own
+# copy) and was stale — it listed "AA" twice and omitted "AAL".  It has been
+# removed rather than corrected, because the authoritative species list is the
+# density-matrix columns / `[species]` block of `parameters.toml`.
 
 # Full species names mapping
 const SPECIES_NAMES = Dict(
@@ -1745,12 +1745,17 @@ end
     extract_habitat_suitability(site_df::DataFrame, sites::Vector{String})
 
 Extract habitat suitability index for each site.
-Uses IET (Índice de Estado Trófico) as habitat quality indicator.
+Uses IET (Índice de estabilidad del talud, bank-stability index; see
+`data/ABIOTIC/Matriz_Ambiental_README.csv`) as a habitat quality indicator.
+Higher IET means a less stable bank (lower habitat quality). The model uses IET
+only as a monotone habitat proxy, not as a trophic-state or water-quality index.
 Return a suitability score where higher IET = lower suitability (normalized).
 """
 function extract_habitat_suitability(site_df::DataFrame, sites::Vector{String})
     # Try to find habitat quality column
-    # IET is a good indicator (lower is better - oligotrophic). Think of it as a "health check" that tells you how much organic matter (mostly algae) is growing in the water.
+    # IET is the bank-stability index (higher = less stable bank = lower habitat
+    # quality); it is used here only as a monotone habitat proxy, not as a
+    # trophic-state or water-quality indicator.
     # We'll use a simple transformation: higher IET = lower suitability
 
     site_to_iet = Dict(row.CODIGO => row.IET for row in eachrow(site_df))

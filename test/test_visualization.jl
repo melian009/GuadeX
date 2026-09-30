@@ -2,6 +2,11 @@
 # Smoke tests for visualization functions
 # =============================================================================
 
+# A plotting call is only meaningful if it returns a real Makie figure that
+# contains at least one drawable axis (not merely "something that is not
+# nothing").
+is_renderable_figure(fig) = fig isa Makie.Figure && !isempty(fig.content)
+
 @testset "Visualization smoke tests" begin
     # Create minimal data for visualization tests
     data = Guadex.prepare_ode_data(
@@ -31,22 +36,22 @@
 
     @testset "plot_avg_total_biomass" begin
         fig = Guadex.plot_avg_total_biomass(sol, data.sites, data.species)
-        @test fig !== nothing
+        @test is_renderable_figure(fig)
     end
 
     @testset "plot_avg_species_richness" begin
         fig = Guadex.plot_avg_species_richness(sol, data.sites, data.species)
-        @test fig !== nothing
+        @test is_renderable_figure(fig)
     end
 
     @testset "plot_total_biomass" begin
         fig = Guadex.plot_total_biomass(sol, data.sites, data.species)
-        @test fig !== nothing
+        @test is_renderable_figure(fig)
     end
 
     @testset "plot_species_richness" begin
         fig = Guadex.plot_species_richness(sol, data.sites, data.species)
-        @test fig !== nothing
+        @test is_renderable_figure(fig)
     end
 
     @testset "plot_combined_analysis" begin
@@ -54,19 +59,21 @@
             sol, data.site_df, data.sites, data.species,
             data.distance_matrix
         )
-        @test fig !== nothing
+        @test is_renderable_figure(fig)
     end
 
     @testset "plot_sites_map" begin
         fig = Guadex.plot_sites_map(data.site_df; color_by=:ALTITUD)
-        @test fig !== nothing
+        @test is_renderable_figure(fig)
     end
 
     @testset "save_figure" begin
         mktempdir() do tmpdir
             fig = Guadex.plot_avg_total_biomass(sol, data.sites, data.species)
-            Guadex.save_figure(fig, joinpath(tmpdir, "test.png"))
-            @test isfile(joinpath(tmpdir, "test.png"))
+            out = joinpath(tmpdir, "test.png")
+            Guadex.save_figure(fig, out)
+            @test isfile(out)
+            @test filesize(out) > 0
         end
     end
 end
