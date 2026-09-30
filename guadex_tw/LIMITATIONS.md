@@ -106,6 +106,27 @@ Two validation summaries are reported and they are not interchangeable:
 - **No process model.** Air2stream (Model 5) was not implemented; an 8-parameter
   process model cannot be identified from monthly grab samples. No flow, shading
   or channel-geometry predictors were available.
+- **Air-water slope is same-day.** The shipped projection uses the **same-day**
+  air–water relationship (`ta_mean_corr`; Spain-wide Model-2 `ta` slope
+  **0.510** at z = 0, n = 39,944 over 980 sites; Guadalquivir 0.436, n = 771).
+  Lagged air temperature fits the pooled calibration better: re-estimating the
+  identical primary specification with 3-, 7- and 30-day means gives Spain-wide
+  slopes of **0.571 / 0.604 / 0.651**. However, only **three cadence-eligible
+  sites** (all inside a single calendar year, 2024; n = 104; pooled same-day
+  slope 0.079, bse 0.184) can support a lagged fit, so time-blocked
+  cross-validation is impossible and a lagged model **cannot replace** the
+  primary calibration. Within the Guadalquivir subset the lagged slopes are in
+  fact *lower* (0.435 / 0.427 / 0.323), so the lagged enhancement is a
+  national-pooled pattern whose sign is not guaranteed in the basin.
+- **Lag uncertainty is expressed as a band, not a refit.** Because the pipeline
+  cannot be re-run with lagged coefficients, the projected water-warming anomaly
+  is scaled by the ratio of the lagged to the same-day slope
+  (`low/high = central × slope_lagged / slope_same_day`) — a documented
+  approximation, not a new simulation. This band is written to
+  `outputs/tables/air_water_slope_uncertainty_band.csv` with the full method and
+  sample sizes in `models/air_water_slope_uncertainty_band_method.json`. Over the
+  full range of lagged slopes (0.323–0.651) the multiplier is
+  **×0.63 (low) to ×1.28 (high)** of the reported same-day warming.
 
 ## 6. What would materially improve the result (minimum additional data)
 
