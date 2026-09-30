@@ -73,6 +73,11 @@ export plot_avg_total_biomass, plot_avg_species_richness
 export plot_sites_map, plot_site_connectivity_map, plot_subcatchment_network
 export plot_combined_analysis, save_figure
 
+# Export global sensitivity toolkit (E7): Latin hypercube + Sobol indices
+export GlobalSensitivityRNG, latin_hypercube, lhs_samples, rescale_columns, rescale_row
+export SaltelliDesign, saltelli_design, saltelli_sample_matrix, n_model_runs
+export sobol_indices_from_outputs, sobol_analyze
+export scale_intrinsic_growth_rate, scale_dispersal, basin_response_metrics
 # Export the shared report-figure style (large fonts, panel letters, no titles)
 export report_theme!, panel_letter!, report_annotation!, trim_figure!, equal_panel_columns!
 export REPORT_BASE_FONTSIZE, REPORT_AXIS_LABEL_FONTSIZE, REPORT_TICK_FONTSIZE
@@ -87,6 +92,7 @@ include("visualize_graph.jl")
 include("ode_model.jl")
 include("temperature_forcing.jl")
 include("spin_up.jl")
+include("global_sensitivity.jl")
 include("data_preparation.jl")
 include("outputs.jl")
 include("visualization.jl")
