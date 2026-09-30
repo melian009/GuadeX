@@ -73,6 +73,8 @@ export plot_avg_total_biomass, plot_avg_species_richness
 export plot_sites_map, plot_site_connectivity_map, plot_subcatchment_network
 export plot_combined_analysis, save_figure
 
+# Export stable run-identity digests (E9/E10)
+export stable_digest, code_version, file_fingerprint, parameter_digest
 # Export global sensitivity toolkit (E7): Latin hypercube + Sobol indices
 export GlobalSensitivityRNG, latin_hypercube, lhs_samples, rescale_columns, rescale_row
 export SaltelliDesign, saltelli_design, saltelli_sample_matrix, n_model_runs
@@ -93,6 +95,7 @@ include("ode_model.jl")
 include("temperature_forcing.jl")
 include("spin_up.jl")
 include("global_sensitivity.jl")
+include("run_identity.jl")
 include("data_preparation.jl")
 include("outputs.jl")
 include("visualization.jl")
