@@ -124,11 +124,11 @@ end
 println("Heat-stress mortality: $(k_heat > 0 ? "k=$k_heat" : "disabled")")
 params = set_heat_stress_rate(data.params, k_heat)
 
-println("\nIntegrating burn-in (tol=$TOL, criterion=:basin)...")
+println("\nIntegrating burn-in (tol=$TOL, criterion=:basin, legacy min_years=2)...")
 t0 = time()
 spin = spin_up(params; initial_state=u0_flat, schedule=schedule,
     days_per_year=Float64(DAYS_PER_YEAR), max_years=MAX_YEARS, tol=TOL,
-    criterion=:basin, progress_every=25)
+    min_years=2, criterion=:basin, progress_every=25)
 elapsed = time() - t0
 println("Integrated $(spin.years) year-blocks in $(round(elapsed, digits=1)) s " *
         "($(round(elapsed / max(spin.years, 1), digits=2)) s/yr); " *

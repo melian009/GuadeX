@@ -226,6 +226,39 @@ end
     @test length(result.history) == result.years
 end
 
+@testset "C3 interim projection route" begin
+    # Route parsing: absent/empty keeps the full-burn-in default; a typo errors.
+    @test Guadex.projection_route(nothing) === :full_burnin
+    @test Guadex.projection_route("") === :full_burnin
+    @test Guadex.projection_route("full_burnin") === :full_burnin
+    @test Guadex.projection_route("FULL_BURNIN") === :full_burnin
+    @test Guadex.projection_route("interim_observed") === :interim_observed
+    @test_throws ErrorException Guadex.projection_route("bogus")
+
+    # Tiny 1-site/1-species model, K = 100.
+    params = Guadex.MetacommunityParams(
+        1, 1, [0.0;;], sparse([1], [1], [0.0], 1, 1),
+        [1.0], [0.05;;], [20.0], [1.0], [20.0], [5.0], [100.0])
+
+    # 0 years returns the observed state unchanged (no convergence machinery).
+    observed = [10.0]
+    zero = Guadex.interim_observed_spin_up(params; initial_state=observed, years=0)
+    @test zero.years == 0
+    @test zero.state == observed
+    @test zero.spin === nothing
+
+    # A short fixed relaxation integrates EXACTLY `years` blocks, bypassing the
+    # E4 convergence stop (tol = 0), and moves the state towards K.
+    short = Guadex.interim_observed_spin_up(params; initial_state=observed, years=3)
+    @test short.years == 3
+    @test short.spin !== nothing
+    @test short.spin.years == 3
+    @test short.state[1] > observed[1]
+
+    @test_throws ErrorException Guadex.interim_observed_spin_up(
+        params; initial_state=observed, years=-1)
+end
+
 @testset "scale_carrying_capacity / set_thermal_optima / set_heat_stress_rate" begin
     params = Guadex.MetacommunityParams(
         2, 2, [0.0 0.0; 0.0 0.0], sparse([1, 2], [1, 2], [0.0, 0.0], 2, 2),

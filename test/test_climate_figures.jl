@@ -251,3 +251,39 @@ end
 end
 
 # =============================================================================
+# C3 interim route — scenario minus matched control
+# =============================================================================
+@testset "scenario_minus_control (C3 interim route)" begin
+    function _series(scenario, gcm, years, richness)
+        n = length(years)
+        Guadex.ClimateBasinSeries(scenario, gcm, "/tmp/" * scenario * "_" * gcm, years,
+            zeros(n), richness, richness .+ 1.0, fill(0.5, n),
+            richness .* 2.0, richness .* 3.0, fill(0.1, n))
+    end
+
+    control = _series("control", "baseline", [2026, 2027, 2045], [3.0, 3.0, 3.0])
+    scenario = _series("ssp585", "GCM1", [2026, 2027, 2045], [3.0, 2.5, 1.0])
+
+    d = Guadex.scenario_minus_control(scenario, control)
+    @test d.years == [2026, 2027, 2045]
+    @test d.native_richness_delta == [0.0, -0.5, -2.0]
+    @test d.total_richness_delta == [0.0, -0.5, -2.0]
+    @test d.native_biomass_delta == [0.0, -1.0, -4.0]
+    @test d.realised_richness_loss_delta == [0.0, 0.0, 0.0]
+
+    # Years present on only one side are dropped, and a non-finite side gives NaN.
+    partial = _series("ssp126", "GCM2", [2027, 2028], [NaN, 1.0])
+    dp = Guadex.scenario_minus_control(partial, control)
+    @test dp.years == [2027]
+    @test isnan(dp.native_richness_delta[1])
+
+    table = Guadex.scenario_minus_control_table([control, scenario, partial];
+        metrics=(:native_richness,))
+    @test !isempty(table)
+    @test Set(table.scenario) == Set(["ssp585", "ssp126"])
+    @test Set(table.metric) == Set(["native_richness"])
+    @test nrow(table) == 3 + 1
+
+    # No control run → empty table (callers can skip writing deltas).
+    @test isempty(Guadex.scenario_minus_control_table([scenario]))
+end

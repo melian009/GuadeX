@@ -160,6 +160,101 @@ function _pearson(xs, ys)
     return cor(xs, ys)
 end
 
+# =============================================================================
+# --- Scenario minus matched control (C3 interim route) ---
+# =============================================================================
+
+"""
+    SCENARIO_CONTROL_METRICS
+
+The response metrics differenced by [`scenario_minus_control`](@ref): native and
+total richness, invasive richness, native and total biomass and the realised
+native-richness-loss metric.
+"""
+const SCENARIO_CONTROL_METRICS = (
+    :native_richness, :total_richness, :invasive_richness,
+    :native_biomass, :total_biomass, :realised_richness_loss)
+
+"""
+    scenario_minus_control(scenario_run, control_run; metrics=SCENARIO_CONTROL_METRICS)
+
+Per-metric annual `scenario − control` series for one scenario run against the
+matched no-warming control run (`scenario == "control"`, `gcm == "baseline"`).
+
+The two basin series are matched on their **shared years**; a year present in
+only one run is dropped, and a metric is `NaN` wherever either side is missing or
+non-finite.  Returns a `NamedTuple` with `years` plus one `<metric>_delta` vector
+per requested metric, in the order given by `metrics`.
+
+This is the reporting form used by the C3 interim projection route: those results
+are provisional and are reported as deltas against the matched control, so any
+residual spin-up/colonisation transient common to both runs cancels.
+"""
+function scenario_minus_control(scenario_run::ClimateBasinSeries,
+        control_run::ClimateBasinSeries;
+        metrics=SCENARIO_CONTROL_METRICS)
+    control_index = Dict{Int,Int}()
+    for (i, y) in enumerate(control_run.years)
+        control_index[y] = i
+    end
+    years = Int[]
+    scenario_positions = Int[]
+    control_positions = Int[]
+    for (i, y) in enumerate(scenario_run.years)
+        j = get(control_index, y, 0)
+        j == 0 && continue
+        push!(years, y)
+        push!(scenario_positions, i)
+        push!(control_positions, j)
+    end
+    values = Vector{Float64}[]
+    for metric in metrics
+        scenario_values = getfield(scenario_run, metric)
+        control_values = getfield(control_run, metric)
+        delta = Vector{Float64}(undef, length(years))
+        for (k, (i, j)) in enumerate(zip(scenario_positions, control_positions))
+            a = Float64(scenario_values[i])
+            b = Float64(control_values[j])
+            delta[k] = (isfinite(a) && isfinite(b)) ? a - b : NaN
+        end
+        push!(values, delta)
+    end
+    names = Tuple(Symbol(metric, :_delta) for metric in metrics)
+    return NamedTuple{(:years, names...)}((years, values...))
+end
+
+"""
+    scenario_minus_control_table(runs; metrics=SCENARIO_CONTROL_METRICS,
+                                 control_scenario="control") -> DataFrame
+
+Tidy `scenario, gcm, year, metric, delta` table of every non-control run's
+per-metric difference from the matched control run, for the reporting/dose-
+response path.  Returns an empty `DataFrame` when the collection has no control
+run, so callers can skip writing deltas without special-casing.
+"""
+function scenario_minus_control_table(runs::AbstractVector{<:ClimateBasinSeries};
+        metrics=SCENARIO_CONTROL_METRICS,
+        control_scenario::AbstractString="control")
+    controls = [run for run in runs if run.scenario == control_scenario]
+    isempty(controls) && return DataFrame()
+    control = first(controls)
+    rows = NamedTuple[]
+    for run in runs
+        run.scenario == control_scenario && continue
+        deltas = scenario_minus_control(run, control; metrics=metrics)
+        for (k, year) in enumerate(deltas.years)
+            for metric in metrics
+                push!(rows, (scenario=run.scenario, gcm=run.gcm, year=year,
+                    metric=string(metric),
+                    delta=getfield(deltas, Symbol(metric, :_delta))[k]))
+            end
+        end
+    end
+    isempty(rows) && return DataFrame()
+    return DataFrame(rows)
+end
+
+# =============================================================================
 # --- C7: dose-response with GCM ensemble structure, forcing axis, endpoints ---
 # =============================================================================
 

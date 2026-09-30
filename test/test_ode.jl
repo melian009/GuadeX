@@ -614,3 +614,104 @@ end
     Guadex.metacommunity_ode!(du_hot, u0, make_params(32.0; k=0.01), 0.0)
     @test du_hot[1] < du_heat[1]
 end
+
+# =============================================================================
+# 8. E4: composition-aware burn-in convergence rule
+# =============================================================================
+@testset "spin_up convergence rule (E4)" begin
+    # Synthetic 1-site × 2-species pair: total biomass is conserved (100 -> 100)
+    # but the cells exchange mass, so composition is still drifting.
+    prev = [50.0, 50.0]
+    cur = [55.0, 45.0]
+    basin_drift = abs(sum(cur) - sum(prev)) / sum(prev)
+    comp_drift = Guadex.composition_q95_change(prev, cur, 1, 2)
+    @test basin_drift < 1e-12          # total-biomass criterion is satisfied
+    @test comp_drift > 1e-2            # composition criterion is not
+    # The old basin-only rule would stop; the new both-criteria rule must not.
+    @test Guadex.spin_up_converged(:basin, 20; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_drift, composition_change=comp_drift,
+        q95_change=comp_drift, max_change=comp_drift) == true
+    @test Guadex.spin_up_converged(:both, 20; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_drift, composition_change=comp_drift,
+        q95_change=comp_drift, max_change=comp_drift) == false
+
+    # A synthetic pair that has converged in both respects.
+    prev_ok = [100.0, 100.0]
+    cur_ok = [100.000001, 99.999999]
+    basin_ok = abs(sum(cur_ok) - sum(prev_ok)) / sum(prev_ok)
+    comp_ok = Guadex.composition_q95_change(prev_ok, cur_ok, 1, 2)
+    @test basin_ok < 1e-6
+    @test comp_ok < 1e-3
+    @test Guadex.spin_up_converged(:both, 20; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_ok, composition_change=comp_ok,
+        q95_change=comp_ok, max_change=comp_ok) == true
+
+    # Minimum years is respected even when both criteria are already met.
+    @test Guadex.spin_up_converged(:both, 9; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_ok, composition_change=comp_ok,
+        q95_change=comp_ok, max_change=comp_ok) == false
+    @test Guadex.spin_up_converged(:both, 10; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_ok, composition_change=comp_ok,
+        q95_change=comp_ok, max_change=comp_ok) == true
+
+    # Definition/floor: a cell below the active floor in both years is excluded
+    # from the robust statistic but still counted by the raw all-cells statistic.
+    prev_flick = [10.0, 1e-6, 10.0]
+    cur_flick = [10.0, 1e-5, 10.0]
+    @test Guadex.composition_q95_change(prev_flick, cur_flick, 1, 3) == 0.0
+    @test Guadex.composition_q95_change_all_cells(prev_flick, cur_flick, 1, 3) > 1.0
+    diag = Guadex.composition_diagnostics(prev_flick, cur_flick, 1, 3)
+    @test diag.active_cells == 2
+    @test diag.q95 == 0.0
+    @test diag.q95_all_cells > 1.0
+    # A cell exactly at the floor is excluded (`>` not `>=`).
+    @test Guadex.composition_q95_change([10.0, 0.05], [10.0, 0.1], 1, 2) == 0.0
+    # With a floor below every cell the robust statistic equals the all-cells one.
+    @test Guadex.composition_q95_change(prev, cur, 1, 2; active_floor=1e-12) ≈
+        Guadex.composition_q95_change_all_cells(prev, cur, 1, 2)
+    @test Guadex.spin_up_composition_active_floor() == 0.1
+
+    # Robust converges while the raw all-cells statistic does not: one near-empty
+    # flickering cell dominates the all-cells percentile but is excluded robustly.
+    stable = fill(10.0, 20)
+    prev_f = copy(stable); prev_f[1] = 1e-6
+    cur_f = copy(stable); cur_f[1] = 1e-5
+    robust_f = Guadex.composition_q95_change(prev_f, cur_f, 1, 20)
+    all_f = Guadex.composition_q95_change_all_cells(prev_f, cur_f, 1, 20)
+    @test robust_f < 1e-3
+    @test all_f > 1e-3
+
+    # Converse: the all-cells statistic converges while the robust one does not.
+    # Only 1% of cells are active (above the floor) and genuinely drifting; the
+    # other 99% are near-empty with negligible change, so the raw percentile is
+    # tiny while the robust percentile over the active cells is large.
+    prev_a = fill(1e-3, 1000); cur_a = fill(1e-3, 1000)
+    prev_a[1:10] .= 10.0
+    cur_a[1:10] .= 10.0 .* exp(1.0)
+    robust_a = Guadex.composition_q95_change(prev_a, cur_a, 1, 1000)
+    all_a = Guadex.composition_q95_change_all_cells(prev_a, cur_a, 1, 1000)
+    @test all_a < 1e-3
+    @test robust_a > 1e-3
+
+    # End-to-end on a cheap 1-site × 1-species system: default is the stricter
+    # two-criteria rule, min_years is enforced, and the legacy rule is available.
+    dispersal = sparse([1], [1], [0.0], 1, 1)
+    p = Guadex.MetacommunityParams(1, 1, [0.0;;], dispersal, [1.0], [0.05;;],
+        [20.0], [1.0], [20.0], [5.0], [100.0])
+    res = spin_up(p; initial_state = [1.0], max_years = 20, tol = 1e-5,
+        composition_tol = 1e-5, min_years = 5)
+    @test res.converged
+    @test res.years >= 5
+    @test res.criteria == [:basin, :composition]
+    @test res.last_composition_change < 1e-5
+
+    res_late = spin_up(p; initial_state = [1.0], max_years = 20, tol = 1e-5,
+        composition_tol = 1e-5, min_years = 12)
+    @test res_late.converged
+    @test res_late.years >= 12
+
+    res_legacy = spin_up(p; initial_state = [1.0], max_years = 20, tol = 1e-5,
+        composition_tol = 1e-5, min_years = 2, criterion = :basin)
+    @test res_legacy.converged
+    @test res_legacy.criteria == [:basin]
+end

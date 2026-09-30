@@ -35,6 +35,10 @@ export exposure_days, exposure_table
 export spin_up, scale_carrying_capacity, set_thermal_optima, set_heat_stress_rate
 export set_dispersal_matrix, set_interaction_matrix, set_thermal_sigma_multiplier
 export with_temperature_baseline, site_totals
+export spin_up_criteria, spin_up_converged, composition_q95_change
+export composition_q95_change_all_cells, composition_diagnostics
+export spin_up_composition_active_floor
+export projection_route, interim_observed_spin_up
 
 # Export four-level reporting / viewer output functions
 export load_site_level_crosswalk, site_level_vectors, species_indices
