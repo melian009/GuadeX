@@ -1,0 +1,346 @@
+# =============================================================================
+# GuadeX parameters — LEGACY September `climate_scenarios_k1x_burnin` config
+#
+# !!! LEGACY REPRODUCTION — DO NOT USE FOR THE CORRECTED RESULTS !!!
+#
+# This file deliberately pins the PRE-E4 legacy convergence rule
+# (`spin_up_criterion = "basin"`, `min_years = 2`) and the pinned September
+# heat-stress slope (`calibrate = false`) so it reproduces the September 2026
+# climate ensemble exactly.  It is retained only for that reproduction; it is
+# NOT the configuration for the corrected re-run.
+#
+# Use `parameters_climate_scenarios_corrected.toml` for the corrected re-run
+# (E4 `"both"` stop rule + corrected water-temperature source + corrected
+# interaction form).
+#
+# Committed configuration that reproduces the September 2026 climate ensemble
+# (`results/climate_scenarios_k1x_burnin/`: 11 GCMs x 4 SSPs + no-warming
+# control).  It is a copy of `parameters.toml` with only two sections changed:
+#
+#   [run_climate_scenarios]  daily per-GCM forcing, burn-in, K = 1x observed,
+#                            control run, output_dir = results/climate_scenarios_k1x_burnin
+#   [temperature_stress]     heat stress enabled with the calibrated slope
+#                            k = 3.7817692640400324e-5 (pinned; calibrate = false)
+#
+# Run it with:
+#   GUADEX_PARAMETERS_FILE=legacy/parameters_climate_scenarios_k1x_burnin.toml \
+#     julia --project=. run_climate_scenarios.jl
+#
+# The default `parameters.toml` is intentionally left unchanged, so other
+# scripts/tests keep their previous behaviour.
+# =============================================================================
+
+[general]
+# Time configuration: 1 time unit = 1 day.
+days_per_year = 365
+
+# ---------------------------------------------------------------------------
+# Updated 2045 inputs shared by all scripts.
+# ---------------------------------------------------------------------------
+
+[inputs]
+# CEDEX basin-level 2045 projection table (hydrological indicators, not
+# temperatures).  Loaded for provenance and scenario selection.
+cedex_var_file = "data/2045_CEDEX_GUADALQUIVIR_VAR.csv"
+
+# CEDEX 2045 seasonal runoff projections per UTS.  Loaded for provenance and
+# scenario selection.
+cedex_esc_uts_file = "data/2045_CEDEX_GUADALQUIVIR_ESC_por_UTS.csv"
+
+# 2026 inventory of obstacles that are not completely passable.
+obstacles_file = "data/obstacles_1658_Obstaculos_No_Completamente_Franqueables _2026-02-16_Guadex.csv"
+
+[obstacles]
+# "legacy" disables the spatial obstacle overlay; "overlay" applies it.
+mode = "overlay"
+
+# Obstacles closer than this (metres) to a straight line segment between two
+# connected sites are assigned to that segment.
+matching_tolerance_m = 2000.0
+
+# Passability applied to movement towards the higher-elevation (upstream) site.
+# This is the limiting direction.
+upstream_passability = 0.1
+
+# Passability applied to movement towards the lower-elevation (downstream)
+# site.  Reduced but more accessible than upstream.
+downstream_passability = 0.5
+
+# ---------------------------------------------------------------------------
+# Dispersal-graph construction.  This file deliberately reproduces the legacy
+# September ensemble, so it keeps the original sub-catchment chaining (C4).
+# ---------------------------------------------------------------------------
+[connectivity]
+method = "legacy"
+
+# ---------------------------------------------------------------------------
+# Species groups used to classify simulation outputs.
+#
+# `native` includes ST (Salmo trutta), the cold-water keystone whose empirical
+# thermal optimum (12 C, range 4-20 C) lies *below* current basin temperatures:
+# it is the native species through which warming can appear as a decline.
+# `migratory` holds the diadromous / estuarine species (AA, AAL, LR, MC) that are
+# neither native-resident nor invasive; they are reported separately and are not
+# part of the native richness metric.
+# ---------------------------------------------------------------------------
+
+[species]
+native = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO", "ST"]
+invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
+migratory = ["AA", "AAL", "LR", "MC"]
+
+# ---------------------------------------------------------------------------
+# Modelled subcatchments.  Exploitation and passability scenarios apply one
+# factor per subcatchment; sites in unlisted subcatchments receive 1.0.
+# ---------------------------------------------------------------------------
+
+[subcatchments]
+all = [1.1, 1.2, 1.3, 1.4, 2.2, 3.0, 6.0, 7.0, 9.0, 10.0, 11.3, 11.5, 11.2, 11.1, 11.4, 12.0, 13.3, 13.2, 13.1, 14.0, 15.2, 15.1, 16.0, 17.0, 18.1, 18.3, 18.2, 19.0, 20.0, 21.0, 22.1, 22.4, 22.2, 23.0, 24.1, 24.2, 25.0, 26.1, 26.2, 26.3, 26.4, 26.5, 26.6, 27.0, 28.1, 28.2, 28.3, 28.4, 29.0, 30.1, 30.2, 30.3, 30.4, 30.5, 30.6, 30.7, 31.0, 32.4, 32.3, 32.1, 32.2, 33.0, 34.1, 34.2, 34.3, 34.4, 35.0, 36.1, 36.2, 36.3, 36.4, 37.0, 38.0, 39.0, 40.1, 40.2, 41.0]
+
+# ---------------------------------------------------------------------------
+# Scenario library.
+#
+# Exploitation scenarios: factors < 1.0 reduce the intrinsic growth rate of a
+# site (harvesting/mortality); 1.0 = no exploitation (baseline).
+# Passability scenarios: multipliers applied to the dam/obstacle passability of
+# a site; 1.0 = baseline, > 1.0 = improved passage, < 1.0 = reduced passage.
+#
+# A scenario has a uniform `factor` applied to every subcatchment and may add a
+# per-subcatchment `overrides` table for heterogeneous scenarios, e.g.
+#
+#   [scenarios.exploitation.fish_refuge]
+#   factor = 1.0
+#   [scenarios.exploitation.fish_refuge.overrides]
+#   "3.1" = 0.7
+#   "4.2" = 0.5
+# ---------------------------------------------------------------------------
+
+[scenarios.exploitation]
+baseline = { factor = 1.0 }
+low_exploitation = { factor = 0.9 }
+medium_exploitation = { factor = 0.7 }
+high_exploitation = { factor = 0.5 }
+example_exploitation = { factor = 0.9 }
+
+[scenarios.passability]
+baseline = { factor = 1.0 }
+improved_passability = { factor = 1.5 }
+reduced_passability = { factor = 0.5 }
+blocked = { factor = 0.1 }
+example_passability = { factor = 1.0 }
+
+# ---------------------------------------------------------------------------
+# Entry script settings.
+#
+# Each maintained entry script reads its own section.  The sensitivity scripts
+# sweep over the listed grids and scenario names; run_model.jl applies a single
+# exploitation and passability scenario.
+# ---------------------------------------------------------------------------
+
+[run_model]
+simulation_years = 1
+upstream_cost = 0.05
+exploitation_scenario = "example_exploitation"
+passability_scenario = "example_passability"
+
+[run_sensitivity]
+simulation_years = 1
+upstream_costs = [0.01, 0.05, 0.1, 0.5]
+exploitation_scenarios = ["baseline", "low_exploitation", "medium_exploitation", "high_exploitation"]
+passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
+
+# ---------------------------------------------------------------------------
+# Obstacle / upstream-cost sensitivity: shared climate-consistent settings.
+#
+# These reproduce the `climate_scenarios_k1x_burnin` configuration (per-GCM
+# daily water temperature, seasonal baseline burn-in, calibrated heat stress,
+# effective K = 1x observed, WP0 species classification).  Both
+# `run_sensitivity_report.jl` and `run_alt_interactions.jl` read this section,
+# so the two sweeps are directly comparable.  Per-run overrides use the
+# GUADEX_SENSITIVITY_* environment variables (and GUADEX_SPINUP_* for the cache).
+# ---------------------------------------------------------------------------
+
+[obstacle_sensitivity]
+start_year = 2026
+end_year = 2045
+save_interval_days = 30.4167
+presence_threshold = 0.1
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"
+baseline_period_start = 1986
+baseline_period_end = 2005
+carrying_capacity_base_scaling = 1.0
+carrying_capacity_scaling = 1.0
+thermal_optima_fraction = 0.5
+spin_up = true
+spin_up_max_years = 600
+spin_up_tol = 5.0e-5
+spin_up_criterion = "basin"
+spin_up_progress_every = 50
+heat_stress_enabled = true
+heat_stress_calibrate = true
+heat_stress_max_loss = 0.05
+quasi_extinction_q = 0.1
+quasi_extinction_persistence = 3
+upstream_cost = 0.05
+output_dir = "results/sensitivity_obstacles"
+
+# The two temperature extremes of the 44-run climate ensemble, used as the
+# background climate for every obstacle/passability combination.  Each entry is
+# a scenario x GCM pair; the per-GCM daily files are read directly.
+climate_models = [
+    { scenario = "ssp126", gcm = "IITM-ESM" },     # coolest run (0.28 degC by 2045)
+    { scenario = "ssp245", gcm = "UKESM1-0-LL" },  # warmest run (1.37 degC by 2045)
+]
+
+# ---------------------------------------------------------------------------
+# Obstacle / upstream-cost sweep (run_sensitivity_report.jl).
+#
+# Sweeps the upstream dispersal cost x passability scenario under each of the
+# `obstacle_sensitivity.climate_models` above.  No exploitation is applied.
+# ---------------------------------------------------------------------------
+
+[run_sensitivity_report]
+upstream_costs = [0.01, 0.05, 0.1, 0.5]
+passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
+
+# ---------------------------------------------------------------------------
+# Alternative-interaction sweep (run_alt_interactions.jl).
+#
+# Adds the interaction-matrix and thermal-sigma uncertainty axes on top of the
+# same obstacle/upstream-cost sweep, so it answers "is the passability signal
+# robust to the interaction structure / thermal breadth?".
+# ---------------------------------------------------------------------------
+
+[run_alt_interactions]
+thermal_sigma_multiplier = 0.3
+upstream_costs = [0.01, 0.5]
+passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
+
+# ---------------------------------------------------------------------------
+# Climate-driven runs (run_climate_scenarios.jl).
+#
+# The simulation starts at the current year and integrates daily to `end_year`
+# (BP horizon 2045), with a year-by-year warming trajectory interpolated from
+# the guadex_tw water-temperature projections, for every GCM x SSP.  States are
+# saved monthly (30 days) to keep outputs small while retaining annual and
+# seasonal metrics.
+# ---------------------------------------------------------------------------
+
+[run_climate_scenarios]
+start_year = 2026
+end_year = 2045
+# 365/12 = 30.4167 days, so monthly snapshots land exactly on year boundaries.
+save_interval_days = 30.4167
+elevation_scaling = false
+presence_threshold = 0.1
+upstream_cost = 0.05
+# Generate the four-level / ensemble figures after the run (env GUADEX_CLIMATE_PLOT=0 disables).
+make_figures = true
+# Output root for the runs (env GUADEX_CLIMATE_OUTPUT_DIR overrides).
+output_dir = "results/climate_scenarios_k1x_burnin"
+temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
+scenarios = ["ssp126", "ssp245", "ssp370", "ssp585"]
+gcms = [
+    "ACCESS-CM2", "CMCC-CM2-SR5", "CNRM-ESM2-1", "EC-Earth3-Veg", "IITM-ESM",
+    "KACE-1-0-G", "MIROC6", "MPI-ESM1-2-HR", "MRI-ESM2-0", "NorESM2-MM",
+    "UKESM1-0-LL",
+]
+
+# --- WP2: forcing mode -----------------------------------------------------
+# "annual_mean" reproduces the historical annual-node warming curve (default);
+# "daily" uses a per-site daily water-temperature forcing file (WP1).
+forcing_mode = "daily"
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"
+# Use the per-(scenario, GCM) wide files (<base>_<scenario>_<gcm>.csv) so the
+# ensemble carries GCM spread instead of the ensemble-median product.
+daily_forcing_per_gcm = true
+# Baseline period for daily anomalies (PNACC convention).
+baseline_period_start = 1986
+baseline_period_end = 2005
+# Add a no-warming control run (baseline climatology over the horizon) so
+# scenario effects can be reported relative to it (WP4).
+control_run = true
+
+# --- WP4: spun-up initial conditions / carrying-capacity sensitivity --------
+# The September ensemble was started from a seasonal-baseline burn-in that
+# converged at 373 years (basin criterion, tol 5e-5, cap 600 years).  `basin`
+# with `min_years = 2` deliberately pins the pre-E4 stop rule so this committed
+# configuration reproduces the September ensemble; the new default is "both".
+spin_up = true
+spin_up_max_years = 600
+spin_up_tol = 5.0e-5
+# Stop rule for the burn-in: "basin" = basin-total relative annual change
+# (legacy, used by the September run), "both" = basin + composition (new
+# default), "q95"/"max" = the legacy per-site rules.
+spin_up_criterion = "basin"
+# Unused under the basin criterion but kept explicit for reproducibility.
+spin_up_composition_tol = 1.0e-3
+spin_up_min_years = 2
+# Print a burn-in progress line every N year-blocks (0 disables).
+spin_up_progress_every = 50
+# Multiplier linking observed total density to the base carrying capacity
+# (build_carrying_capacity).  10.0 = legacy "10x observed"; 1.0 = the observed
+# snapshot is the capacity level.  The effective multiplier is
+# carrying_capacity_base_scaling * carrying_capacity_scaling.
+carrying_capacity_base_scaling = 1.0
+carrying_capacity_scaling = 1.0
+# WP3 optimum sweep: 0.0 = cold edge, 0.5 = midpoint (default), 1.0 = warm edge.
+thermal_optima_fraction = 0.5
+
+# --- WP5: quasi-extinction --------------------------------------------------
+quasi_extinction_q = 0.1
+quasi_extinction_persistence = 3
+
+# [temperature_stress] below controls WP3: when `enabled = false` the ODE is the
+# pre-WP3 model regardless of `k`.
+
+# ---------------------------------------------------------------------------
+# WP3 heat-stress mortality.  `k` is the single shared slope (1/day/degC^2);
+# `enabled = false` disables the term (and preserves the old model).  When
+# `calibrate = true` the run script derives `k` from the baseline exceedance
+# energy so that the worst observed baseline species/site loses at most
+# `max_annual_loss` per year.
+# ---------------------------------------------------------------------------
+
+[temperature_stress]
+# September `climate_scenarios_k1x_burnin`: heat stress enabled with the
+# calibrated slope pinned exactly as recorded in the run metadata
+# (`heat_stress_k = 3.7817692640400324e-5`; calibrate = false so the value is
+# reproducible regardless of the calibration data).
+enabled = true
+k = 3.7817692640400324e-5
+calibrate = false
+max_annual_loss = 0.05
+limits_source = "trait_table"
+
+# ---------------------------------------------------------------------------
+# Staged experiment driver (run_climate_experiments.jl, WP6).
+#
+# Stages, cheapest first; each stage gates the next:
+#   E0 spinup     - spun-up state vs observed (realism check)
+#   E1 seasonality- baseline annual-mean vs daily forcing
+#   E2 heat       - heat-stress on/off
+#   E3 k          - carrying-capacity sensitivity {1x, 3x, 10x}
+#   E4 optimum    - thermal-optimum sweep across the empirical range
+#   E5 ensemble   - full GCM x SSP run (delegated to run_climate_scenarios.jl)
+# ---------------------------------------------------------------------------
+
+[run_climate_experiments]
+stages = ["E0", "E1", "E2", "E3", "E4"]
+start_year = 2026
+end_year = 2045
+scenario = "ssp585"
+gcms = ["ACCESS-CM2", "CMCC-CM2-SR5", "CNRM-ESM2-1", "EC-Earth3-Veg", "IITM-ESM",
+    "KACE-1-0-G", "MIROC6", "MPI-ESM1-2-HR", "MRI-ESM2-0", "NorESM2-MM",
+    "UKESM1-0-LL"]
+# E3 carrying-capacity multipliers and E4 optimum positions within the range.
+# The effective multiplier against observed density is
+# carrying_capacity_base_scaling * k_scaling_grid[k], and both are recorded per case.
+carrying_capacity_base_scaling = 10.0
+k_scaling_grid = [1.0, 3.0, 10.0]
+optimum_fractions = [0.0, 0.25, 0.5, 0.75, 1.0]
+spin_up_max_years = 50
+spin_up_tol = 1.0e-6
+output_dir = "results/climate_experiments"
+temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
+daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"
