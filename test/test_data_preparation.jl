@@ -435,6 +435,141 @@ end
             @test data.elevations[destination] > data.elevations[origin]
             @test data.obstacle_overlay[origin, destination] == 0.5
         end
+
+        # E12: classification/exclusion metadata is exposed alongside the overlay.
+        @test data.obstacle_metadata !== nothing
+        md = data.obstacle_metadata
+        @test md.n_total == 1658
+        @test md.n_status_active == 1274
+        @test md.n_status_nonoperational == 185
+        @test md.n_status_ambiguous == 199
+        @test md.n_excluded_out_of_basin == 5
+        @test md.n_applied > 0
+        @test "DE" in md.nonoperational_statuses
+        @test Set(md.ambiguous_statuses) == Set(["<blank>", "DM", "ND", "OT", "SC"])
+        @test md.if_index_used_for_passability == false
+        # Per-link counts are exposed and equal the number of applied obstacles
+        # summed over links.
+        @test sum(values(md.link_obstacle_counts)) == md.n_applied
+    end
+
+    @testset "E12 obstacle accumulation, classification and de-duplication" begin
+        site_df = DataFrame(CODIGO=["a", "b", "c"], UTMX=[0.0, 100.0, 200.0],
+            UTMY=[0.0, 0.0, 0.0])
+        sites = ["a", "b", "c"]
+        distances = sparse([2, 1, 3, 2], [1, 2, 2, 3],
+            [100.0, 100.0, 100.0, 100.0], 3, 3)
+        elevations = [100.0, 200.0, 300.0]
+
+        @testset "two obstacles multiply per direction" begin
+            obs = DataFrame(ID_CLAVE_MGM=["o1", "o2"], coord_x_m=[50.0, 60.0],
+                coord_y_m=[1.0, 1.0], ESTADO=["EX", "EX"])
+            r = Guadex.build_obstacle_passability_matrix(obs, site_df, sites, distances,
+                elevations; matching_tolerance=10.0, obstacle_passability=0.1,
+                obstacle_downstream_passability=0.5)
+            # 0.1 * 0.1 upstream and 0.5 * 0.5 downstream, not min().
+            @test r.passability[2, 1] ≈ 0.01
+            @test r.passability[1, 2] ≈ 0.25
+            @test r.metadata.n_applied == 2
+            @test r.metadata.link_obstacle_counts[("a", "b")] == 2
+            @test r.diagnostics.restricted_origin == ["a", "a"]
+            @test r.diagnostics.restricted_destination == ["b", "b"]
+        end
+
+        @testset "deterministic across repeated and shuffled runs" begin
+            obs = DataFrame(ID_CLAVE_MGM=["o2", "o1"], coord_x_m=[60.0, 50.0],
+                coord_y_m=[1.0, 1.0], ESTADO=["EX", "EX"])
+            r1 = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0)
+            r2 = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0)
+            @test r1.passability == r2.passability
+            @test r1.diagnostics.obstacle_id == r2.diagnostics.obstacle_id
+            # Obstacles are processed in ID order, so the output is independent
+            # of the source row order.
+            @test r1.diagnostics.obstacle_id == ["o1", "o2"]
+            shuffled = obs[[2, 1], :]
+            r3 = Guadex.build_obstacle_passability_matrix(shuffled, site_df, sites,
+                distances, elevations; matching_tolerance=10.0)
+            @test r3.passability == r1.passability
+            @test r3.metadata == r1.metadata
+        end
+
+        @testset "status classification and exclusion counts" begin
+            obs = DataFrame(
+                ID_CLAVE_MGM=["a1", "a2", "a3", "a4", "a5"],
+                coord_x_m=fill(50.0, 5), coord_y_m=fill(1.0, 5),
+                ESTADO=["EX", "AB", "SC", missing, "DE"])
+            r = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0)
+            @test r.metadata.n_status_active == 1
+            @test r.metadata.n_status_nonoperational == 2
+            @test r.metadata.n_status_ambiguous == 2
+            @test r.metadata.n_excluded_nonoperational == 2
+            @test r.metadata.n_excluded_ambiguous_status == 2
+            @test r.metadata.n_excluded_duplicate_legacy == 0
+            @test r.metadata.n_excluded_total == 4
+            @test r.metadata.n_applied == 1
+            @test r.metadata.n_matched == 5
+            @test Set(r.metadata.ambiguous_statuses) == Set(["<blank>", "SC"])
+            @test Set(r.metadata.nonoperational_statuses) == Set(["AB", "DE"])
+        end
+
+        @testset "ambiguous status can be included explicitly" begin
+            obs = DataFrame(ID_CLAVE_MGM=["s1"], coord_x_m=[50.0], coord_y_m=[1.0],
+                ESTADO=["SC"])
+            excluded = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0)
+            @test excluded.metadata.n_applied == 0
+            included = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0,
+                include_ambiguous_status=true)
+            @test included.metadata.n_applied == 1
+            @test included.metadata.n_status_ambiguous == 1
+        end
+
+        @testset "out-of-basin structures are excluded and counted" begin
+            obs = DataFrame(ID_CLAVE_MGM=["x1", "x2"], coord_x_m=[50.0, 60.0],
+                coord_y_m=[1.0, 1.0], ESTADO=["EX", "EX"],
+                CODMAS=["ES160MSPF999001", "ES050MSPF011002001"])
+            r = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0)
+            @test r.metadata.n_excluded_out_of_basin == 1
+            @test r.metadata.n_applied == 1
+            @test r.diagnostics.outcome[r.diagnostics.obstacle_id .== "x1"] ==
+                ["excluded_out_of_basin"]
+        end
+
+        @testset "reservoir duplicates of the legacy dam layer are excluded" begin
+            obs = DataFrame(ID_CLAVE_MGM=["dam1", "weir1"], coord_x_m=[50.0, 60.0],
+                coord_y_m=[1.0, 1.0], ESTADO=["EX", "EX"],
+                Cap_emba=[12.5, missing])
+            legacy = ones(3, 3)
+            legacy[2, 1] = 0.1
+            legacy[1, 2] = 0.1
+            r = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0, legacy_dams=legacy)
+            @test r.metadata.n_excluded_duplicate_legacy == 1
+            @test r.metadata.n_applied == 1
+            @test r.diagnostics.duplicate_of_legacy_dam[
+                r.diagnostics.obstacle_id .== "dam1"] == [true]
+            # Without a legacy layer the same reservoir is kept.
+            r2 = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0)
+            @test r2.metadata.n_excluded_duplicate_legacy == 0
+            @test r2.metadata.n_applied == 2
+        end
+
+        @testset "legacy matching and uniform passability unchanged" begin
+            obs = DataFrame(ID_CLAVE_MGM=["ob1"], coord_x_m=[50.0], coord_y_m=[2.0])
+            r = Guadex.build_obstacle_passability_matrix(obs, site_df, sites,
+                distances, elevations; matching_tolerance=10.0,
+                obstacle_passability=0.25, obstacle_downstream_passability=0.5)
+            @test r.passability[2, 1] == 0.25   # upstream a -> b
+            @test r.passability[1, 2] == 0.5    # downstream b -> a
+            @test r.metadata.use_tree_edges == false
+            @test r.metadata.if_index_used_for_passability == false
+        end
     end
 
     @testset "build_distance_matrix (via prepare_ode_data)" begin

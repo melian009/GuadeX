@@ -406,6 +406,16 @@ function load_obstacles(file::AbstractString)
     df.if_index = parse_optional_float.(df[!, "IF"])
     df.has_valid_coordinates = .!(ismissing.(df.coord_x_m) .| ismissing.(df.coord_y_m))
 
+    # E12 classification inputs: reservoir capacity (de-duplication key) and the
+    # normalised structure status.  `IF` is still retained uninterpreted.
+    if hasproperty(df, :Cap_emba)
+        df.cap_emba_m3 = parse_optional_float.(df[!, "Cap_emba"])
+    end
+    if hasproperty(df, :ESTADO)
+        df.status_code = [_normalise_obstacle_status(v) for v in df[!, "ESTADO"]]
+        df.status_class = [_classify_obstacle_status(v)[1] for v in df[!, "ESTADO"]]
+    end
+
     println("Loaded $(nrow(df)) obstacles; $(count(df.has_valid_coordinates)) have valid coordinates")
     return df
 end
@@ -434,31 +444,153 @@ function build_site_coordinate_matrix(site_df::DataFrame, sites::Vector{String})
     return coordinates
 end
 
+# =============================================================================
+# E12: obstacle passability on the selected (legacy or corrected) network.
+#
+# Status classification (documented criteria; no MGM codebook ships with the
+# inventory, so the code meanings below are inferred from the source's own
+# free-text descriptions and recorded explicitly):
+#   * non-operational / removed -> excluded from the barrier overlay:
+#       AB = abandoned, DE = demolished, AR = ruined, FS = out of service, plus
+#       the spelled-out "Abandonado en buen estado" / "Abandonado en ruinas".
+#   * operational -> kept: EX (existing / in service) and "En explotación".
+#   * genuinely ambiguous -> annotated and (by default) excluded, never
+#       silently dropped: SC, DM, ND, OT and a missing/blank or unknown code.
+# Out-of-basin structures are those whose water-body code (CODMAS) does not
+# start with the Guadalquivir basin-district prefix ES050.
+#
+# De-duplication: the legacy dam layer is built from per-site distances to the
+# nearest upstream/downstream embalse and exposes no barrier identifiers, so an
+# exact ID join is impossible.  The documented de-duplication key is therefore
+# "reservoir-class obstacle on a directional link the legacy dam layer already
+# restricts": an obstacle is a legacy duplicate only when its `Cap_emba`
+# reservoir capacity parses as a finite number AND `legacy_dams` already
+# restricts that directional link.  Such obstacles are excluded from the
+# overlay so the same physical dam is not applied twice.
+#
+# The inventory's `IF` passability index is deliberately NOT translated to a
+# passability: its scale/direction is unconfirmed and 547/1,658 rows are
+# non-numeric.  Uniform `obstacle_passability` /
+# `obstacle_downstream_passability` are used instead (documented limitation).
+# =============================================================================
+
+const OBSTACLE_NONOPERATIONAL_STATUS = Set([
+    "AB", "DE", "AR", "FS", "ABANDONADOENBUENESTADO", "ABANDONADOENRUINAS",
+])
+const OBSTACLE_AMBIGUOUS_STATUS = Set(["SC", "DM", "ND", "OT"])
+const OBSTACLE_ACTIVE_STATUS = Set(["EX", "ENEXPLOTACION"])
+const GUADALQUIVIR_BASIN_PREFIX = "ES050"
+
+"""
+    _normalise_obstacle_status(value) -> String
+
+Uppercase, strip and de-accent an `ESTADO` cell so classification does not
+depend on the source's casing or accents.  Returns `""` for a missing/blank
+cell.
+"""
+function _normalise_obstacle_status(value)
+    (value === missing || isempty(strip(string(value)))) && return ""
+    raw = string(value)
+    # The inventory CSV is Latin-1, so a raw accented byte is not valid UTF-8
+    # and `uppercase` raises `InvalidCharError`.  Decode through Latin-1 in
+    # that case; valid UTF-8/ASCII inputs are left untouched.
+    text = try
+        uppercase(strip(raw))
+    catch
+        uppercase(strip(String([Char(b) for b in codeunits(raw)])))
+    end
+    text = replace(text, "Á" => "A", "É" => "E", "Í" => "I", "Ó" => "O",
+        "Ú" => "U", "Ü" => "U", "Ñ" => "N")
+    return replace(text, r"\s+" => "")
+end
+
+"""
+    _classify_obstacle_status(value) -> (class::String, code::String)
+
+Deterministically classify a raw `ESTADO` value into `"active"`,
+`"nonoperational"` or `"ambiguous"`.  Unknown, blank and missing codes are
+reported as `"ambiguous"` so they are annotated rather than silently dropped.
+"""
+function _classify_obstacle_status(value)
+    code = _normalise_obstacle_status(value)
+    code in OBSTACLE_ACTIVE_STATUS && return ("active", code)
+    code in OBSTACLE_NONOPERATIONAL_STATUS && return ("nonoperational", code)
+    return ("ambiguous", code)
+end
+
+function _obstacle_status_class(row)
+    hasproperty(row, :status_class) && return string(row.status_class)
+    hasproperty(row, :ESTADO) && return _classify_obstacle_status(row.ESTADO)[1]
+    return "active"
+end
+
+function _obstacle_status_code(row)
+    hasproperty(row, :status_code) && return string(row.status_code)
+    hasproperty(row, :ESTADO) && return _classify_obstacle_status(row.ESTADO)[2]
+    return ""
+end
+
+function _obstacle_capacity(row)
+    hasproperty(row, :cap_emba_m3) && return row.cap_emba_m3
+    if hasproperty(row, :Cap_emba)
+        text = strip(string(row.Cap_emba))
+        return try
+            parse(Float64, replace(text, ',' => '.'))
+        catch
+            missing
+        end
+    end
+    return missing
+end
+
 """
     build_obstacle_passability_matrix(obstacles, site_df, sites, distances, elevations;
                                       matching_tolerance=2000.0,
                                       obstacle_passability=0.1,
-                                      obstacle_downstream_passability=0.5)
+                                      obstacle_downstream_passability=0.5,
+                                      tree_edges=Tuple{Int,Int,Float64}[],
+                                      legacy_dams=nothing,
+                                      include_ambiguous_status=false,
+                                      basin_prefix="ES050")
 
-Create an obstacle overlay for the existing site network.  Each obstacle is
+Create an obstacle overlay for the selected site network.  Each obstacle is
 matched to the nearest straight line segment between connected site pairs,
-using UTM coordinates and the supplied tolerance.  Matched edges restrict
-movement towards the higher-elevation (upstream) site to `obstacle_passability`
-and movement towards the lower-elevation (downstream) site to
-`obstacle_downstream_passability`: downstream passage is reduced but remains
-more accessible than upstream passage.  Equal-elevation edges are left
-unchanged because their flow direction cannot be inferred from the current
-inputs.
-The return value contains the overlay and a diagnostics DataFrame.  This is a
-transparent first-pass spatial approximation; it does not interpret `IF` or
-infer species-specific passage.
+using UTM coordinates and the supplied tolerance.  On the corrected
+(`connectivity_method = :on_path`) network pass `tree_edges`, the directed
+`(upstream, downstream, metres)` interface returned by
+[`build_on_path_distance_matrix`](@ref); obstacles are then snapped only to
+those links and the tree orientation defines the movement direction.  The
+legacy call (no `tree_edges`) keeps the original straight-line matching and the
+elevation-based direction.
+
+Barriers ACCUMULATE along a link: the effective passability is the PRODUCT of
+the individual obstacle passabilities on it (two 0.1 barriers give 0.01),
+separately for the upstream and downstream directions.  A link's upstream
+factor is applied to movement towards the higher/tree-upstream site and the
+downstream factor to the reverse movement (downstream stays more accessible).
+Equal-elevation legacy edges are left unchanged because their direction cannot
+be inferred.
+
+Non-operational structures (demolished/abandoned), out-of-basin structures,
+legacy duplicates and (by default) ambiguous-status structures are excluded
+from the overlay; every obstacle is still annotated in the diagnostics with
+its `status_class` and `outcome`, and the counts are returned in `metadata`.
+Ties between equidistant links are broken deterministically by site code, and
+obstacles are processed in `ID_CLAVE_MGM` order so results never depend on file
+or `Dict` order.  The `IF` index is not interpreted (see the section comment).
+
+Returns `(passability=overlay, diagnostics=DataFrame, metadata=NamedTuple)`.
 """
 function build_obstacle_passability_matrix(obstacles::DataFrame, site_df::DataFrame,
                                             sites::Vector{String}, distances,
                                             elevations::AbstractVector;
                                             matching_tolerance::Float64=2000.0,
                                             obstacle_passability::Float64=0.1,
-                                            obstacle_downstream_passability::Float64=0.5)
+                                            obstacle_downstream_passability::Float64=0.5,
+                                            tree_edges::Vector{Tuple{Int,Int,Float64}}=Tuple{Int,Int,Float64}[],
+                                            legacy_dams::Union{Nothing,AbstractMatrix}=nothing,
+                                            include_ambiguous_status::Bool=false,
+                                            basin_prefix::AbstractString=GUADALQUIVIR_BASIN_PREFIX)
     matching_tolerance >= 0 || error("matching_tolerance must be non-negative")
     0.0 <= obstacle_passability <= 1.0 || error("obstacle_passability must be between 0 and 1")
     0.0 <= obstacle_downstream_passability <= 1.0 || error("obstacle_downstream_passability must be between 0 and 1")
@@ -466,14 +598,34 @@ function build_obstacle_passability_matrix(obstacles::DataFrame, site_df::DataFr
     n_sites = length(sites)
     length(elevations) == n_sites || error("elevations must contain one value per site")
     coordinates = build_site_coordinate_matrix(site_df, sites)
+
+    # Candidate links in a deterministic order.  On the corrected network the
+    # caller supplies the directed tree edges; the legacy path derives the
+    # links from the sparse distance matrix exactly as before.
     edges = Tuple{Int,Int}[]
-    for i in 1:n_sites, j in (i + 1):n_sites
-        if (isfinite(coordinates[i, 1]) && isfinite(coordinates[i, 2]) &&
-            isfinite(coordinates[j, 1]) && isfinite(coordinates[j, 2]) &&
-            (distances[i, j] > 0 || distances[j, i] > 0))
-            push!(edges, (i, j))
+    tree_direction = Dict{Tuple{Int,Int},Tuple{Int,Int}}()   # (a,b) -> (up, down)
+    if !isempty(tree_edges)
+        edge_set = Set{Tuple{Int,Int}}()
+        for (u, v, _) in tree_edges
+            (1 <= u <= n_sites && 1 <= v <= n_sites) ||
+                error("tree edge ($u, $v) is out of range for $n_sites sites")
+            u == v && error("tree edge ($u, $v) is a self-loop")
+            a, b = minmax(u, v)
+            push!(edge_set, (a, b))
+            tree_direction[(a, b)] = (u, v)   # u upstream, v downstream
+        end
+        edges = sort!(collect(edge_set))
+    else
+        for i in 1:n_sites, j in (i + 1):n_sites
+            if (isfinite(coordinates[i, 1]) && isfinite(coordinates[i, 2]) &&
+                isfinite(coordinates[j, 1]) && isfinite(coordinates[j, 2]) &&
+                (distances[i, j] > 0 || distances[j, i] > 0))
+                push!(edges, (i, j))
+            end
         end
     end
+
+    edge_tie_key(i, j) = sites[i] <= sites[j] ? (sites[i], sites[j]) : (sites[j], sites[i])
 
     overlay = ones(Float64, n_sites, n_sites)
     obstacle_ids = String[]
@@ -483,73 +635,169 @@ function build_obstacle_passability_matrix(obstacles::DataFrame, site_df::DataFr
     restricted_origin = String[]
     restricted_destination = String[]
     match_distance_m = Union{Missing,Float64}[]
+    status = String[]
+    status_class = String[]
+    outcome = String[]
+    duplicate_flag = Bool[]
+    cap_values = Union{Missing,Float64}[]
+    link_obstacle_counts = Dict{Tuple{String,String},Int}()
 
-    for row in eachrow(obstacles)
-        push!(obstacle_ids, string(row.ID_CLAVE_MGM))
-        x, y = row.coord_x_m, row.coord_y_m
-        if ismissing(x) || ismissing(y)
-            push!(matched, false); push!(edge_from, ""); push!(edge_to, "")
-            push!(restricted_origin, ""); push!(restricted_destination, "")
-            push!(match_distance_m, missing)
-            continue
-        end
+    n_obs = nrow(obstacles)
+    id_column = hasproperty(obstacles, :ID_CLAVE_MGM) ?
+        string.(obstacles[!, :ID_CLAVE_MGM]) : string.(1:n_obs)
+    order = sortperm(id_column)
+
+    for index in order
+        row = obstacles[index, :]
+        obstacle_id = id_column[index]
+        push!(obstacle_ids, obstacle_id)
+
+        class = _obstacle_status_class(row)
+        code = _obstacle_status_code(row)
+        cap = _obstacle_capacity(row)
+        push!(status, code)
+        push!(status_class, class)
+        push!(cap_values, cap)
+
+        raw_codmas = hasproperty(row, :CODMAS) ? string(row.CODMAS) : ""
+        out_of_basin = !isempty(strip(raw_codmas)) &&
+            !startswith(uppercase(strip(raw_codmas)), uppercase(string(basin_prefix)))
+
+        x = hasproperty(row, :coord_x_m) ? row.coord_x_m : missing
+        y = hasproperty(row, :coord_y_m) ? row.coord_y_m : missing
 
         best_edge = nothing
         best_distance = Inf
-        for (i, j) in edges
-            x1, y1 = coordinates[i, 1], coordinates[i, 2]
-            x2, y2 = coordinates[j, 1], coordinates[j, 2]
-            dx, dy = x2 - x1, y2 - y1
-            length_squared = dx * dx + dy * dy
-            length_squared == 0 && continue
-            projection = ((Float64(x) - x1) * dx + (Float64(y) - y1) * dy) / length_squared
-            # Do not attach an obstacle to an unrelated edge through an endpoint.
-            if projection < 0.0 || projection > 1.0
-                continue
-            end
-            closest_x = x1 + projection * dx
-            closest_y = y1 + projection * dy
-            distance_to_edge = hypot(Float64(x) - closest_x, Float64(y) - closest_y)
-            if distance_to_edge < best_distance
-                best_distance = distance_to_edge
-                best_edge = (i, j)
+        best_key = (Inf, "", "")
+        if !ismissing(x) && !ismissing(y) && isfinite(Float64(x)) && isfinite(Float64(y))
+            for (i, j) in edges
+                x1, y1 = coordinates[i, 1], coordinates[i, 2]
+                x2, y2 = coordinates[j, 1], coordinates[j, 2]
+                (isfinite(x1) && isfinite(y1) && isfinite(x2) && isfinite(y2)) || continue
+                dx, dy = x2 - x1, y2 - y1
+                length_squared = dx * dx + dy * dy
+                length_squared == 0 && continue
+                projection = ((Float64(x) - x1) * dx + (Float64(y) - y1) * dy) / length_squared
+                # Do not attach an obstacle to an unrelated edge through an endpoint.
+                (projection < 0.0 || projection > 1.0) && continue
+                closest_x = x1 + projection * dx
+                closest_y = y1 + projection * dy
+                distance_to_edge = hypot(Float64(x) - closest_x, Float64(y) - closest_y)
+                # Deterministic tie-break: nearer edge first, then site codes.
+                key = (distance_to_edge, edge_tie_key(i, j)...)
+                if key < best_key
+                    best_key = key
+                    best_distance = distance_to_edge
+                    best_edge = (i, j)
+                end
             end
         end
 
-        if best_edge === nothing || best_distance > matching_tolerance
-            push!(matched, false); push!(edge_from, ""); push!(edge_to, "")
-            push!(restricted_origin, ""); push!(restricted_destination, "")
-            push!(match_distance_m, best_edge === nothing ? missing : best_distance)
-        else
+        is_matched = best_edge !== nothing && best_distance <= matching_tolerance
+        push!(matched, is_matched)
+
+        up = 0
+        down = 0
+        is_duplicate = false
+        if is_matched
             i, j = best_edge
-            # Dispersal entries are keyed [destination, origin].  Movement
-            # towards the higher-elevation (upstream) site is the limiting
-            # direction; the downstream direction is reduced but remains more
-            # passable.
-            if elevations[i] > elevations[j]
-                overlay[i, j] = min(overlay[i, j], obstacle_passability)
-                overlay[j, i] = min(overlay[j, i], obstacle_downstream_passability)
-                origin, destination = sites[j], sites[i]
-            elseif elevations[j] > elevations[i]
-                overlay[j, i] = min(overlay[j, i], obstacle_passability)
-                overlay[i, j] = min(overlay[i, j], obstacle_downstream_passability)
-                origin, destination = sites[i], sites[j]
-            else
-                origin, destination = "", ""
-            end
-            push!(matched, true); push!(edge_from, sites[i]); push!(edge_to, sites[j])
-            push!(restricted_origin, origin); push!(restricted_destination, destination)
+            push!(edge_from, sites[i]); push!(edge_to, sites[j])
             push!(match_distance_m, best_distance)
+
+            # Direction: corrected tree orientation when available, otherwise
+            # the legacy elevation rule.
+            if haskey(tree_direction, (i, j))
+                up, down = tree_direction[(i, j)]
+            elseif elevations[i] > elevations[j]
+                up, down = i, j
+            elseif elevations[j] > elevations[i]
+                up, down = j, i
+            end
+
+            if cap !== missing && isfinite(Float64(cap)) && legacy_dams !== nothing && up != 0
+                is_duplicate = legacy_dams[up, down] < 1.0 || legacy_dams[down, up] < 1.0
+            end
+        else
+            push!(edge_from, ""); push!(edge_to, "")
+            push!(match_distance_m, best_edge === nothing ? missing : best_distance)
         end
+        push!(duplicate_flag, is_duplicate)
+
+        # Outcome precedence is fixed so the counts are additive and
+        # independent of whether the structure also snapped to a link.
+        if out_of_basin
+            origin, destination = "", ""
+            push!(outcome, "excluded_out_of_basin")
+        elseif class == "nonoperational"
+            origin, destination = "", ""
+            push!(outcome, "excluded_nonoperational")
+        elseif is_duplicate
+            origin, destination = "", ""
+            push!(outcome, "excluded_duplicate_legacy")
+        elseif class == "ambiguous" && !include_ambiguous_status
+            origin, destination = "", ""
+            push!(outcome, "excluded_ambiguous_status")
+        elseif !is_matched
+            origin, destination = "", ""
+            push!(outcome, "unmatched")
+        elseif up == 0
+            origin, destination = "", ""
+            push!(outcome, "no_direction")
+        else
+            # Accumulate barriers: the effective passability is the product of
+            # the individual obstacle passabilities in each direction.
+            overlay[up, down] *= obstacle_passability
+            overlay[down, up] *= obstacle_downstream_passability
+            origin, destination = sites[down], sites[up]
+            push!(outcome, "applied")
+            key = edge_tie_key(i, j)
+            link_obstacle_counts[key] = get(link_obstacle_counts, key, 0) + 1
+        end
+        push!(restricted_origin, origin)
+        push!(restricted_destination, destination)
     end
 
     diagnostics = DataFrame(
         obstacle_id=obstacle_ids, matched=matched, edge_from=edge_from,
         edge_to=edge_to, restricted_origin=restricted_origin,
         restricted_destination=restricted_destination,
-        match_distance_m=match_distance_m
+        match_distance_m=match_distance_m, status=status,
+        status_class=status_class, outcome=outcome,
+        duplicate_of_legacy_dam=duplicate_flag, cap_emba_m3=cap_values
     )
-    return (passability=overlay, diagnostics=diagnostics)
+
+    tally(name) = count(==(name), outcome)
+    ambiguous_statuses = sort(unique([status[k] for k in eachindex(status)
+        if status_class[k] == "ambiguous"]))
+    ambiguous_statuses = [isempty(code) ? "<blank>" : code for code in ambiguous_statuses]
+    nonoperational_statuses = sort(unique([status[k] for k in eachindex(status)
+        if status_class[k] == "nonoperational"]))
+    metadata = (
+        n_total = n_obs,
+        n_matched = count(matched),
+        n_unmatched = tally("unmatched"),
+        n_applied = tally("applied"),
+        n_no_direction = tally("no_direction"),
+        n_excluded_out_of_basin = tally("excluded_out_of_basin"),
+        n_excluded_nonoperational = tally("excluded_nonoperational"),
+        n_excluded_ambiguous_status = tally("excluded_ambiguous_status"),
+        n_excluded_duplicate_legacy = tally("excluded_duplicate_legacy"),
+        n_excluded_total = tally("excluded_out_of_basin") +
+            tally("excluded_nonoperational") + tally("excluded_ambiguous_status") +
+            tally("excluded_duplicate_legacy"),
+        n_status_active = count(==("active"), status_class),
+        n_status_nonoperational = count(==("nonoperational"), status_class),
+        n_status_ambiguous = count(==("ambiguous"), status_class),
+        ambiguous_statuses = ambiguous_statuses,
+        nonoperational_statuses = nonoperational_statuses,
+        include_ambiguous_status = include_ambiguous_status,
+        basin_prefix = string(basin_prefix),
+        duplicate_legacy_key = "reservoir capacity (Cap_emba numeric) on a directional link already restricted by legacy_dams",
+        if_index_used_for_passability = false,
+        use_tree_edges = !isempty(tree_edges),
+        link_obstacle_counts = link_obstacle_counts
+    )
+    return (passability=overlay, diagnostics=diagnostics, metadata=metadata)
 end
 
 # =============================================================================
@@ -1527,8 +1775,18 @@ Prepare all data needed for the ODE metacommunity model.
 - `obstacles_file`: Optional obstacle inventory; loaded but ignored unless `obstacle_mode = :overlay`
 - `obstacle_mode`: `:legacy` (default, no obstacle overlay) or `:overlay`
 - `obstacle_matching_tolerance`: Matching tolerance in metres for the obstacle overlay
-- `obstacle_passability`: Passability applied to upstream movement on matched edges
-- `obstacle_downstream_passability`: Passability applied to downstream movement on matched edges
+- `obstacle_passability`: Uniform passability applied to upstream movement on
+  matched edges (the inventory's `IF` index is deliberately not interpreted)
+- `obstacle_downstream_passability`: Uniform passability applied to downstream
+  movement on matched edges.  Barriers accumulate by multiplication along a
+  link, so two matched obstacles of 0.1 give 0.01 upstream.  With
+  `connectivity_method = :on_path` obstacles are snapped only to the corrected
+  tree edges; non-operational, out-of-basin, legacy-duplicate and (by default)
+  ambiguous-status structures are excluded and annotated (counts in
+  `obstacle_metadata`).
+- `obstacle_include_ambiguous_status`: when `true` the structures with an
+  unconfirmed `ESTADO` code (SC/DM/ND/OT/blank) are kept as barriers instead of
+  being excluded; they remain flagged `status_class = "ambiguous"`.
 
 ## Returns a NamedTuple with:
 - params: MetacommunityParams struct
@@ -1540,6 +1798,18 @@ Prepare all data needed for the ODE metacommunity model.
 - legacy_dams: Passability matrix from the legacy connectivity fields
 - obstacle_overlay: Passability matrix derived from the optional obstacle inventory
 - obstacle_mapping_diagnostics: Per-obstacle network matching diagnostics
+  (including `status_class`, `outcome`, `duplicate_of_legacy_dam`)
+- obstacle_metadata: E12 classification/accumulation counts (matched, applied,
+  per-category exclusions, ambiguous/non-operational status codes, per-link
+  obstacle counts); `nothing` when no overlay was applied
+- connectivity_method: the method actually used (`:legacy` or `:on_path`)
+- connectivity_diagnostics: `nothing` for `:legacy`, otherwise the
+  `build_on_path_distance_matrix` diagnostics (roots, edge counts, elevation
+  inversions, total link length)
+- connectivity_tree_edges, connectivity_parent: directed dendritic edges and
+  downstream-parent index of the selected graph (empty for `:legacy`).  These
+  are the E12 interface for rebuilding dam/obstacle passability on the
+  corrected network.
 - cedex_var_df, cedex_esc_uts_df, obstacles_df: Optional loaded updated inputs
 """
 function prepare_ode_data(;
@@ -1557,6 +1827,7 @@ function prepare_ode_data(;
     obstacle_matching_tolerance::Float64 = 2000.0,
     obstacle_passability::Float64 = 0.1,
     obstacle_downstream_passability::Float64 = 0.5,
+    obstacle_include_ambiguous_status::Bool = false,
     heat_stress_rate::Float64 = 0.0,
     carrying_capacity_base_scaling::Float64 = 10.0,
     carrying_capacity_scaling::Float64 = 1.0,
@@ -1656,23 +1927,40 @@ function prepare_ode_data(;
     legacy_dams = build_dam_passability_matrix(site_df, sites, distance_matrix, elevations)
     dams = copy(legacy_dams)
     obstacle_overlay = ones(Float64, n_sites, n_sites)
+    obstacle_metadata = nothing
     obstacle_mapping_diagnostics = DataFrame(
         obstacle_id=String[], matched=Bool[], edge_from=String[], edge_to=String[],
         restricted_origin=String[], restricted_destination=String[],
-        match_distance_m=Union{Missing,Float64}[]
+        match_distance_m=Union{Missing,Float64}[], status=String[],
+        status_class=String[], outcome=String[],
+        duplicate_of_legacy_dam=Bool[], cap_emba_m3=Union{Missing,Float64}[]
     )
     if obstacles_df !== nothing && obstacle_mode == :overlay
         println("Applying obstacle passability overlay (tolerance=$(obstacle_matching_tolerance)m, upstream passability=$(obstacle_passability), downstream passability=$(obstacle_downstream_passability))...")
+        # On the corrected network, snap obstacles only to the C4 tree edges and
+        # use the tree's upstream/downstream orientation (E12); the legacy path
+        # keeps the straight-line matching and elevation-based direction.
         obstacle_result = build_obstacle_passability_matrix(
             obstacles_df, site_df, sites, distance_matrix, elevations;
             matching_tolerance=obstacle_matching_tolerance,
             obstacle_passability=obstacle_passability,
-            obstacle_downstream_passability=obstacle_downstream_passability
+            obstacle_downstream_passability=obstacle_downstream_passability,
+            tree_edges=connectivity_tree_edges,
+            legacy_dams=legacy_dams,
+            include_ambiguous_status=obstacle_include_ambiguous_status
         )
         obstacle_overlay = obstacle_result.passability
         obstacle_mapping_diagnostics = obstacle_result.diagnostics
-        dams = min.(dams, obstacle_overlay)
-        println("Matched $(count(obstacle_mapping_diagnostics.matched)) of $(nrow(obstacle_mapping_diagnostics)) obstacles to network edges")
+        obstacle_metadata = obstacle_result.metadata
+        # Accumulate the distinct legacy-dam and obstacle layers rather than
+        # taking the (non-compounding) elementwise minimum.
+        dams = legacy_dams .* obstacle_overlay
+        println("Obstacles: matched $(obstacle_metadata.n_matched)/$(obstacle_metadata.n_total), " *
+                "applied $(obstacle_metadata.n_applied), excluded $(obstacle_metadata.n_excluded_total) " *
+                "(non-operational $(obstacle_metadata.n_excluded_nonoperational), " *
+                "out-of-basin $(obstacle_metadata.n_excluded_out_of_basin), " *
+                "ambiguous $(obstacle_metadata.n_excluded_ambiguous_status), " *
+                "legacy duplicates $(obstacle_metadata.n_excluded_duplicate_legacy))")
     end
 
     # 8. Extract environmental parameters
@@ -1748,6 +2036,9 @@ function prepare_ode_data(;
         legacy_dams = legacy_dams,
         obstacle_overlay = obstacle_overlay,
         obstacle_mapping_diagnostics = obstacle_mapping_diagnostics,
+        # E12: obstacle classification/accumulation counts and per-link obstacle
+        # counts (nothing when no overlay was applied).
+        obstacle_metadata = obstacle_metadata,
         obstacles_df = obstacles_df,
         cedex_var_df = cedex_var_df,
         cedex_esc_uts_df = cedex_esc_uts_df,
