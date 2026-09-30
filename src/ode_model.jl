@@ -21,10 +21,21 @@ Structure to hold parameters for the fish metacommunity ODE model.
   (WP3), above which the quadratic heat-stress loss is active.
 - `heat_stress_rate::Real`: Shared heat-stress slope `k` (1/day/°C²). Zero
   disables the term entirely and reproduces the pre-WP3 model.
+- `interaction_inside_growth::Bool`: Selects where the species-interaction term
+  enters the RHS (issue C2). `true` (the default) uses the competitive
+  Lotka–Volterra form, with interactions inside the intrinsic-growth bracket:
+  `dN_is/dt = N_is [r_eff (1 - Σ_j N_j/K_i + Σ_j α_sj N_j/K_i) - heat]`.
+  This is equivalent to competition coefficients `c_sj = 1 - α_sj`
+  (with `c_ss = 1`), not `c = -α`. `false` reproduces the legacy form, where
+  interactions sit *outside* growth and dominate the equilibrium:
+  `dN_is/dt = N_is [r_eff (1 - Σ_j N_j/K_i) + Σ_j α_sj N_j/K_i - heat]`.
+  The legacy form is retained for comparison only and must be opted into
+  explicitly (see the 14-argument constructor).
 
-The 11-argument constructor (without the thermal limits and `k`) is retained for
-backwards compatibility and fills `-Inf`/`+Inf` limits and `k = 0`, so existing
-runs are unchanged.
+The 11-argument constructor (without the thermal limits, `k` and the
+interaction-form flag) is retained for backwards compatibility and fills
+`-Inf`/`+Inf` limits, `k = 0` and the corrected interaction form (`true`), so
+existing runs keep working and use the corrected form.
 """
 struct MetacommunityParams{T<:Real, M<:AbstractMatrix{T}, V<:AbstractVector{T}, S<:AbstractMatrix{T}}
     n_sites::Int
@@ -41,6 +52,29 @@ struct MetacommunityParams{T<:Real, M<:AbstractMatrix{T}, V<:AbstractVector{T}, 
     thermal_lower_limits::V
     thermal_upper_limits::V
     heat_stress_rate::T
+    interaction_inside_growth::Bool
+end
+
+"""
+    MetacommunityParams(n_sites, n_species, interaction_matrix, dispersal_matrix,
+                        dispersal_scaling, intrinsic_growth_rates, temperatures,
+                        habitat_suitability, thermal_optima, thermal_sigmas,
+                        carrying_capacity, thermal_lower_limits, thermal_upper_limits,
+                        heat_stress_rate)
+
+14-argument constructor matching the pre-C2 field list.  The new
+`interaction_inside_growth` flag defaults to `true`, i.e. the corrected
+competitive Lotka–Volterra form with interactions inside the growth bracket.
+Pass a 15th argument explicitly to select the legacy form.
+"""
+function MetacommunityParams(n_sites::Int, n_species::Int, interaction_matrix,
+        dispersal_matrix, dispersal_scaling, intrinsic_growth_rates, temperatures,
+        habitat_suitability, thermal_optima, thermal_sigmas, carrying_capacity,
+        thermal_lower_limits, thermal_upper_limits, heat_stress_rate)
+    return MetacommunityParams(n_sites, n_species, interaction_matrix, dispersal_matrix,
+        dispersal_scaling, intrinsic_growth_rates, temperatures, habitat_suitability,
+        thermal_optima, thermal_sigmas, carrying_capacity, thermal_lower_limits,
+        thermal_upper_limits, heat_stress_rate, true)
 end
 
 """
@@ -50,7 +84,8 @@ end
                         carrying_capacity)
 
 Backwards-compatible constructor: no empirical thermal limits and no heat-stress
-mortality (`k = 0`), reproducing the model before WP3.
+mortality (`k = 0`), reproducing the model before WP3.  Uses the corrected
+competitive Lotka–Volterra interaction form (interaction inside growth).
 """
 function MetacommunityParams(n_sites::Int, n_species::Int, interaction_matrix,
         dispersal_matrix, dispersal_scaling, intrinsic_growth_rates, temperatures,
@@ -89,6 +124,11 @@ temperature anomaly (°C) applied to site `i` at time `t`; the static model
 passes a constant-zero function and the climate model passes the interpolated
 schedule.  Site temperatures and per-site total biomass are computed once per
 site per RHS call rather than once per species.
+
+The interaction term is placed inside the intrinsic-growth bracket by default
+(`p.interaction_inside_growth == true`, competitive Lotka–Volterra form); the
+legacy placement outside growth is available for comparison by constructing the
+parameters with the flag set to `false`.
 """
 function _metacommunity_ode!(du, u, p::MetacommunityParams, delta_at, t)
     U = reshape(u, p.n_sites, p.n_species)
@@ -125,7 +165,20 @@ function _metacommunity_ode!(du, u, p::MetacommunityParams, delta_at, t)
                 end
             end
 
-            dU[i, s] = N_is * (r_eff * logistic_term + interaction_term - heat_stress)
+            if p.interaction_inside_growth
+                # Corrected competitive Lotka-Volterra form (issue C2): the
+                # interaction term sits INSIDE the intrinsic-growth bracket, so
+                # growth and competition jointly set the equilibrium.  With
+                # c_sj = 1 - alpha_sj this is
+                #   N * (r_eff * (1 - total/K + sum_j alpha_sj N_j/K) - heat).
+                dU[i, s] = N_is * (r_eff * clamp(1.0 - total_biomass_i / k_i +
+                                                interaction_term, -1.0, 2.0) - heat_stress)
+            else
+                # Legacy form, retained for comparison only: the interaction
+                # term is added OUTSIDE the logistic bracket, so interactions
+                # dominate growth and set the equilibrium.
+                dU[i, s] = N_is * (r_eff * logistic_term + interaction_term - heat_stress)
+            end
         end
     end
 

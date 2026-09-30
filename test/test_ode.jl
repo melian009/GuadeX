@@ -328,6 +328,114 @@ end
 end
 
 # =============================================================================
+# 4b. Competitive Lotka-Volterra interaction form (issue C2)
+# =============================================================================
+# The corrected default places the interaction term INSIDE the intrinsic-growth
+# bracket:  dN/dt = N * (r_eff * clamp(1 - total/K + sum_j alpha_sj N_j/K) - heat).
+# The legacy form added it OUTSIDE growth.  These tests pin the corrected
+# behaviour and guard the legacy switch.
+@testset "interaction form: competitive Lotka-Volterra (C2)" begin
+    # --- single species, one site, no dispersal, alpha = 0 ---------------
+    # With interactions inside growth the single-species equilibrium is N* = K.
+    @testset "single species equilibrium is K" begin
+        p = Guadex.MetacommunityParams(
+            1, 1, [0.0;;], sparse([1], [1], [0.0], 1, 1),
+            [1.0], [0.05;;], [20.0], [1.0], [20.0], [5.0], [100.0])
+
+        # The corrected form must be the constructor default.
+        @test p.interaction_inside_growth
+        @test p.interaction_inside_growth == true
+
+        prob = ODEProblem(Guadex.metacommunity_ode!, [1.0;;], (0.0, 600.0), p)
+        sol = solve(prob, Tsit5(), saveat=10.0)
+        @test sol.u[end][1] ≈ 100.0 rtol=1e-3
+    end
+
+    # --- defining property: per-capita growth equals the LV bracket -------
+    # The old form put the interaction term outside growth and fails this
+    # identity, so it is the core regression guard for C2.
+    @testset "per-capita growth matches r_eff*(1 - total/K + sum alpha N/K)" begin
+        alpha = [-0.2 -0.3; -0.1 -0.2]
+        growth = [0.1 0.2]  # 1 site x 2 species
+        K = 100.0
+        p = Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], growth, [20.0], [1.0], [20.0, 20.0], [5.0, 5.0], [K])
+
+        u0 = [10.0 5.0]
+        total = sum(u0)
+        du = zeros(1, 2)
+        Guadex.metacommunity_ode!(du, u0, p, 0.0)
+
+        for s in 1:2
+            interaction = sum(alpha[s, j] * u0[j] / K for j in 1:2)
+            expected_percap = growth[1, s] * (1.0 - total / K + interaction)
+            @test du[1, s] / u0[s] ≈ expected_percap rtol=1e-10
+        end
+    end
+
+    # --- r_eff scaling ----------------------------------------------------
+    # In the corrected form r_eff multiplies the whole bracket, so doubling
+    # r_eff doubles the per-capita growth rate.  Under the legacy form the
+    # interaction term was added outside r_eff, so this did NOT hold.
+    @testset "per-capita growth doubles when r_eff doubles" begin
+        alpha = [-0.2 -0.3; -0.1 -0.2]
+        K = 100.0
+        lv(g; form=true) = Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], g, [20.0], [1.0], [20.0, 20.0], [5.0, 5.0], [K],
+            [-Inf, -Inf], [Inf, Inf], 0.0, form)
+
+        u0 = [10.0 5.0]
+        du1 = zeros(1, 2)
+        du2 = zeros(1, 2)
+        Guadex.metacommunity_ode!(du1, u0, lv([0.1 0.2]), 0.0)
+        Guadex.metacommunity_ode!(du2, u0, lv([0.2 0.4]), 0.0)
+        for s in 1:2
+            @test du2[1, s] / du1[1, s] ≈ 2.0 rtol=1e-10
+        end
+
+        # Legacy form must NOT scale linearly: the additive interaction term
+        # stays fixed when r_eff doubles.
+        du1_leg = zeros(1, 2)
+        du2_leg = zeros(1, 2)
+        Guadex.metacommunity_ode!(du1_leg, u0, lv([0.1 0.2]; form=false), 0.0)
+        Guadex.metacommunity_ode!(du2_leg, u0, lv([0.2 0.4]; form=false), 0.0)
+        for s in 1:2
+            ratio = du2_leg[1, s] / du1_leg[1, s]
+            @test abs(ratio - 2.0) > 1e-6
+        end
+    end
+
+    # --- legacy switch reproduces the old expression exactly --------------
+    @testset "legacy switch reproduces interaction-outside-growth" begin
+        alpha = [-0.2 -0.3; -0.1 -0.2]
+        growth = [0.1 0.2]
+        K = 100.0
+        make(form) = Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], growth, [20.0], [1.0], [20.0, 20.0], [5.0, 5.0], [K],
+            [-Inf, -Inf], [Inf, Inf], 0.0, form)
+
+        u0 = [10.0 5.0]
+        total = sum(u0)
+        du_corrected = zeros(1, 2)
+        du_legacy = zeros(1, 2)
+        Guadex.metacommunity_ode!(du_corrected, u0, make(true), 0.0)
+        Guadex.metacommunity_ode!(du_legacy, u0, make(false), 0.0)
+
+        for s in 1:2
+            interaction = sum(alpha[s, j] * u0[j] / K for j in 1:2)
+            # Old form: r_eff * clamp(1 - total/K) + interaction, all outside.
+            expected_legacy = growth[1, s] * clamp(1.0 - total / K, -1.0, 2.0) + interaction
+            @test du_legacy[1, s] / u0[s] ≈ expected_legacy rtol=1e-10
+            # And the two forms genuinely differ when alpha != 0.
+            @test !isapprox(du_corrected[1, s], du_legacy[1, s])
+        end
+    end
+end
+
+# =============================================================================
 # 5. Full ODE integration tests
 # =============================================================================
 @testset "Full ODE integration" begin
