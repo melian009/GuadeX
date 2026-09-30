@@ -2102,7 +2102,10 @@ end
         obstacle_mode::Symbol = :legacy,
         obstacle_matching_tolerance::Float64 = 2000.0,
         obstacle_passability::Float64 = 0.1,
-        obstacle_downstream_passability::Float64 = 0.5
+        obstacle_downstream_passability::Float64 = 0.5,
+        connectivity_method::Symbol = :legacy,
+        on_path_rtol::Float64 = 0.02,
+        on_path_atol::Float64 = 200.0
     )
 
 Prepare all data needed for the ODE metacommunity model.
