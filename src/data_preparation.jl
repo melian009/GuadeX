@@ -552,60 +552,254 @@ function build_obstacle_passability_matrix(obstacles::DataFrame, site_df::DataFr
     return (passability=overlay, diagnostics=diagnostics)
 end
 
+# =============================================================================
+# Interaction parsing (issue C1)
+#
+# Conventions implemented here:
+#  * The model equation reads `α[s, j]` as the effect of species `j` (source)
+#    on species `s` (target), stored at `α[target, source]`.
+#  * A CSV cell at (row A, column B) describes the relationship between the two
+#    species A and B.  The species named in the cell text is the AFFECTED one
+#    (the target); the other species of the pair is the source.
+#  * Undirected competition/interference (no named species) is symmetric: both
+#    directions receive the mechanism value.
+#  * `"No coexist"` denotes allopatry, i.e. ABSENCE of interaction (α = 0):
+#    co-occurrence is already governed by the thermal and habitat filters.
+#  * Cells that combine an undirected clause and a directed clause are applied
+#    as both; the more specific directed clause defines the coefficient in its
+#    own direction, and every directed effect of such a cell is flagged
+#    `ambiguous = true` in the long-format table.
+# =============================================================================
+
+const _DIRECTED_VERB_REGEX =
+    r"(?:affects|displaces|interferes|interfere|interfiere)\s+([A-Za-z]{1,4})\s+through"
+const _BARE_TARGET_REGEX = r"\band\s+([A-Za-z]{1,4})\s+through"
+const _DEPREDA_REGEX = r"([A-Za-z]{1,4})\s+depreda\s+([A-Za-z]{1,4})"
+const _UNDIRECTED_REGEX =
+    r"(?:affects|displaces|interferes|interfere|interfiere)\s+through"
+
+"""
+    _interaction_mechanism_name(text::AbstractString)
+
+Return the qualitative mechanism category implied by `text`, using the same
+priority order as [`parse_interaction_string`](@ref).
+"""
+function _interaction_mechanism_name(text::AbstractString)
+    lower = lowercase(string(text))
+    occursin("no coexist", lower) && return "none"
+    occursin("displaces", lower) && return "displacement"
+    occursin("predation", lower) && return "predation"
+    if occursin("competition", lower) || occursin("interfere", lower) ||
+       occursin("interfiere", lower)
+        return "competition"
+    end
+    occursin("affects", lower) && return "effect"
+    return "none"
+end
+
+"""
+    parse_interaction_cell(text, row_code, col_code) -> Vector{NamedTuple}
+
+Parse a single matrix cell into one directed effect per `(source, target)` pair.
+
+`row_code` and `col_code` are the species of the cell's pair.  A species named
+in the text is the target (the affected species); the other member of the pair
+is the source.  Returned rows are `(source, target, mechanism, alpha,
+ambiguous, raw_text)` with species codes uppercased.
+
+Rules:
+- `"<verb> <Code> through <mechanism>"` (verb ∈ affects/displaces/interfere/
+  interferes/interfiere) names the target.
+- `"<Code> through <mechanism>"` after `"and"` (no verb) names the target.
+- `"<CodeA> depreda <CodeB>"` is predation of CodeA (source) on CodeB (target).
+- An undirected clause (verb directly followed by `through`) applies to both
+  directions.
+- `"No coexist"` yields no effect at all (allopatry → α = 0).
+"""
+function parse_interaction_cell(text, row_code, col_code)
+    raw = ismissing(text) ? "" : string(text)
+    stripped = strip(raw)
+    effects = NamedTuple[]
+    isempty(stripped) && return effects
+
+    lower = lowercase(stripped)
+    occursin("no coexist", lower) && return effects
+
+    row = lowercase(string(row_code))
+    col = lowercase(string(col_code))
+
+    # (source, target, value, mechanism, specific?)
+    clauses = Tuple{String,String,Float64,String,Bool}[]
+
+    for m in eachmatch(_DIRECTED_VERB_REGEX, lower)
+        named = lowercase(m.captures[1])
+        (named == row || named == col) || continue
+        source = named == row ? col : row
+        push!(clauses, (source, named, parse_interaction_string(lower),
+                        _interaction_mechanism_name(lower), true))
+    end
+
+    for m in eachmatch(_BARE_TARGET_REGEX, lower)
+        named = lowercase(m.captures[1])
+        (named == row || named == col) || continue
+        source = named == row ? col : row
+        clause = lower[m.offset:end]
+        push!(clauses, (source, named, parse_interaction_string(clause),
+                        _interaction_mechanism_name(clause), true))
+    end
+
+    for m in eachmatch(_DEPREDA_REGEX, lower)
+        source = lowercase(m.captures[1])
+        target = lowercase(m.captures[2])
+        (target == row || target == col) || continue
+        push!(clauses, (source, target, -0.5, "predation", true))
+    end
+
+    has_undirected = occursin(_UNDIRECTED_REGEX, lower)
+    if has_undirected
+        m = match(_UNDIRECTED_REGEX, lower)
+        clause = lower[m.offset:end]
+        value = parse_interaction_string(clause)
+        mechanism = _interaction_mechanism_name(clause)
+        push!(clauses, (row, col, value, mechanism, false))
+        push!(clauses, (col, row, value, mechanism, false))
+    end
+
+    ambiguous = has_undirected && any(c -> c[5], clauses)
+
+    resolved = Dict{Tuple{String,String}, Tuple{Float64,String,Bool}}()
+    for (source, target, value, mechanism, specific) in clauses
+        key = (source, target)
+        if !haskey(resolved, key) || (specific && !resolved[key][3])
+            resolved[key] = (value, mechanism, specific)
+        end
+    end
+
+    for ((source, target), (value, mechanism, _)) in resolved
+        push!(effects, (source=uppercase(source), target=uppercase(target),
+                        mechanism=mechanism, alpha=value, ambiguous=ambiguous,
+                        raw_text=stripped))
+    end
+    return effects
+end
+
+"""
+    build_interaction_long_table(interaction_file; species_codes=nothing) -> DataFrame
+
+Parse a semicolon-delimited interaction matrix into an explicit long-format
+table with columns `source, target, mechanism, alpha, ambiguous, raw_text`.
+
+One row is emitted per directed effect (i.e. per `(source, target)` pair), so an
+undirected symmetric relationship contributes two rows.  Rows belonging to a
+cell that mixes an undirected clause with a directed clause are flagged
+`ambiguous = true`.
+
+The loader [`load_interaction_matrix`](@ref) reads this table when a sibling
+`*_long.csv` (or `interaction_matrix_long.csv`) exists.
+"""
+function build_interaction_long_table(interaction_file::String;
+        species_codes::Union{Nothing,AbstractVector{<:AbstractString}}=nothing)
+    interaction_df = CSV.read(interaction_file, DataFrame; delim=';')
+    rename!(interaction_df, 1 => :Species)
+
+    row_labels = string.(interaction_df.Species)
+    column_codes = String.(names(interaction_df)[2:end])
+
+    records = NamedTuple[]
+    for (i, row) in enumerate(eachrow(interaction_df))
+        for col_code in column_codes
+            for effect in parse_interaction_cell(row[Symbol(col_code)], row_labels[i], col_code)
+                push!(records, effect)
+            end
+        end
+    end
+
+    if isempty(records)
+        return DataFrame(source=String[], target=String[], mechanism=String[],
+                         alpha=Float64[], ambiguous=Bool[], raw_text=String[])
+    end
+
+    table = DataFrame(records)
+    if species_codes === nothing
+        order = lowercase.(unique(vcat(row_labels, column_codes)))
+    else
+        order = lowercase.(collect(species_codes))
+    end
+    rank = Dict(code => i for (i, code) in enumerate(order))
+    ranks = [(get(rank, lowercase(r.source), typemax(Int)),
+              get(rank, lowercase(r.target), typemax(Int))) for r in eachrow(table)]
+    perm = sortperm(ranks)
+    return table[perm, :]
+end
+
+"""
+    _interaction_long_path(interaction_file::String) -> Union{String,Nothing}
+
+Return the path of the long-format table to read for `interaction_file`, or
+`nothing` when none is present.  Prefers a sibling with the same basename plus
+`_long.csv`, then the canonical `interaction_matrix_long.csv` in the same
+directory.
+"""
+function _interaction_long_path(interaction_file::String)
+    same_basename = splitext(interaction_file)[1] * "_long.csv"
+    isfile(same_basename) && return same_basename
+
+    canonical = joinpath(dirname(interaction_file), "interaction_matrix_long.csv")
+    isfile(canonical) && return canonical
+
+    return nothing
+end
+
 """
     load_interaction_matrix(interaction_file::String, species_codes::Vector{String})
 
 Load and parse the species interaction matrix.
-Returns a numeric interaction matrix where:
-- Positive values indicate facilitation/positive effect
-- Negative values indicate competition/predation
-- Zero indicates neutral coexistence
+
+Returns a numeric matrix `α` where `α[target, source]` is the effect of
+`species_codes[source]` on `species_codes[target]`.  When a long-format table
+is available next to `interaction_file` it is read directly; otherwise the
+semicolon matrix is parsed from its cell text (see [`parse_interaction_cell`](@ref)).
+`"No coexist"` cells are treated as no interaction (α = 0).  Row labels and
+column names are matched case-insensitively and their union is used, so a row
+without a matching column (e.g. *Lepomis gibbosus*) is not silently dropped.
 """
 function load_interaction_matrix(interaction_file::String, species_codes::Vector{String})
     println("Loading interaction matrix from: $interaction_file")
 
-    # Read the interaction matrix (semicolon delimited, with row names in first column)
-    interaction_df = CSV.read(interaction_file, DataFrame; delim=';')
-
-    # The first column contains species codes (row names)
-    rename!(interaction_df, 1 => :Species)
-
-    # Get species in the matrix (same order as columns without the first row)
-    matrix_species = names(interaction_df)[2:end]
-
-    # Create a mapping from species code to column index
-    species_to_idx = Dict(sp => i for (i, sp) in enumerate(matrix_species))
-
-    # Initialize interaction matrix
     n_species = length(species_codes)
+    lower_codes = lowercase.(species_codes)
+    code_to_idx = Dict(lower_codes[i] => i for i in 1:n_species)
     interaction_matrix = zeros(n_species, n_species)
 
-    # Parse interaction values
-    for row in eachrow(interaction_df)
-        sp1 = row.Species
-        sp1_lower = lowercase(sp1)
-        if !haskey(species_to_idx, sp1)
-            continue
+    long_file = _interaction_long_path(interaction_file)
+    if long_file !== nothing
+        println("Reading long-format interaction table: $long_file")
+        long_df = CSV.read(long_file, DataFrame)
+        for row in eachrow(long_df)
+            source = lowercase(string(row.source))
+            target = lowercase(string(row.target))
+            (haskey(code_to_idx, source) && haskey(code_to_idx, target)) || continue
+            interaction_matrix[code_to_idx[target], code_to_idx[source]] = Float64(row.alpha)
         end
+        println("Created $(n_species)x$(n_species) interaction matrix from long table")
+        return interaction_matrix
+    end
 
-        # Find this species in our target species list
-        lower_species_codes = lowercase.(species_codes)
-        if sp1_lower ∈ lower_species_codes
-            target_idx1 = findfirst(==(sp1_lower), lower_species_codes)
+    # Fall back to parsing the semicolon-delimited matrix directly.
+    interaction_df = CSV.read(interaction_file, DataFrame; delim=';')
+    rename!(interaction_df, 1 => :Species)
 
-            for sp2 in matrix_species
-                if hasproperty(row, Symbol(sp2))
-                    interaction_str = row[Symbol(sp2)]
+    row_labels = string.(interaction_df.Species)
+    column_codes = String.(names(interaction_df)[2:end])
 
-                    # Parse interaction string
-                    value = parse_interaction_string(interaction_str)
-
-                    sp2lower = lowercase(sp2)
-                    if sp2lower ∈ lower_species_codes
-                        target_idx2 = findfirst(==(sp2lower), lower_species_codes)
-                        interaction_matrix[target_idx1, target_idx2] = value
-                    end
-                end
+    for (i, row) in enumerate(eachrow(interaction_df))
+        row_code = row_labels[i]
+        for col_code in column_codes
+            for effect in parse_interaction_cell(row[Symbol(col_code)], row_code, col_code)
+                source = lowercase(effect.source)
+                target = lowercase(effect.target)
+                (haskey(code_to_idx, source) && haskey(code_to_idx, target)) || continue
+                interaction_matrix[code_to_idx[target], code_to_idx[source]] = effect.alpha
             end
         end
     end
@@ -618,7 +812,7 @@ end
     parse_interaction_string(interaction_str::String)
 
 Parse an interaction string and return a numeric value.
-- "No coexist" => strong negative (-1.0)
+- "No coexist" => 0.0 (allopatry: absence of interaction)
 - "displaces" => strong negative (-0.8)
 - "predation" or "affects ... predation" => negative (-0.5)
 - "competition", "interfere", "interfiere", "affects ... competition" => negative (-0.3)
@@ -644,9 +838,11 @@ function parse_interaction_string(interaction_str::Union{String, Missing})
     # Convert to lowercase for case-insensitive matching
     interaction_lower = lowercase(interaction_str)
 
-    # 1. Strongest negative: No coexistence
+    # 1. "No coexist" describes allopatry; the thermal and habitat filters
+    #    already decide whether two species can co-occur, so this is no
+    #    measurable interaction.
     if occursin("no coexist", interaction_lower)
-        return -1.0
+        return 0.0
     end
 
     # 2. Strong negative: displaces (complete displacement)

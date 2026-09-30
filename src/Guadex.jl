@@ -58,7 +58,7 @@ export plot_climate_community_filling, plot_climate_diagnostics
 # Export data preparation functions
 export prepare_ode_data, save_ode_data
 export load_species_characteristics, load_site_data, load_species_density_data
-export load_interaction_matrix, build_distance_matrix
+export load_interaction_matrix, build_distance_matrix, build_interaction_long_table
 export load_cedex_var, load_cedex_esc_uts, select_cedex_uts, load_obstacles
 export build_elevation_vector, build_dam_passability_matrix
 export build_site_coordinate_matrix, build_obstacle_passability_matrix

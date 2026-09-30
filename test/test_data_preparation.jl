@@ -71,9 +71,9 @@
     end
 
     @testset "parse_interaction_string" begin
-        # Strongest negative: no coexistence
-        @test Guadex.parse_interaction_string("No coexist") ≈ -1.0
-        @test Guadex.parse_interaction_string("no coexist.") ≈ -1.0
+        # "No coexist" describes allopatry: absence of interaction (issue C1)
+        @test Guadex.parse_interaction_string("No coexist") ≈ 0.0
+        @test Guadex.parse_interaction_string("no coexist.") ≈ 0.0
 
         # Strong negative: displaces
         @test Guadex.parse_interaction_string("displaces") ≈ -0.8
@@ -178,14 +178,63 @@ end
         @test all(mat .<= 0.0)
         @test all(mat .>= -1.0)
 
-        # LAX: interaction matrix has as many nonzeros as the documented 205,
-        # but verify a few known relationships from the empirical matrix
-        # ST has -1.0 on many invasives
-        st_idx = findfirst(==("ST"), species_codes)
-        gh_idx = findfirst(==("GH"), species_codes)
-        ms_idx = findfirst(==("MS"), species_codes)
-        @test mat[st_idx, gh_idx] == 0.0   # ST row, GH col = effect of GH on ST
-        @test mat[gh_idx, st_idx] == -1.0  # GH row, ST col = effect of ST on GH
+        idx = Dict(sp => i for (i, sp) in enumerate(species_codes))
+        sa, ms = idx["SA"], idx["MS"]
+        gh, st = idx["GH"], idx["ST"]
+        io, il = idx["IO"], idx["IL"]
+        lg = idx["LG"]
+
+        # Direction is read from the text (issue C1): the species named in a
+        # cell is the affected (target) one.  Row Ms / column Sa says
+        # "displaces Sa through predation", i.e. largemouth bass preys on
+        # S. alburnoides, so alpha[SA, MS] < 0 and alpha[MS, SA] == 0.
+        @test mat[sa, ms] < 0.0
+        @test mat[sa, ms] ≈ -0.8
+        @test mat[ms, sa] == 0.0
+
+        # "No coexist" (row Gh / column St) is allopatry: no interaction.
+        @test mat[gh, st] == 0.0
+        @test mat[st, gh] == 0.0
+
+        # A known undirected competition cell is symmetric in both directions
+        # (row Io / column Il = "Coexist, interfere through competition.").
+        @test mat[io, il] ≈ -0.3
+        @test mat[il, io] ≈ -0.3
+        @test mat[io, il] == mat[il, io]
+
+        # The Lepomis gibbosus row is no longer skipped: it has effects on other
+        # species (column) and other species affect it (row).
+        @test count(!iszero, mat[lg, :]) > 0
+        @test count(!iszero, mat[:, lg]) > 0
+
+        # Every species participates in at least one interaction, so no row is
+        # silently dropped.
+        for k in 1:24
+            @test count(!iszero, mat[k, :]) + count(!iszero, mat[:, k]) > 0
+        end
+
+        # The summed effect of invasive species on native species is negative.
+        native = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO", "ST", "LR", "MC"]
+        invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT", "AAL"]
+        native_idx = [idx[sp] for sp in native]
+        invasive_idx = [idx[sp] for sp in invasive]
+        @test sum(mat[native_idx, invasive_idx]) < 0.0
+
+        # The committed long-format table is exported with the documented schema
+        # and the loader reproduces the matrix from a plain matrix CSV too.
+        long_file = joinpath(dirname(INTERACTION_FILE), "interaction_matrix_long.csv")
+        @test isfile(long_file)
+        long_df = CSV.read(long_file, DataFrame)
+        @test names(long_df) == ["source", "target", "mechanism", "alpha", "ambiguous", "raw_text"]
+        @test nrow(long_df) > 0
+        @test count(long_df.ambiguous) > 0
+
+        mktempdir() do tmp
+            plain = joinpath(tmp, basename(INTERACTION_FILE))
+            cp(INTERACTION_FILE, plain)
+            direct = Guadex.load_interaction_matrix(plain, species_codes)
+            @test direct == mat
+        end
     end
 end
 
