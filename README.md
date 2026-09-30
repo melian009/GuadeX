@@ -68,7 +68,7 @@ Beyond which specific simulation framework we choose, there are elements that wi
 
 ## Data Sources and Files
 
-The research relies on a comprehensive dataset from 1,037 sampled sites in the Guadalquivir basin.
+The research relies on a comprehensive GIS dataset of 1,037 sampled sites in the Guadalquivir basin. Of these, the dynamic simulation model uses the **775** sites that have complete network and forcing data; the remaining sites appear in the GIS data and the viewer but are not part of the simulated metacommunity.
 
 | File Name | Description and Key Variables | Data Context |
 | :--- | :--- | :--- |

@@ -5,7 +5,7 @@
 **Who this is for.** Biologists, ecologists and managers who want to know what this
 simulation ensemble found and what it did **not** find. No programming background is
 assumed. Companion documents: `docs/climate_scenarios.md` (run setup) and
-`docs/climate_scenarios_results_report.md` (technical review). All results are in
+`legacy/climate_scenarios_results_report.md` (technical review). All results are in
 `results/climate_scenarios_k1x_burnin/`.
 
 ---
@@ -157,7 +157,7 @@ sub-basin → water body → basin), each a mean over the units within a level.
 | :--- | :--- |
 | Native richness | number of the 10 native species above density 0.1 at a site, averaged over sites |
 | Invasive richness | same for the 10 invasive species |
-| Native richness loss (relative) | `max(0, 1 − current richness / 2026 equilibrium richness)`; labelled "extinction risk" in some figures. It can only exceed zero if basin-average richness falls below its starting value |
+| Native richness loss (relative) | `max(0, 1 − current richness / 2026 equilibrium richness)`; a deterministic realised contraction, not an extinction probability. It can only exceed zero if basin-average richness falls below its starting value |
 | Total biomass | summed density of all 24 species per site |
 | Projected water temperature | basin-mean water temperature |
 
@@ -312,7 +312,7 @@ site-to-site variability.
    horizon or stronger forcing separation is needed. (Absolute ΔT against 1986–2005
    is also not comparable across SSP products, because they carry different 2026
    offsets; see §5.1.)
-3. **The "extinction-risk" metric is not a risk measure.** It is `1 − current / initial
+3. **The realised richness-loss metric is not an extinction probability.** It is `1 − current / initial
    richness` floored at zero, so it is ≤1 % here by construction: a realised loss, not
    a probability or danger of future extinction.
 4. **The quasi-extinction fraction is unusable and is not a result.** It reaches
@@ -402,4 +402,4 @@ in `<run>/export/run_metadata.json`; `runs_index.csv` summarises all 45 runs.
 *Generated from `results/climate_scenarios_k1x_burnin` (45 runs; 775 sites;
 2026–2045). Run setup: `docs/climate_scenarios.md`. Engineering review of earlier
 ensembles and the burn-in / carrying-capacity change:
-`docs/climate_scenarios_results_report.md`.*
+`legacy/climate_scenarios_results_report.md`.*
