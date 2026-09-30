@@ -59,6 +59,7 @@ export plot_climate_community_filling, plot_climate_diagnostics
 export prepare_ode_data, save_ode_data
 export load_species_characteristics, load_site_data, load_species_density_data
 export load_interaction_matrix, build_distance_matrix, build_interaction_long_table
+export build_on_path_distance_matrix, ON_PATH_DEFAULT_RTOL, ON_PATH_DEFAULT_ATOL
 export load_cedex_var, load_cedex_esc_uts, select_cedex_uts, load_obstacles
 export build_elevation_vector, build_dam_passability_matrix
 export build_site_coordinate_matrix, build_obstacle_passability_matrix

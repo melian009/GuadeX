@@ -1259,6 +1259,236 @@ function build_distance_matrix(distance_file::String, sites::Vector{String},
     return distance_matrix
 end
 
+# ---------------------------------------------------------------------------
+# C4: dendritic graph reconstructed from the network-distance matrix.
+#
+# The preferred route (snap sites to `SW_Line_4C_.shp`, orient the river lines
+# and follow the channels) is not feasible with this layer: it is a WISE
+# water-body *inventory* with no flow-direction attribute (no FromNode/ToNode,
+# no order), no elevation (the geometry is 2D EPSG:25830, `has_z == false`) and
+# no clean noded reach topology (3821 digitised parts for 360 multi-line
+# features), so flow direction is ambiguous.  We therefore use the documented
+# fallback: the on-path parent rule plus an explicit minimum-spanning-tree join
+# of the remaining roots.  See `docs/GuadeX_Correction_Plan_Sept2026.md` (C4).
+# ---------------------------------------------------------------------------
+
+# Default tolerance of the on-path test `D(i,k) ≈ d(i) − d(k)`.  The two data
+# sources (ConnectivityUTM and the reticular matrix) are not perfectly
+# consistent, so a small relative + absolute slack is required.  These are the
+# values of the reviewer's prototype (issue C4).
+const ON_PATH_DEFAULT_RTOL = 0.02   # relative slack (fraction of D)
+const ON_PATH_DEFAULT_ATOL = 200.0  # absolute slack (metres)
+
+"""
+    _consider_on_path_parent!(parent, parent_distance, i, k, dist, dg, sites,
+                              rtol, atol)
+
+Update the on-path parent of site `i` with candidate `k` (which must be
+downstream, `dg[k] < dg[i]`) when the pair lies on one flow path
+`|dist − (dg[i] − dg[k])| ≤ rtol·dist + atol` and the candidate is nearer (smaller
+`dist`).  Exact ties are broken by site code so the result never depends on
+`Dict` iteration order.
+"""
+function _consider_on_path_parent!(parent::Vector{Int}, parent_distance::Vector{Float64},
+        i::Int, k::Int, dist::Float64, dg::Vector{Float64},
+        sites::Vector{String}, rtol::Float64, atol::Float64)
+    on_path = abs(dist - (dg[i] - dg[k])) <= rtol * dist + atol
+    on_path || return nothing
+
+    best = parent[i]
+    if best == 0 || dist < parent_distance[i] ||
+       (dist == parent_distance[i] && sites[k] < sites[best])
+        parent[i] = k
+        parent_distance[i] = dist
+    end
+    return nothing
+end
+
+"""
+    build_on_path_distance_matrix(distance_file, sites, site_to_river_distance,
+                                  site_to_elevation;
+                                  rtol=0.02, atol=200.0,
+                                  store_both_directions=true) -> NamedTuple
+
+Reconstruct the dendritic dispersal graph from the network-distance matrix
+(issue C4, fallback route).
+
+Algorithm
+1. Stream `distance_file` once and keep the reticular (network) distance of
+   every unordered pair of model sites.
+2. On-path parent rule: site `i` is connected to the *nearest* site `k` such
+   that `dg[k] < dg[i]` (downstream, with `dg` the distance to the Guadalquivir)
+   and `|D(i,k) − (dg[i] − dg[k])| ≤ rtol·D(i,k) + atol`, i.e. `k` lies on the
+   same flow path from `i` to the river mouth.  Sites without such a candidate
+   are roots.
+3. The roots are joined by a minimum spanning tree on the network distance
+   (Kruskal; edges ordered by `(weight, site-code pair)` for reproducibility).
+   Each root edge is oriented from the endpoint farther from the mouth
+   (larger `dg`) to the nearer one.
+
+The result is a spanning tree with exactly `n − 1` edges.  Its parent edges are
+flow-path edges; the `n_roots − 1` root-join edges connect distinct flow paths
+(they are necessarily *not* on-path edges).  The returned sparse matrix stores
+both directions of every tree edge (2·(n−1) non-zeros) so it is a drop-in
+replacement for the symmetric legacy matrix used by the ODE dispersal kernel.
+
+Returns a NamedTuple with `distance_matrix`, `parent` (`0` = root), `roots`,
+`tree_edges` (directed `(upstream, downstream, distance)` triples) and
+`diagnostics`.
+"""
+function build_on_path_distance_matrix(distance_file::String, sites::Vector{String},
+        site_to_river_distance::Dict{T3, Float64},
+        site_to_elevation::Dict{T4, Float64};
+        rtol::Float64 = ON_PATH_DEFAULT_RTOL,
+        atol::Float64 = ON_PATH_DEFAULT_ATOL,
+        store_both_directions::Bool = true) where {T3 <: AbstractString} where {T4 <: AbstractString}
+    println("Building on-path (river-network) distance matrix from: $distance_file")
+    println("  on-path tolerance: rtol=$rtol, atol=$(atol) m")
+
+    site_to_idx = Dict(s => i for (i, s) in enumerate(sites))
+    n_sites = length(sites)
+    dg = Float64[get(site_to_river_distance, s, Inf) for s in sites]
+    dg_site = Dict(sites[i] => dg[i] for i in 1:n_sites)
+    elevation = Float64[get(site_to_elevation, s, NaN) for s in sites]
+
+    # --- streaming pass: network distance of every model-site pair ----------
+    pair_distance = Dict{Tuple{Int, Int}, Float64}()
+    total_rows = 0
+    reader = CSV.File(distance_file; delim=';')
+    for row in reader
+        total_rows += 1
+        i = get(site_to_idx, row.ID_ORIGIN, 0)
+        k = get(site_to_idx, row.ID_DESTINATION, 0)
+        (i == 0 || k == 0 || i == k) && continue
+        dist = Float64(row.RETICULAR_DIST)
+        (isfinite(dist) && dist > 0) || continue
+        a, b = i < k ? (i, k) : (k, i)
+        key = (a, b)
+        # The matrix is symmetric but read twice; keeping the smaller value
+        # makes the stored distance independent of row order.
+        pair_distance[key] = haskey(pair_distance, key) ?
+            min(pair_distance[key], dist) : dist
+    end
+    println("  read $total_rows distance records; kept $(length(pair_distance)) model-site pairs")
+
+    # --- on-path parent rule ------------------------------------------------
+    parent = zeros(Int, n_sites)
+    parent_distance = fill(Inf, n_sites)
+    for ((a, b), dist) in pair_distance
+        if dg[b] < dg[a]
+            _consider_on_path_parent!(parent, parent_distance, a, b, dist, dg, sites, rtol, atol)
+        elseif dg[a] < dg[b]
+            _consider_on_path_parent!(parent, parent_distance, b, a, dist, dg, sites, rtol, atol)
+        end
+    end
+
+    parent_edges = Tuple{Int, Int, Float64}[]
+    parent_length = 0.0
+    for i in 1:n_sites
+        if parent[i] != 0
+            push!(parent_edges, (i, parent[i], parent_distance[i]))
+            parent_length += parent_distance[i]
+        end
+    end
+    roots = Int[i for i in 1:n_sites if parent[i] == 0]
+    println("  $(length(parent_edges)) parent edges, $(length(roots)) roots")
+
+    # --- join the roots with an MST on network distance ---------------------
+    root_set = Set(roots)
+    root_pos = Dict(r => p for (p, r) in enumerate(roots))
+    mst_candidates = Tuple{Float64, Int, Int}[]
+    for ((a, b), dist) in pair_distance
+        (a in root_set && b in root_set) && push!(mst_candidates, (dist, a, b))
+    end
+    sort!(mst_candidates, by = e -> (e[1],
+        min(sites[e[2]], sites[e[3]]), max(sites[e[2]], sites[e[3]])))
+
+    uf = collect(1:length(roots))
+    function _find(x)
+        while uf[x] != x
+            uf[x] = uf[uf[x]]
+            x = uf[x]
+        end
+        return x
+    end
+
+    root_edges = Tuple{Int, Int, Float64}[]
+    root_length = 0.0
+    for (dist, a, b) in mst_candidates
+        x, y = _find(root_pos[a]), _find(root_pos[b])
+        x == y && continue
+        uf[x] = y
+        root_length += dist
+        # Orient upstream -> downstream: larger distance-to-mouth first.
+        if dg[a] > dg[b] || (dg[a] == dg[b] && sites[a] < sites[b])
+            push!(root_edges, (a, b, dist))
+        else
+            push!(root_edges, (b, a, dist))
+        end
+    end
+    println("  $(length(root_edges)) root-join MST edges " *
+            "($(round(root_length / 1000, digits = 1)) km)")
+    length(root_edges) == length(roots) - 1 ||
+        error("root MST is disconnected: $(length(root_edges)) edges for $(length(roots)) roots")
+
+    # --- combine and build the sparse matrix --------------------------------
+    tree_edges = vcat(parent_edges, root_edges)
+    isempty(tree_edges) && n_sites > 1 &&
+        error("on-path graph has no edges for $(n_sites) sites")
+
+    I = Int[]
+    J = Int[]
+    V = Float64[]
+    for (u, v, w) in tree_edges
+        push!(I, v); push!(J, u); push!(V, w)   # v (downstream) <- u (upstream)
+        if store_both_directions
+            push!(I, u); push!(J, v); push!(V, w)
+        end
+    end
+    distance_matrix = sparse(I, J, V, n_sites, n_sites)
+
+    parent_inversions = Tuple{String, String, Float64, Float64}[]
+    for (u, v, _) in parent_edges
+        if isfinite(elevation[u]) && isfinite(elevation[v]) && elevation[u] < elevation[v]
+            push!(parent_inversions, (sites[u], sites[v], elevation[u], elevation[v]))
+        end
+    end
+    root_inversions = Tuple{String, String, Float64, Float64}[]
+    for (u, v, _) in root_edges
+        if isfinite(elevation[u]) && isfinite(elevation[v]) && elevation[u] < elevation[v]
+            push!(root_inversions, (sites[u], sites[v], elevation[u], elevation[v]))
+        end
+    end
+
+    diagnostics = (
+        method = :on_path,
+        rtol = rtol,
+        atol = atol,
+        n_sites = n_sites,
+        n_edges = length(tree_edges),
+        n_parent_edges = length(parent_edges),
+        n_root_join_edges = length(root_edges),
+        n_roots = length(roots),
+        nnz = nnz(distance_matrix),
+        parent_length_km = parent_length / 1000.0,
+        root_join_length_km = root_length / 1000.0,
+        total_length_km = (parent_length + root_length) / 1000.0,
+        parent_elevation_inversions = parent_inversions,
+        root_join_elevation_inversions = root_inversions
+    )
+    println("  tree: $(diagnostics.n_edges) edges, total length " *
+            "$(round(diagnostics.total_length_km, digits = 1)) km, " *
+            "$(length(parent_inversions)) parent elevation inversion(s)")
+
+    return (
+        distance_matrix = distance_matrix,
+        parent = parent,
+        roots = roots,
+        tree_edges = tree_edges,
+        diagnostics = diagnostics
+    )
+end
+
 """
     build_elevation_vector(site_df::DataFrame, sites::Vector{String})
 
@@ -1772,6 +2002,12 @@ Prepare all data needed for the ODE metacommunity model.
 - `distance_file`: Path to distance matrix data
 - `interaction_file`: Path to species interaction data
 - `upstream_cost`: Additional cost factor for upstream dispersal
+- `connectivity_method`: `:legacy` (default) keeps the original
+  sub-catchment chaining in [`build_distance_matrix`](@ref); `:on_path` builds the
+  dendritic tree from the network-distance matrix with
+  [`build_on_path_distance_matrix`](@ref) (issue C4).
+- `on_path_rtol`, `on_path_atol`: tolerance used by the `:on_path` rule
+  `|D(i,k) − (d(i) − d(k))| ≤ rtol·D(i,k) + atol` (metres).
 - `obstacles_file`: Optional obstacle inventory; loaded but ignored unless `obstacle_mode = :overlay`
 - `obstacle_mode`: `:legacy` (default, no obstacle overlay) or `:overlay`
 - `obstacle_matching_tolerance`: Matching tolerance in metres for the obstacle overlay
@@ -1828,6 +2064,9 @@ function prepare_ode_data(;
     obstacle_passability::Float64 = 0.1,
     obstacle_downstream_passability::Float64 = 0.5,
     obstacle_include_ambiguous_status::Bool = false,
+    connectivity_method::Symbol = :legacy,
+    on_path_rtol::Float64 = ON_PATH_DEFAULT_RTOL,
+    on_path_atol::Float64 = ON_PATH_DEFAULT_ATOL,
     heat_stress_rate::Float64 = 0.0,
     carrying_capacity_base_scaling::Float64 = 10.0,
     carrying_capacity_scaling::Float64 = 1.0,
@@ -1845,6 +2084,8 @@ function prepare_ode_data(;
     println("Found $n_sites sites")
 
     obstacle_mode in (:legacy, :overlay) || error("obstacle_mode must be :legacy or :overlay")
+    connectivity_method in (:legacy, :on_path) ||
+        error("connectivity_method must be :legacy or :on_path (got :$(connectivity_method))")
 
     # Optional updated inputs are loaded explicitly and kept separate from the
     # legacy site/environment tables.  This avoids silently changing the model
@@ -1914,8 +2155,30 @@ function prepare_ode_data(;
     # Create elevation mapping
     site_to_elevation = Dict{String, Float64}(string(row.CODIGO) => Float64(coalesce(row.ALTITUD, 500.0)) for row in eachrow(site_df))
 
-    println("\n[5/12] Building distance matrix...")
-    distance_matrix = build_distance_matrix(distance_file, sites, site_to_subcatchment, site_to_river_distance, site_to_elevation)
+    println("\n[5/12] Building distance matrix (method=:$(connectivity_method))...")
+    connectivity_diagnostics = nothing
+    # E12 interface: the directed dendritic edges (upstream, downstream, metres)
+    # and the downstream-parent index (0 = root) of the selected graph.  Empty
+    # for the legacy method, which has no flow-oriented topology.
+    connectivity_tree_edges = Tuple{Int, Int, Float64}[]
+    connectivity_parent = Int[]
+    if connectivity_method == :legacy
+        distance_matrix = build_distance_matrix(distance_file, sites, site_to_subcatchment,
+            site_to_river_distance, site_to_elevation)
+    else
+        on_path_result = build_on_path_distance_matrix(distance_file, sites,
+            site_to_river_distance, site_to_elevation;
+            rtol=on_path_rtol, atol=on_path_atol)
+        distance_matrix = on_path_result.distance_matrix
+        connectivity_diagnostics = on_path_result.diagnostics
+        connectivity_tree_edges = on_path_result.tree_edges
+        connectivity_parent = on_path_result.parent
+        println("On-path graph: $(connectivity_diagnostics.n_edges) edges " *
+                "($(connectivity_diagnostics.n_parent_edges) parent + " *
+                "$(connectivity_diagnostics.n_root_join_edges) root-join), " *
+                "$(connectivity_diagnostics.n_roots) roots, total " *
+                "$(round(connectivity_diagnostics.total_length_km, digits=1)) km")
+    end
 
     # 6. Build elevation vector
     println("\n[6/12] Extracting elevations...")
@@ -2039,6 +2302,10 @@ function prepare_ode_data(;
         # E12: obstacle classification/accumulation counts and per-link obstacle
         # counts (nothing when no overlay was applied).
         obstacle_metadata = obstacle_metadata,
+        connectivity_method = connectivity_method,
+        connectivity_diagnostics = connectivity_diagnostics,
+        connectivity_tree_edges = connectivity_tree_edges,
+        connectivity_parent = connectivity_parent,
         obstacles_df = obstacles_df,
         cedex_var_df = cedex_var_df,
         cedex_esc_uts_df = cedex_esc_uts_df,

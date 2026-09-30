@@ -6,6 +6,7 @@ using CSV
 using DifferentialEquations
 using LinearAlgebra
 using Statistics
+using Graphs
 
 # Shared constants for test files
 const DATA_DIR = joinpath(@__DIR__, "../data")
@@ -24,6 +25,7 @@ include("test_ode.jl")
 include("test_temperature_forcing.jl")
 include("test_data_preparation.jl")
 include("test_parameters.jl")
+include("test_on_path_graph.jl")
 include("test_outputs.jl")
 include("test_climate_figures.jl")
 include("test_visualization.jl")
