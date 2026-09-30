@@ -204,8 +204,9 @@ end
         du = zeros(2, 2)
         Guadex.metacommunity_ode!(du, u0, p_no_interact, 0.0)
 
-        # logistic_term = clamp(1 - 35/30, -1, 2) = -0.167
-        # growth = N * r_eff * logistic_term < 0
+        # Interactions are zero here, so the corrected LV bracket reduces to
+        # logistic_term = clamp(1 - 35/30, -1, 2) = -0.167 and growth is still
+        # N * r_eff * logistic_term < 0 (issue C2 leaves this limit unchanged).
         @test du[1, 1] < 0.0
         @test du[1, 2] < 0.0
         @test du[2, 1] < 0.0
