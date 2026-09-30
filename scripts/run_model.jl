@@ -32,6 +32,12 @@ const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOL
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
 
+# C4: dispersal-graph construction method from the [connectivity] section.
+const CONNECTIVITY_METHOD = SimulationParameters.connectivity_method(GUADEX_PARAMS)
+
+# E13-E16/E18: opt-in biological-assumption options (all legacy by default).
+const BIOLOGICAL_OPTIONS = SimulationParameters.biological_options(GUADEX_PARAMS)
+
 # Time configuration: 1 time unit = 1 day
 const DAYS_PER_YEAR = Int(GUADEX_PARAMS["general"]["days_per_year"])
 const SIMULATION_YEARS = Int(GUADEX_PARAMS["run_model"]["simulation_years"])
@@ -172,7 +178,14 @@ data = prepare_ode_data(
     obstacle_mode = OBSTACLE_MODE,
     obstacle_matching_tolerance = OBSTACLE_MATCHING_TOLERANCE,
     obstacle_passability = OBSTACLE_PASSABILITY,
-    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY
+    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY,
+    connectivity_method = CONNECTIVITY_METHOD,
+    absence_growth_fraction = BIOLOGICAL_OPTIONS.absence_growth_fraction,
+    pool_capacity_mode = BIOLOGICAL_OPTIONS.pool_capacity_mode,
+    fishless_dificil_capacity = BIOLOGICAL_OPTIONS.fishless_dificil_capacity,
+    nonreproducing_local_growth = BIOLOGICAL_OPTIONS.nonreproducing_local_growth,
+    exclude_fishfarm_eel_records = BIOLOGICAL_OPTIONS.exclude_fishfarm_eel_records,
+    salinity_envelope = BIOLOGICAL_OPTIONS.salinity_envelope
 )
 
 # --- Apply Management Scenarios ---
@@ -384,5 +397,6 @@ export_result = export_run_outputs(export_dir;
         "obstacle_mode" => string(OBSTACLE_MODE),
         "cedex_var_file" => CEDEX_VAR_FILE,
         "cedex_uts_file" => CEDEX_UTS_FILE,
-        "obstacles_file" => OBSTACLES_FILE))
+        "obstacles_file" => OBSTACLES_FILE,
+        "biological_options" => SimulationParameters.biological_options_dict(GUADEX_PARAMS)))
 println("Four-level outputs written to: $(export_result.output_dir)")

@@ -3,6 +3,9 @@
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 
+# Exercise the corrected configuration (daily per-GCM forcing, robust
+# basin+composition stop rule, corrected output dir).
+$env:GUADEX_PARAMETERS_FILE             = "parameters_climate_scenarios_corrected.toml"
 $env:GUADEX_CLIMATE_OUTPUT_DIR          = "results/_smoke_k1x"
 $env:GUADEX_CLIMATE_FORCING_MODE        = "daily"
 $env:GUADEX_CLIMATE_DAILY_FILE          = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"
@@ -10,7 +13,9 @@ $env:GUADEX_CLIMATE_DAILY_PER_GCM       = "1"
 $env:GUADEX_CLIMATE_SPIN_UP             = "1"
 $env:GUADEX_CLIMATE_SPIN_UP_YEARS       = "3"
 $env:GUADEX_CLIMATE_SPIN_UP_TOL         = "1.0e-3"
-$env:GUADEX_CLIMATE_SPIN_UP_CRITERION   = "basin"
+$env:GUADEX_CLIMATE_SPIN_UP_CRITERION   = "both"
+$env:GUADEX_CLIMATE_SPIN_UP_COMPOSITION_TOL = "1.0e-2"
+$env:GUADEX_CLIMATE_SPIN_UP_MIN_YEARS   = "1"
 $env:GUADEX_CLIMATE_K_BASE              = "1.0"
 $env:GUADEX_CLIMATE_K_SCALING           = "1.0"
 $env:GUADEX_CLIMATE_HEAT_STRESS         = "1"

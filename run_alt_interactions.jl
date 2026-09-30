@@ -33,6 +33,14 @@ SimulationParameters.require_sections(GUADEX_PARAMS, "general", "inputs", "obsta
 const SETTINGS = load_sensitivity_settings(GUADEX_PARAMS)
 const THERMAL_SIGMA_MULTIPLIER = Float64(GUADEX_PARAMS["run_alt_interactions"]["thermal_sigma_multiplier"])
 
+# Output root for the alt-interaction sweep.  Explicit `[run_alt_interactions].output_dir`
+# lets the corrected config write to its own directory without touching the
+# legacy `results/sensitivity_obstacles/alt_interactions`; absent, the legacy
+# path (under the obstacle output root) is preserved.  `GUADEX_ALT_OUTPUT_DIR`
+# still overrides.
+const ALT_OUTPUT_DIR = String(get(GUADEX_PARAMS["run_alt_interactions"], "output_dir",
+    joinpath(SETTINGS.output_dir, "alt_interactions")))
+
 const CEDEX_VAR_FILE = get(ENV, "GUADEX_CEDEX_VAR_FILE", GUADEX_PARAMS["inputs"]["cedex_var_file"])
 const CEDEX_UTS_FILE = get(ENV, "GUADEX_CEDEX_UTS_FILE", GUADEX_PARAMS["inputs"]["cedex_esc_uts_file"])
 const OBSTACLES_FILE = get(ENV, "GUADEX_OBSTACLES_FILE", GUADEX_PARAMS["inputs"]["obstacles_file"])
@@ -40,6 +48,9 @@ const OBSTACLE_MODE = Symbol(get(ENV, "GUADEX_OBSTACLE_MODE", GUADEX_PARAMS["obs
 const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOLERANCE_M", string(GUADEX_PARAMS["obstacles"]["matching_tolerance_m"])))
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
+
+# C4: dispersal-graph construction method from the [connectivity] section.
+const CONNECTIVITY_METHOD = SimulationParameters.connectivity_method(GUADEX_PARAMS)
 
 const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
 const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
@@ -65,7 +76,18 @@ if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
     println("  sigma multiplier: $(THERMAL_SIGMA_MULTIPLIER)")
     println("  forcing file:    $(SETTINGS.daily_forcing_file)")
     println("  heat stress:     enabled=$(SETTINGS.heat_stress_enabled) calibrate=$(SETTINGS.heat_stress_calibrate)")
-    println("  burn-in:         max $(SETTINGS.spin_up_max_years) yr, tol=$(SETTINGS.spin_up_tol), criterion=:$(SETTINGS.spin_up_criterion)")
+    println("  burn-in:         max $(SETTINGS.spin_up_max_years) yr, tol=$(SETTINGS.spin_up_tol), " *
+            "composition_tol=$(SETTINGS.spin_up_composition_tol), min_years=$(SETTINGS.spin_up_min_years), " *
+            "criterion=:$(SETTINGS.spin_up_criterion)")
+    println("  route:           :$(SETTINGS.projection_route)" *
+            (SETTINGS.projection_route === :interim_observed ?
+                " ($(SETTINGS.interim_spin_up_years) baseline yr, E4 bypassed)" : " (E4 stop rule)"))
+    println("  connectivity:    :$(CONNECTIVITY_METHOD)")
+    println("  biology:         absence_growth_fraction=$(SETTINGS.absence_growth_fraction), " *
+            "pool=$(SETTINGS.pool_capacity_mode), dificil=$(SETTINGS.fishless_dificil_capacity), " *
+            "nonrep=$(SETTINGS.nonreproducing_local_growth), eel=$(SETTINGS.exclude_fishfarm_eel_records), " *
+            "salinity=$(SETTINGS.salinity_envelope)")
+    println("  output:          $(ALT_OUTPUT_DIR)")
     exit(0)
 end
 
@@ -117,6 +139,10 @@ println("Alternative-interaction obstacle sensitivity (daily forcing + burn-in)"
 println("  horizon:        $(SETTINGS.start_year)-$(SETTINGS.end_year)")
 println("  climate models: $(join([climate_model_tag(m) for m in CLIMATE_MODELS], ", "))")
 println("  sigma multiplier: $(THERMAL_SIGMA_MULTIPLIER)")
+println("  route:          :$(SETTINGS.projection_route)" *
+        (SETTINGS.projection_route === :interim_observed ?
+            " ($(SETTINGS.interim_spin_up_years) baseline yr)" : ""))
+println("  output:         $(ALT_OUTPUT_DIR)")
 println("="^70)
 
 # =============================================================================
@@ -133,8 +159,15 @@ data_base = prepare_ode_data(
     obstacle_matching_tolerance = OBSTACLE_MATCHING_TOLERANCE,
     obstacle_passability = OBSTACLE_PASSABILITY,
     obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY,
+    connectivity_method = CONNECTIVITY_METHOD,
     carrying_capacity_base_scaling = SETTINGS.carrying_capacity_base_scaling,
-    carrying_capacity_scaling = SETTINGS.carrying_capacity_scaling
+    carrying_capacity_scaling = SETTINGS.carrying_capacity_scaling,
+    absence_growth_fraction = SETTINGS.absence_growth_fraction,
+    pool_capacity_mode = SETTINGS.pool_capacity_mode,
+    fishless_dificil_capacity = SETTINGS.fishless_dificil_capacity,
+    nonreproducing_local_growth = SETTINGS.nonreproducing_local_growth,
+    exclude_fishfarm_eel_records = SETTINGS.exclude_fishfarm_eel_records,
+    salinity_envelope = SETTINGS.salinity_envelope
 )
 
 n_sites = data_base.params.n_sites
@@ -147,11 +180,8 @@ if SETTINGS.thermal_optima_fraction != 0.5
     base_params = set_thermal_optima(base_params, optima)
 end
 
-density_cols = [Symbol("$(sp)_DEN") for sp in data_base.species]
-density_df_filtered = filter(row -> row.CODIGO in data_base.sites, data_base.density_df)
-u0_obs = Matrix(density_df_filtered[:, density_cols])
-replace!(u0_obs, NaN => 0.0)
-u0_obs = max.(u0_obs, 0.0)
+# Align the observed state to model sites by code (minor #3), not by row order.
+u0_obs = observed_density_matrix(data_base.density_df, data_base.sites, data_base.species)
 
 println("\nLoading baseline daily forcing ($(SETTINGS.daily_forcing_file))...")
 baseline_dates, baseline_temps = load_baseline_forcing(SETTINGS.daily_forcing_file, data_base.sites)
@@ -175,6 +205,14 @@ matrices = [
 # depends on the interaction structure, so every matrix is started from its own
 # baseline equilibrium.
 matrix_states = Dict{String,Any}()
+# E4: actual burn-in diagnostics per interaction matrix, written to a summary
+# file so the report can cite the real matrix-specific years (they differ
+# strongly: 21 for the original matrix, hundreds for the alternatives).
+burnin_summary = DataFrame(matrix=String[], thermal_sigma_multiplier=Float64[],
+    years=Int[], converged=Bool[], total_biomass_change=Float64[],
+    composition_q95_change=Float64[], composition_q95_change_all_cells=Float64[],
+    composition_active_cells=Int[], composition_active_floor=Float64[],
+    composition_tol=Float64[], criteria=String[])
 for entry in matrices
     p = set_heat_stress_rate(set_interaction_matrix(base_params, entry.matrix), k_heat)
     if THERMAL_SIGMA_MULTIPLIER != 1.0
@@ -194,24 +232,45 @@ for entry in matrices
     end
     matrix_states[entry.name] = (params=p, spin=spin,
         baseline_species_density=reshape(spin.state, n_sites, n_species))
+    push!(burnin_summary, (matrix=entry.name,
+        thermal_sigma_multiplier=THERMAL_SIGMA_MULTIPLIER,
+        years=Int(spin.years), converged=Bool(spin.converged),
+        total_biomass_change=Float64(spin.last_basin_change),
+        composition_q95_change=Float64(spin.last_composition_change),
+        composition_q95_change_all_cells=Float64(spin.last_composition_change_all_cells),
+        composition_active_cells=Int(spin.composition_active_cells),
+        composition_active_floor=Float64(spin_up_composition_active_floor()),
+        composition_tol=Float64(SETTINGS.spin_up_composition_tol),
+        criteria=join(String.(spin.criteria), ";")))
+    println("  burn-in [matrix=$(entry.name)]: years=$(spin.years), " *
+            "converged=$(spin.converged), total=$(spin.last_basin_change), " *
+            "composition_q95=$(spin.last_composition_change), " *
+            "criteria=$(join(String.(spin.criteria), "+"))")
 end
 
 # The forcing depends only on (scenario, gcm), so load each per-GCM series once
 # and reuse it across all interaction matrices.
 forcing_by_model = Dict{String,Any}()
 warming_end_by_model = Dict{String,Float64}()
+realised_by_model = Dict{String,Any}()
 for model in CLIMATE_MODELS
     model_tag = climate_model_tag(model)
     forcing = load_climate_model_forcing(SETTINGS.daily_forcing_file, data_base.sites,
         model.scenario, model.gcm;
         baseline_start=SETTINGS.baseline_period_start,
         baseline_end=SETTINGS.baseline_period_end,
+        baseline_means=data_base.params.temperatures,
         days_per_year=SETTINGS.days_per_year,
         year_labels=SETTINGS.year_labels)
     forcing_by_model[model_tag] = forcing
     warming_end_by_model[model_tag] = maximum(forcing.warming[:, end])
+    realised_by_model[model_tag] = realised_warming_anomaly(forcing.warming,
+        SETTINGS.year_labels;
+        early_window=(SETTINGS.start_year, SETTINGS.end_year),
+        late_window=(max(SETTINGS.start_year, SETTINGS.end_year - 9), SETTINGS.end_year))
     println("  loaded daily forcing for $model_tag (" *
-            "$(round(warming_end_by_model[model_tag], digits=3)) degC by $(SETTINGS.end_year))")
+            "$(round(warming_end_by_model[model_tag], digits=3)) degC by $(SETTINGS.end_year); " *
+            "realised mean $(round(realised_by_model[model_tag].mean_2036_2045, digits=3)) degC)")
 end
 
 saveat = sensitivity_saveat(SETTINGS)
@@ -221,9 +280,13 @@ positivity_cb = sensitivity_positivity_callback()
 # --- Main sweep ---
 # =============================================================================
 
-base_output_dir = get(ENV, "GUADEX_ALT_OUTPUT_DIR",
-    joinpath(SETTINGS.output_dir, "alt_interactions"))
+base_output_dir = get(ENV, "GUADEX_ALT_OUTPUT_DIR", ALT_OUTPUT_DIR)
 mkpath(base_output_dir)
+# E4: persist the actual per-matrix burn-in years and diagnostics so the report
+# reads them instead of hard-coding a single value.
+burnin_summary_path = joinpath(base_output_dir, "burnin_summary.csv")
+CSV.write(burnin_summary_path, burnin_summary)
+println("\nBurn-in summary written to: $burnin_summary_path")
 index_path = joinpath(base_output_dir, "runs_index.csv")
 index_df = read_sensitivity_index(index_path; with_matrix=true)
 
@@ -267,7 +330,14 @@ for entry in matrices
 
                 fingerprint = sensitivity_run_fingerprint(SETTINGS, model;
                     upstream_cost=uc, passability_scenario=pass_name,
-                    interaction_matrix=matrix_name, sigma=THERMAL_SIGMA_MULTIPLIER)
+                    interaction_matrix=matrix_name, sigma=THERMAL_SIGMA_MULTIPLIER,
+                    params=params,
+                    digest_options=Dict{String,Any}(
+                        "obstacle_mode" => string(OBSTACLE_MODE),
+                        "obstacle_matching_tolerance_m" => OBSTACLE_MATCHING_TOLERANCE,
+                        "obstacle_passability" => OBSTACLE_PASSABILITY,
+                        "obstacle_downstream_passability" => OBSTACLE_DOWNSTREAM_PASSABILITY,
+                        "obstacles_file" => basename(OBSTACLES_FILE)))
 
                 if !FORCE_RERUN && sensitivity_run_status(run_dir, fingerprint)
                     println("  skipped (complete and fingerprint matches; " *
@@ -294,6 +364,9 @@ for entry in matrices
                         temperature_baseline=params.temperatures, warming=forcing.warming,
                         heat_stress_k=k_heat,
                         spin_up=SETTINGS.spin_up, spin_up_years=spin.years, spin_up_converged=spin.converged,
+                        spin_up_total_biomass_change=spin.last_basin_change,
+                        spin_up_composition_q95_change=spin.last_composition_change,
+                        spin_up_criteria=join(String.(spin.criteria), ";"),
                         carrying_capacity_base_scaling=SETTINGS.carrying_capacity_base_scaling,
                         carrying_capacity_scaling=SETTINGS.carrying_capacity_scaling,
                         thermal_optima_fraction=SETTINGS.thermal_optima_fraction,
@@ -303,7 +376,8 @@ for entry in matrices
                         obstacle_passability=OBSTACLE_PASSABILITY,
                         obstacle_downstream_passability=OBSTACLE_DOWNSTREAM_PASSABILITY,
                         obstacle_matched_count=count(data_base.obstacle_mapping_diagnostics.matched),
-                        obstacle_total_count=nrow(data_base.obstacle_mapping_diagnostics))
+                        obstacle_total_count=nrow(data_base.obstacle_mapping_diagnostics),
+                        parameter_digest=fingerprint["parameter_digest"])
 
                     export_sensitivity_run(run_dir;
                         data_base=data_base, sol=sol, params=scenario_params, forcing=forcing,
@@ -316,17 +390,25 @@ for entry in matrices
                             upstream_cost=uc, passability_scenario=pass_name,
                             warming_end=warming_end, heat_stress_k=k_heat,
                             spin_years=spin.years, spin_converged=spin.converged,
+                            spin_basin_change=spin.last_basin_change,
+                            spin_composition_change=spin.last_composition_change,
+                            spin_composition_change_all_cells=spin.last_composition_change_all_cells,
+                            spin_composition_active_cells=spin.composition_active_cells,
+                            spin_criteria=spin.criteria,
                             obstacle_mode=OBSTACLE_MODE,
+                            realised=realised_by_model[model_tag],
                             extras=Dict{String,Any}(
                                 "interaction_matrix_type" => matrix_name,
-                                "thermal_sigma_multiplier" => THERMAL_SIGMA_MULTIPLIER)))
+                                "thermal_sigma_multiplier" => THERMAL_SIGMA_MULTIPLIER,
+                                "parameter_digest" => fingerprint["parameter_digest"])))
                     mark_sensitivity_run_complete(run_dir, fingerprint)
                     println("  saved to: $run_dir")
                 end
 
                 row = index_row_values(run_dir, SETTINGS, model;
                     upstream_cost=uc, passability_scenario=pass_name, warming_end=warming_end,
-                    matrix=matrix_name, sigma=THERMAL_SIGMA_MULTIPLIER)
+                    matrix=matrix_name, sigma=THERMAL_SIGMA_MULTIPLIER,
+                    spin=spin, realised=realised_by_model[model_tag])
                 upsert_index_row!(index_df, row)
                 CSV.write(index_path, index_df)
             end
