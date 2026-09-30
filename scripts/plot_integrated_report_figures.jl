@@ -3,6 +3,7 @@ using DataFrames
 using CSV
 using CairoMakie
 using Statistics
+using Guadex
 
 # =============================================================================
 # Figures for the integrated climate / obstacle reports.
@@ -18,19 +19,24 @@ using Statistics
 # explain every visual element.
 # =============================================================================
 
-# Reuse the report theme / panel-letter helpers defined for the Guadex package.
-include(joinpath(@__DIR__, "..", "src", "report_style.jl"))
-
 const ROOT = normpath(joinpath(@__DIR__, ".."))
+include(joinpath(ROOT, "scripts", "plot_paths.jl"))
+
+# Input roots are overridable from the environment; the defaults reproduce the
+# legacy (pre-correction) results exactly.  See scripts/plot_paths.jl.
+const CLIMATE_ROOT = report_output_root("GUADEX_CLIMATE_OUTPUT_DIR",
+    joinpath("results", "climate_scenarios_k1x_burnin"); base=ROOT)
+const ALT_ROOT = report_output_root("GUADEX_ALT_OUTPUT_DIR",
+    joinpath("results", "sensitivity_obstacles", "alt_interactions"); base=ROOT)
 # Report figures live with the results they visualise, not in docs/.
-const OUT_CLIMATE = joinpath(ROOT, "results", "climate_scenarios_k1x_burnin", "figures", "report_plots")
-const OUT_ALT = joinpath(ROOT, "results", "sensitivity_obstacles", "alt_interactions", "report_plots")
+const OUT_CLIMATE = joinpath(CLIMATE_ROOT, "figures", "report_plots")
+const OUT_ALT = joinpath(ALT_ROOT, "report_plots")
 mkpath(OUT_CLIMATE); mkpath(OUT_ALT)
 
-const CLIMATE_ROOT = joinpath(ROOT, "results", "climate_scenarios_k1x_burnin")
-const ALT_INDEX = joinpath(ROOT, "results", "sensitivity_obstacles", "alt_interactions", "runs_index.csv")
+const ALT_INDEX = joinpath(ALT_ROOT, "runs_index.csv")
 const SPECIES_CHARS = joinpath(ROOT, "data", "ABIOTIC", "caracteristicas_peces_Guadalquivir_03-04-2018.csv")
 const SITE_TABLE = joinpath(CLIMATE_ROOT, "control", "baseline", "export", "levels", "level_sampling_point.csv")
+println("plot_integrated_report_figures roots: climate=$CLIMATE_ROOT alt=$ALT_ROOT")
 
 const NATIVE_CODES = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO", "ST"]
 const SSP_COLORS = Dict("ssp126" => RGBAf(0.11, 0.36, 0.60, 0.9),
@@ -54,13 +60,33 @@ function read_st_metrics(run_dir)
 end
 
 function read_st_exposure(run_dir)
+    # C7: prefer the established-site summary (mean/median/max over the sites
+    # where brown trout was baseline established), fall back to the all-sites
+    # table for runs written before the summary existed, and label which was used.
+    summary_path = joinpath(run_dir, "export", "levels", "exposure_summary.csv")
+    if isfile(summary_path)
+        df = CSV.read(summary_path, DataFrame)
+        sub = df[df.species .== "ST", :]
+        isempty(sub) && return nothing
+        days = Float64.(sub.mean_exposure_days)
+        return (max_days = maximum(Float64.(sub.max_exposure_days)),
+            mean_days = isempty(filter(isfinite, days)) ? NaN : maximum(days),
+            n_sites = maximum(Int.(sub.n_sites_selected)),
+            site_set = string(sub.site_set[1]),
+            max_energy = maximum(Float64.(sub.max_exceedance_energy)),
+            source = "established")
+    end
     path = joinpath(run_dir, "export", "levels", "exposure_sites.csv")
     isfile(path) || return nothing
     df = CSV.read(path, DataFrame)
     sub = df[df.species .== "ST", :]
     isempty(sub) && return nothing
     return (max_days = maximum(Int.(sub.exposure_days)),
-        max_energy = maximum(Float64.(sub.exceedance_energy)))
+        mean_days = mean(Float64.(sub.exposure_days)),
+        n_sites = length(unique(String.(sub.CODIGO))),
+        site_set = "all_sites_fallback",
+        max_energy = maximum(Float64.(sub.exceedance_energy)),
+        source = "all_sites_fallback")
 end
 
 # Axes here use explicit width/height, so the requested Figure size can be
@@ -106,7 +132,11 @@ function fig01_thermal_niches()
     baseline = mean(temps)
 
     idx = CSV.read(joinpath(CLIMATE_ROOT, "runs_index.csv"), DataFrame)
-    warming_delta = median(Float64.(idx.warming_end_degc[idx.scenario .!= "control"]))
+    # C7: draw the end-of-horizon shift from the realised applied warming when
+    # available, falling back to the labelled warming_end_degc proxy otherwise.
+    forcing_axis = Guadex.realised_forcing_axis(idx; window=:late)
+    finite_forcing = filter(isfinite, forcing_axis.values)
+    warming_delta = isempty(finite_forcing) ? 0.0 : median(finite_forcing)
 
     fig = Figure(size=(1700, 1050))
     ax = Axis(fig[1, 1]; width=760, height=650,
@@ -167,9 +197,15 @@ end
 function fig12_st_climate_response()
     report_theme!()
     idx = CSV.read(joinpath(CLIMATE_ROOT, "runs_index.csv"), DataFrame)
+    # C7: realised mean applied anomaly is the regressor; the warming_end_degc
+    # proxy is used only if the realised columns are absent, and is labelled.
+    axis = Guadex.realised_forcing_axis(idx)
+    idx[!, :forcing_axis] = axis.values
+    println("fig12 forcing axis: $(axis.column) [$(axis.source)]")
 
     scenario_rows = DataFrame(scenario = String[], gcm = String[], warming = Float64[],
-        rel = Float64[], final = Float64[], max_days = Int[], max_energy = Float64[])
+        rel = Float64[], final = Float64[], max_days = Int[], mean_days = Float64[],
+        max_energy = Float64[], exposure_site_set = String[])
     control = nothing
     for r in eachrow(idx)
         dir = run_path(r)
@@ -179,24 +215,26 @@ function fig12_st_climate_response()
         ex === nothing && continue
         if String(r.scenario) == "control"
             control = (warming = 0.0, rel = st.relative, final = st.final,
-                max_days = ex.max_days, max_energy = ex.max_energy)
+                max_days = ex.max_days, mean_days = ex.mean_days,
+                max_energy = ex.max_energy, site_set = ex.site_set)
             continue
         end
-        push!(scenario_rows, (String(r.scenario), String(r.gcm), Float64(r.warming_end_degc),
-            st.relative, st.final, ex.max_days, ex.max_energy))
+        push!(scenario_rows, (String(r.scenario), String(r.gcm), Float64(r.forcing_axis),
+            st.relative, st.final, ex.max_days, ex.mean_days, ex.max_energy, ex.site_set))
     end
 
     warm = scenario_rows.warming
     rel_pct = 100 .* scenario_rows.rel
     n = length(warm)
-    X = hcat(ones(n), warm)
-    beta = X \ rel_pct
-    yhat = X * beta
-    r2 = 1 - sum(abs2, rel_pct .- yhat) / sum(abs2, rel_pct .- mean(rel_pct))
+    # Dose-response with GCM as a categorical fixed effect (no MixedModels
+    # dependency) plus the per-GCM slope spread.
+    dose = Guadex.dose_response(warm, rel_pct, scenario_rows.gcm)
+    site_set = isempty(scenario_rows) ? "baseline_established" :
+        string(scenario_rows.exposure_site_set[1])
 
     fig = Figure(size=(1700, 1000))
     ax1 = Axis(fig[1, 1]; width=420, height=540,
-        xlabel = "Warming by 2045 (°C)",
+        xlabel = axis.label,
         ylabel = "Brown trout change (%)")
     panel_letter!(ax1, "(a)")
     hlines!(ax1, [0.0]; color = (:black, 0.4), linewidth = 1)
@@ -205,16 +243,23 @@ function fig12_st_climate_response()
         scatter!(ax1, s.warming, 100 .* s.rel; color = SSP_COLORS[sc], markersize = 14,
             strokewidth = 0)
     end
-    xx = range(minimum(warm), maximum(warm); length = 50)
-    lines!(ax1, xx, beta[1] .+ beta[2] .* xx; color = :black, linewidth = 2.0, linestyle = :dash)
+    finite_warm = filter(isfinite, warm)
+    if isfinite(dose.slope) && !isempty(finite_warm)
+        xx = range(minimum(finite_warm), maximum(finite_warm); length = 50)
+        lines!(ax1, xx, dose.intercept .+ dose.slope .* xx;
+            color = :black, linewidth = 2.0, linestyle = :dash)
+    end
     control === nothing || scatter!(ax1, [0.0], [100 * control.rel]; color = :black,
         marker = :diamond, markersize = 18)
-    text!(ax1, 0.03, 0.06; space = :relative,
-        text = "OLS slope = $(round(beta[2], digits = 2)) % per °C\nR² = $(round(r2, digits = 2))",
+    slope_text = "Pooled slope = $(round(dose.slope, digits = 2)) % per °C"
+    isfinite(dose.slope_spread) &&
+        (slope_text *= "\nGCM spread (SD) = $(round(dose.slope_spread, digits = 2))")
+    slope_text *= "\nR² = $(round(dose.r2, digits = 2)) (n=$n, GCMs=$(dose.n_groups))"
+    text!(ax1, 0.03, 0.06; space = :relative, text = slope_text,
         align = (:left, :bottom), fontsize = REPORT_ANNOTATION_FONTSIZE)
 
     ax2 = Axis(fig[1, 2]; width=420, height=540,
-        xlabel = "Warming by 2045 (°C)",
+        xlabel = axis.label,
         ylabel = "Brown trout biomass (units)")
     panel_letter!(ax2, "(b)")
     for sc in unique(scenario_rows.scenario)
@@ -225,7 +270,7 @@ function fig12_st_climate_response()
         marker = :diamond, markersize = 18)
 
     ax3 = Axis(fig[1, 3]; width=420, height=540,
-        xlabel = "Warming by 2045 (°C)",
+        xlabel = axis.label,
         ylabel = "Days per year above 20 °C")
     panel_letter!(ax3, "(c)")
     for sc in unique(scenario_rows.scenario)
@@ -239,6 +284,9 @@ function fig12_st_climate_response()
             text = "No-warming control = $(control.max_days) days per year",
             align = (:left, :bottom), fontsize = REPORT_ANNOTATION_FONTSIZE)
     end
+    text!(ax3, 0.03, 0.16; space = :relative,
+        text = "max over '$site_set' trout sites",
+        align = (:left, :bottom), fontsize = REPORT_ANNOTATION_FONTSIZE)
 
     handles = Any[]
     labels = String[]
@@ -255,7 +303,7 @@ function fig12_st_climate_response()
         framevisible = false, title = "Point = one GCM × SSP run",
         titlefontsize = REPORT_LEGEND_FONTSIZE)
     save_report(fig, joinpath(OUT_CLIMATE, "fig12_st_climate_response.png"); size=(1700, 1000))
-    println("fig12 uses n=$(n) scenario runs")
+    println("fig12 uses n=$(n) scenario runs; exposure site set = $site_set")
 end
 
 # ---------------------------------------------------------------------------

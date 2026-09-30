@@ -21,8 +21,10 @@ using Guadex
 # alt-interaction sweep: matrix x model x upstream_cost x passability =
 # 3x2x2x4 = 48), so a standard sum-of-squares decomposition is valid *inside*
 # a sweep.  Across the two sweeps the thermal-sigma multiplier (0.3) is fully
-# confounded with the sweep AND with a shorter burn-in (21 vs 373 years), so
-# the sigma effect is reported as a confounded contrast, not a clean effect.
+# confounded with the sweep AND with a shorter burn-in (the per-matrix burn-in
+# years recorded in each run's metadata / burnin_summary.csv are all far shorter
+# than the 373-year climate/obstacle burn-in), so the sigma effect is reported
+# as a confounded contrast, not a clean effect.
 #
 # Writes:
 #   results/sensitivity_obstacles/report_plots/parameter_effect_rank.csv
@@ -33,11 +35,19 @@ using Guadex
 #   results/sensitivity_obstacles/report_plots/fig_interaction_effects.png
 # =============================================================================
 
-const ROOT = joinpath("results", "sensitivity_obstacles")
+include(joinpath(@__DIR__, "plot_paths.jl"))
+
+# Input roots are overridable from the environment; the defaults reproduce the
+# legacy (pre-correction) results exactly.  See scripts/plot_paths.jl.
+const ROOT = report_output_root("GUADEX_SENSITIVITY_OUTPUT_DIR",
+    joinpath("results", "sensitivity_obstacles"))
+const ALT_ROOT = report_output_root("GUADEX_ALT_OUTPUT_DIR",
+    joinpath("results", "sensitivity_obstacles", "alt_interactions"))
 const MAIN_INDEX = joinpath(ROOT, "runs_index.csv")
-const ALT_INDEX = joinpath(ROOT, "alt_interactions", "runs_index.csv")
+const ALT_INDEX = joinpath(ALT_ROOT, "runs_index.csv")
 const REPORT_DIR = joinpath(ROOT, "report_plots")
 mkpath(REPORT_DIR)
+println("plot_sensitivity_effects roots: sensitivity=$ROOT alt=$ALT_ROOT")
 
 # Axes in this script have explicit width/height, so the requested Figure size
 # can be smaller than the space the panels plus their labels, legends and
@@ -59,7 +69,7 @@ const METRICS = [
     "basin_native_biomass",
     "basin_invasive_biomass",
     "basin_native_richness",
-    "basin_native_extinction_risk",
+    "basin_realised_richness_loss",
     "st_relative_biomass_change",
     "st_final_biomass",
     "st_quasi_extinct_fraction",
@@ -70,7 +80,7 @@ const METRIC_LABELS = Dict(
     "basin_native_biomass" => "Basin native biomass",
     "basin_invasive_biomass" => "Basin invasive biomass",
     "basin_native_richness" => "Basin native richness",
-    "basin_native_extinction_risk" => "Native extinction risk",
+    "basin_realised_richness_loss" => "Realised richness loss",
     "st_relative_biomass_change" => "ST relative biomass change",
     "st_final_biomass" => "ST final biomass",
     "st_quasi_extinct_fraction" => "ST quasi-extinct fraction",

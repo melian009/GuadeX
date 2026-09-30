@@ -30,12 +30,21 @@ using Guadex
 # heat-stress k=3.7817692640400324e-5 (verified from run_metadata.json).
 # =============================================================================
 
-const ROOT = joinpath("results", "sensitivity_obstacles")
-const ALT_ROOT = joinpath(ROOT, "alt_interactions")
-const CLIMATE_INDEX = joinpath("results", "climate_scenarios_k1x_burnin", "runs_index.csv")
+include(joinpath(@__DIR__, "plot_paths.jl"))
+
+# Input roots are overridable from the environment; the defaults reproduce the
+# legacy (pre-correction) results exactly.  See scripts/plot_paths.jl.
+const ROOT = report_output_root("GUADEX_SENSITIVITY_OUTPUT_DIR",
+    joinpath("results", "sensitivity_obstacles"))
+const ALT_ROOT = report_output_root("GUADEX_ALT_OUTPUT_DIR",
+    joinpath("results", "sensitivity_obstacles", "alt_interactions"))
+const CLIMATE_ROOT = report_output_root("GUADEX_CLIMATE_OUTPUT_DIR",
+    joinpath("results", "climate_scenarios_k1x_burnin"))
+const CLIMATE_INDEX = joinpath(CLIMATE_ROOT, "runs_index.csv")
 const OUT = joinpath(ROOT, "report_plots")
 const ALT_OUT = joinpath(ALT_ROOT, "report_plots")
 mkpath(OUT); mkpath(ALT_OUT)
+println("plot_report_figures roots: sensitivity=$ROOT alt=$ALT_ROOT climate=$CLIMATE_ROOT")
 
 const PASS_LEVELS = ["baseline", "improved_passability", "reduced_passability", "blocked"]
 const PASS_COLORS = Dict(
@@ -56,7 +65,7 @@ const METRIC_LABELS = Dict(
     "basin_native_biomass" => "Native biomass (units)",
     "basin_invasive_biomass" => "Invasive biomass (units)",
     "basin_native_richness" => "Native richness (sp.)",
-    "basin_native_extinction_risk" => "Richness loss (fraction)",
+    "basin_realised_richness_loss" => "Richness loss (fraction)",
     "st_final_biomass" => "Brown trout biomass (units)",
     "st_relative_biomass_change" => "Brown trout change (fraction)")
 
@@ -201,39 +210,53 @@ function temperature_figure!(path)
     report_theme!()
     d = clim[clim.scenario .!= "control", :]
     metrics = ["basin_total_biomass", "basin_native_richness",
-               "basin_native_extinction_risk"]
+               "basin_realised_richness_loss"]
     scen_colors = Dict("ssp126" => RGBAf(0.11, 0.36, 0.60, 0.9),
         "ssp245" => RGBAf(0.20, 0.60, 0.35, 0.9),
         "ssp370" => RGBAf(0.90, 0.55, 0.10, 0.9),
         "ssp585" => RGBAf(0.70, 0.15, 0.15, 0.9))
+    # C7: prefer the realised mean applied anomaly persisted by the runner; fall
+    # back to the warming_end_degc proxy (and label it) for runs written before
+    # the realised columns existed.
+    axis = Guadex.realised_forcing_axis(d)
+    d[!, :forcing_axis] = axis.values
+    println("temperature_figure forcing axis: $(axis.column) [$(axis.source)]")
+    endpoints = Guadex.select_climate_endpoints(clim)
+    cool_model = endpoints.cool.scenario * "/" * endpoints.cool.gcm
+    warm_model = endpoints.warm.scenario * "/" * endpoints.warm.gcm
     fig = Figure(size=(1500, 1600))
     for (mi, metric) in enumerate(metrics)
         r, c = divrem(mi - 1, 2)
         ax = Axis(fig[r + 1, c + 1]; width=560, height=480,
-            xlabel="Warming by 2045 (°C)",
+            xlabel=axis.label,
             ylabel=METRIC_LABELS[metric])
         panel_letter!(ax, "(" * string(Char(96 + mi)) * ")")
         for sc in unique(String.(d.scenario))
             sub = d[d.scenario .== sc, :]
-            scatter!(ax, Float64.(sub.warming_end_degc), Float64.(sub[!, Symbol(metric)]);
+            scatter!(ax, Float64.(sub.forcing_axis), Float64.(sub[!, Symbol(metric)]);
                 color=scen_colors[sc], markersize=13, strokewidth=0)
         end
-        x = Float64.(d.warming_end_degc); y = Float64.(d[!, Symbol(metric)])
-        X = hcat(ones(length(x)), x)
-        β = X \ y
-        yhat = X * β
-        ss_tot = sum(abs2, y .- mean(y)); ss_res = sum(abs2, y .- yhat)
-        r2 = ss_tot > 0 ? 1 - ss_res / ss_tot : 0.0
-        xx = range(minimum(x), maximum(x); length=50)
-        lines!(ax, xx, β[1] .+ β[2] .* xx; color=:black, linewidth=2.0, linestyle=:dash)
-        report_annotation!(ax, @sprintf("OLS slope = %.3g per °C\nR² = %.2f", β[2], r2),
-            position=:lt)
-        # Mark the two sensitivity-sweep extremes used by the obstacle sweep.
-        for (m, lab) in [(COOL_MODEL, "Cool endpoint (SSP1-2.6 / IITM-ESM)"),
-                         (WARM_MODEL, "Warm endpoint (SSP2-4.5 / UKESM1)")]
+        x = axis.values; y = Float64.(d[!, Symbol(metric)])
+        # Dose-response accounting for the GCM ensemble structure (GCM as a
+        # categorical fixed effect; MixedModels is not a dependency).
+        dose = Guadex.dose_response(x, y, d.gcm)
+        xx = range(minimum(filter(isfinite, x)), maximum(filter(isfinite, x)); length=50)
+        isfinite(dose.slope) &&
+            lines!(ax, xx, dose.intercept .+ dose.slope .* xx;
+                color=:black, linewidth=2.0, linestyle=:dash)
+        if isfinite(dose.slope)
+            text = @sprintf("GCM-fixed slope = %.3g per °C", dose.slope)
+            isfinite(dose.slope_spread) &&
+                (text *= @sprintf("\nGCM spread (SD) = %.3g", dose.slope_spread))
+            text *= @sprintf("\nR² = %.2f (n=%d, GCMs=%d)", dose.r2, dose.n, dose.n_groups)
+            report_annotation!(ax, text, position=:lt)
+        end
+        # Mark the cool/warm endpoints re-selected on the realised forcing.
+        for (m, lab) in [(cool_model, "Cool endpoint ($(endpoints.source))"),
+                         (warm_model, "Warm endpoint ($(endpoints.source))")]
             sub = d[d.model .== m, :]
             isempty(sub) && continue
-            scatter!(ax, [Float64(sub.warming_end_degc[1])], [Float64(sub[1, Symbol(metric)])];
+            scatter!(ax, [Float64(sub.forcing_axis[1])], [Float64(sub[1, Symbol(metric)])];
                 color=:magenta, marker=:star5, markersize=24, strokecolor=:black,
                 strokewidth=1.0)
         end
@@ -243,7 +266,7 @@ function temperature_figure!(path)
     push!(handles, MarkerElement(color=:magenta, marker=:star5, markersize=18,
         strokecolor=:black, strokewidth=1.0))
     labels = ["ssp126", "ssp245", "ssp370", "ssp585",
-              "Selected cool/warm\nendpoint (IITM-ESM, UKESM1)"]
+              "Cool $cool_model\nWarm $warm_model\n(from $(endpoints.source))"]
     equal_panel_columns!(fig, 1, 1)
     Legend(fig[2, 2], handles, labels; framevisible=false,
         title="Point = one GCM × SSP run", titlefontsize=REPORT_LEGEND_FONTSIZE)
