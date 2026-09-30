@@ -317,6 +317,82 @@ function annual_mean_deltas(schedule::TemperatureSchedule; days_per_year::Real=3
 end
 
 # =============================================================================
+# --- C7: realised applied warming anomaly ---
+# =============================================================================
+
+"""
+    mean_warming_anomaly(warming, years; first_year, last_year)
+
+Mean applied warming anomaly (°C) over **every site** and the calendar years in
+`first_year:last_year`, from an `n_sites × n_years` anomaly matrix whose columns
+are labelled by `years`. This is the warming the ODE actually receives, not the
+[`basin_warming_curve`](@ref) proxy built from the 6-gauge projection table.
+Returns `NaN` when the window selects no years or no finite values.
+"""
+function mean_warming_anomaly(warming::AbstractMatrix, years::AbstractVector;
+        first_year::Int, last_year::Int)
+    size(warming, 2) == length(years) ||
+        error("warming has $(size(warming, 2)) year columns but " *
+              "$(length(years)) year labels")
+    total = 0.0
+    n = 0
+    for k in eachindex(years)
+        (first_year <= Int(years[k]) <= last_year) || continue
+        for i in axes(warming, 1)
+            v = warming[i, k]
+            if isfinite(v)
+                total += Float64(v)
+                n += 1
+            end
+        end
+    end
+    return n == 0 ? NaN : total / n
+end
+
+"""
+    realised_warming_anomaly(warming, years; early_window=(2026, 2045),
+                            late_window=(2036, 2045))
+
+Persistable summary of the realised applied warming anomaly from the annual-mean
+applied-warming matrix `warming` (n_sites × n_years) used by the ODE, whose
+columns are labelled by `years`. Returns a named tuple with the site-and-window
+means for the full horizon (`mean_2026_2045`) and the last decade
+(`mean_2036_2045`, the end-of-horizon quantity used by the dose-response), the
+windows actually used, and the number of sites and years covered. The field
+names keep the documented 2026-2045 / 2036-2045 windows; pass different windows
+only when the run horizon itself differs.
+"""
+function realised_warming_anomaly(warming::AbstractMatrix, years::AbstractVector;
+        early_window::Tuple{Int,Int}=(2026, 2045),
+        late_window::Tuple{Int,Int}=(2036, 2045))
+    early = mean_warming_anomaly(warming, years;
+        first_year=early_window[1], last_year=early_window[2])
+    late = mean_warming_anomaly(warming, years;
+        first_year=late_window[1], last_year=late_window[2])
+    return (
+        mean_2026_2045 = early,
+        mean_2036_2045 = late,
+        early_window = early_window,
+        late_window = late_window,
+        n_sites = size(warming, 1),
+        n_years = length(unique(Int.(years))),
+    )
+end
+
+"""
+    realised_warming_anomaly(schedule, dates; kwargs...)
+
+Convenience overload that recovers the annual-mean anomaly matrix from a daily
+[`TemperatureSchedule`](@ref) and then summarises it. Used by the runner to
+record the realised forcing without relying on the projection table.
+"""
+function realised_warming_anomaly(schedule::TemperatureSchedule, dates::AbstractVector;
+        kwargs...)
+    labels, matrix = annual_mean_deltas_by_year(schedule, dates)
+    return realised_warming_anomaly(matrix, labels; kwargs...)
+end
+
+# =============================================================================
 # --- WP3: optimum sweep, heat-stress calibration, exposure ---
 # =============================================================================
 
@@ -444,6 +520,82 @@ function exposure_table(sites::AbstractVector, species::AbstractVector,
                 push!(rows, (year=Int(y), CODIGO=string(site), species=string(sp),
                     exposure_days=n_days, exceedance_energy=energy))
             end
+        end
+    end
+    return DataFrame(rows)
+end
+
+"""
+    established_exposure_summary(exposure, species_metrics;
+        site_set="baseline_established", species=nothing)
+
+Summarise [`exposure_table`](@ref) exposure at the sites where each species was
+**baseline established**, using the `baseline_established` flag recorded by
+`compute_species_metrics` (E6).  Returns one row per species × year with the
+mean, median and maximum exposure days and exceedance energy over those sites,
+the number of sites used, and the site list itself.
+
+This replaces the basin maximum (which is reached at a lowland site that may
+carry no individuals of the species) with statistics over the sites the species
+actually occupies.  When `species_metrics` is `nothing`, empty, or lacks
+`baseline_established`, the summary falls back to every site present in
+`exposure` and the `site_set` column is set to `"all_sites"` so the fallback is
+explicit.  A species established at no site yields a row with
+`n_sites_selected = 0` and `NaN` statistics.
+"""
+function established_exposure_summary(exposure::DataFrame, species_metrics;
+        site_set::AbstractString="baseline_established",
+        species::Union{Nothing,AbstractVector}=nothing)
+    nrow(exposure) == 0 && return DataFrame()
+    for col in (:year, :CODIGO, :species, :exposure_days, :exceedance_energy)
+        hasproperty(exposure, col) ||
+            error("exposure is missing the '$col' column")
+    end
+
+    flags = Dict{Tuple{String,String},Bool}()
+    have_established = species_metrics !== nothing && nrow(species_metrics) > 0 &&
+        hasproperty(species_metrics, :baseline_established) &&
+        hasproperty(species_metrics, :CODIGO) && hasproperty(species_metrics, :species)
+    if have_established
+        for r in eachrow(species_metrics)
+            flags[(string(r.CODIGO), string(r.species))] = Bool(r.baseline_established)
+        end
+    end
+
+    selected_species = species === nothing ? sort(unique(string.(exposure.species))) :
+        String[string(s) for s in species]
+
+    rows = NamedTuple[]
+    for sp in selected_species
+        sp_rows = exposure[exposure.species .== sp, :]
+        isempty(sp_rows) && continue
+        all_sites = sort(unique(string.(sp_rows.CODIGO)))
+        used_sites = have_established ?
+            [s for s in all_sites if get(flags, (s, sp), false)] : all_sites
+        used_set = have_established ? String(site_set) : "all_sites"
+        for y in sort(unique(Int.(sp_rows.year)))
+            days = Float64[]
+            energy = Float64[]
+            for row in eachrow(sp_rows[sp_rows.year .== y, :])
+                string(row.CODIGO) in used_sites || continue
+                d = row.exposure_days
+                d isa Real && isfinite(float(d)) && push!(days, Float64(d))
+                e = row.exceedance_energy
+                e isa Real && isfinite(float(e)) && push!(energy, Float64(e))
+            end
+            push!(rows, (
+                species = sp,
+                year = y,
+                site_set = used_set,
+                n_sites_total = length(all_sites),
+                n_sites_selected = length(used_sites),
+                selected_sites = join(used_sites, ";"),
+                mean_exposure_days = isempty(days) ? NaN : mean(days),
+                median_exposure_days = isempty(days) ? NaN : median(days),
+                max_exposure_days = isempty(days) ? NaN : maximum(days),
+                mean_exceedance_energy = isempty(energy) ? NaN : mean(energy),
+                max_exceedance_energy = isempty(energy) ? NaN : maximum(energy),
+            ))
         end
     end
     return DataFrame(rows)

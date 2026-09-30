@@ -179,3 +179,75 @@ end
     # An empty tree yields no series instead of an error.
     @test isempty(Guadex.read_climate_basin_series(mktempdir()))
 end
+
+# =============================================================================
+# C7 — dose-response with GCM structure
+# =============================================================================
+@testset "dose_response handles GCM structure (C7)" begin
+    x = [0.0, 0.5, 1.0, 1.5, 0.0, 0.5, 1.0, 1.5]
+    y1 = 10 .- 4 .* [0.0, 0.5, 1.0, 1.5]   # G1 slope -4
+    y2 = 20 .- 6 .* [0.0, 0.5, 1.0, 1.5]   # G2 slope -6
+    groups = vcat(fill("G1", 4), fill("G2", 4))
+    y = vcat(y1, y2)
+
+    res = Guadex.dose_response(x, y, groups)
+    @test res.n == 8
+    @test res.n_groups == 2
+    @test isfinite(res.slope)
+    @test isfinite(res.fixed_effect_slope)
+    @test res.group_labels == ["G1", "G2"]
+    @test res.group_slopes[1] ≈ -4.0 atol = 1e-9
+    @test res.group_slopes[2] ≈ -6.0 atol = 1e-9
+    @test res.slope_min ≈ -6.0
+    @test res.slope_max ≈ -4.0
+    @test res.slope_spread > 0
+    @test res.between_group_sd > 0
+
+    # Non-finite pairs are dropped and a degenerate sample does not throw.
+    degenerate = Guadex.dose_response([1.0, 2.0], [1.0, NaN], ["a", "a"])
+    @test degenerate.n == 0
+    @test isnan(degenerate.slope)
+end
+
+# =============================================================================
+# C7 — endpoint re-selection and forcing-axis fallback
+# =============================================================================
+@testset "select_climate_endpoints / realised_forcing_axis (C7)" begin
+    idx = DataFrame(
+        scenario=["ssp126", "ssp245", "ssp370", "ssp585"],
+        gcm=["IITM-ESM", "UKESM1-0-LL", "MIROC6", "ACCESS-CM2"],
+        realised_warming_2036_2045_mean_degc=[0.70, 1.37, 1.10, 1.60],
+        warming_end_degc=[0.28, 0.90, 0.85, 1.36])
+
+    # Realised forcing selects the true extremes (not the proxy extremes).
+    endpoints = Guadex.select_climate_endpoints(idx)
+    @test endpoints.source == "realised"
+    @test endpoints.cool.gcm == "IITM-ESM"
+    @test endpoints.cool.warming ≈ 0.70
+    @test endpoints.warm.gcm == "ACCESS-CM2"
+    @test endpoints.warm.warming ≈ 1.60
+
+    # Proxy fallback when the realised column is absent, labelled as such.
+    proxy = select(idx, Not(:realised_warming_2036_2045_mean_degc))
+    proxy_endpoints = Guadex.select_climate_endpoints(proxy)
+    @test proxy_endpoints.source == "warming_end_degc_proxy"
+    @test proxy_endpoints.cool.gcm == "IITM-ESM"
+    @test proxy_endpoints.warm.gcm == "ACCESS-CM2"
+
+    # Configured fallback when neither column is present.
+    bare = DataFrame(scenario=["ssp126", "ssp245"], gcm=["IITM-ESM", "UKESM1-0-LL"])
+    fallback = Guadex.select_climate_endpoints(bare)
+    @test fallback.source == "configured_fallback"
+    @test fallback.cool.gcm == "IITM-ESM"
+    @test fallback.warm.gcm == "UKESM1-0-LL"
+
+    # Forcing-axis helper uses the realised column and labels the proxy fallback.
+    axis = Guadex.realised_forcing_axis(idx)
+    @test axis.source == "realised"
+    @test axis.values == [0.70, 1.37, 1.10, 1.60]
+    proxy_axis = Guadex.realised_forcing_axis(proxy)
+    @test proxy_axis.source == "warming_end_degc_proxy"
+    @test occursin("proxy", proxy_axis.label)
+end
+
+# =============================================================================

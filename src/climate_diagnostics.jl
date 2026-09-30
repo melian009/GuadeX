@@ -40,7 +40,7 @@ struct ClimateBasinSeries
     invasive_richness::Vector{Float64}
     native_biomass::Vector{Float64}
     total_biomass::Vector{Float64}
-    native_extinction_risk::Vector{Float64}
+    realised_richness_loss::Vector{Float64}
 end
 
 const _BASIN_SERIES_FIELDS = [
@@ -50,7 +50,7 @@ const _BASIN_SERIES_FIELDS = [
     (:invasive_richness, :mean_invasive_richness),
     (:native_biomass, :mean_native_biomass),
     (:total_biomass, :mean_total_biomass),
-    (:native_extinction_risk, :mean_native_extinction_risk),
+    (:realised_richness_loss, :mean_realised_richness_loss),
 ]
 
 function _read_float_column(df, column::Symbol)
@@ -94,7 +94,7 @@ function read_climate_basin_series(results_root::AbstractString)
             columns[:delta_temperature_c], columns[:native_richness],
             columns[:total_richness], columns[:invasive_richness],
             columns[:native_biomass], columns[:total_biomass],
-            columns[:native_extinction_risk]))
+            columns[:realised_richness_loss]))
     end
     sort!(series; by=run -> (run.scenario, run.gcm))
     return series
@@ -160,6 +160,226 @@ function _pearson(xs, ys)
     return cor(xs, ys)
 end
 
+# --- C7: dose-response with GCM ensemble structure, forcing axis, endpoints ---
+# =============================================================================
+
+_float_or_nan(v) = (v isa Real && isfinite(float(v))) ? Float64(v) : NaN
+
+function _ols_slope_intercept(xs::AbstractVector, ys::AbstractVector)
+    length(xs) == length(ys) || error("xs and ys must have the same length")
+    n = length(xs)
+    n == 0 && return (NaN, NaN)
+    mx = mean(xs)
+    my = mean(ys)
+    sxx = sum(abs2, xs .- mx)
+    sxy = sum((xs .- mx) .* (ys .- my))
+    slope = sxx == 0 ? NaN : sxy / sxx
+    return (slope, isfinite(slope) ? my - slope * mx : NaN)
+end
+
+function _ols_r2(xs::AbstractVector, ys::AbstractVector, slope::Real, intercept::Real)
+    (isfinite(slope) && isfinite(intercept)) || return NaN
+    yhat = intercept .+ slope .* xs
+    ss_tot = sum(abs2, ys .- mean(ys))
+    ss_res = sum(abs2, ys .- yhat)
+    return ss_tot > 0 ? 1 - ss_res / ss_tot : NaN
+end
+
+"""
+    dose_response(x, y, groups; min_group_n=2)
+
+Fit the dose-response of a response `y` on the realised warming `x`, accounting
+for the GCM ensemble structure **without adding a dependency**. `groups` labels
+the GCM (or scenario × GCM) of each point.
+
+The fit is deliberately a fixed-effect approximation to a per-GCM random
+intercept: `y ~ x + GCM`, i.e. GCM enters as a categorical effect that absorbs
+the between-GCM level shifts. `MixedModels` is *not* a dependency of this project
+(see `Project.toml`), so it is not added merely for one diagnostic; the
+fixed-effect slope and the per-GCM slope spread together carry the same
+information (a random intercept and a fixed intercept coincide up to shrinkage).
+
+Returns a named tuple with
+
+* pooled OLS `slope`, `intercept`, `r2` (all points together);
+* `fixed_effect_slope` / `fixed_effect_r2` from `y ~ x + GCM`;
+* the per-group slopes (`group_labels`, `group_slopes`) and their spread
+  (`slope_spread` = standard deviation, `slope_min`, `slope_max`);
+* `between_group_sd`, the standard deviation of the per-GCM mean responses.
+
+All arguments must have the same length; non-finite `(x, y)` pairs are dropped.
+A group with fewer than `min_group_n` points or no spread in `x` gets a `NaN`
+slope and is excluded from the spread.
+"""
+function dose_response(x::AbstractVector, y::AbstractVector, groups::AbstractVector;
+        min_group_n::Int=2)
+    length(x) == length(y) == length(groups) ||
+        error("x, y and groups must have the same length")
+    xs = Float64[]
+    ys = Float64[]
+    gs = String[]
+    for (xi, yi, gi) in zip(x, y, groups)
+        (xi isa Real && yi isa Real &&
+         isfinite(float(xi)) && isfinite(float(yi))) || continue
+        push!(xs, Float64(xi)); push!(ys, Float64(yi)); push!(gs, string(gi))
+    end
+    n = length(xs)
+    empty_result = (
+        slope=NaN, intercept=NaN, r2=NaN, n=0, n_groups=0,
+        fixed_effect_slope=NaN, fixed_effect_r2=NaN,
+        group_labels=String[], group_slopes=Float64[],
+        slope_spread=NaN, slope_min=NaN, slope_max=NaN, between_group_sd=NaN)
+    n < 2 && return empty_result
+
+    pooled = _ols_slope_intercept(xs, ys)
+
+    labels = sort(unique(gs))
+    # GCM fixed effect: intercept + x + one dummy per non-reference GCM.
+    Z = Matrix{Float64}(undef, n, 2 + max(0, length(labels) - 1))
+    Z[:, 1] .= 1.0
+    Z[:, 2] .= xs
+    for (j, g) in enumerate(labels)
+        j == 1 && continue
+        Z[:, 1 + j] .= (gs .== g) .* 1.0
+    end
+    fe_slope = NaN
+    fe_r2 = NaN
+    if n > size(Z, 2)
+        beta = Z \ ys
+        fe_slope = beta[2]
+        yhat = Z * beta
+        ss_tot = sum(abs2, ys .- mean(ys))
+        ss_res = sum(abs2, ys .- yhat)
+        fe_r2 = ss_tot > 0 ? 1 - ss_res / ss_tot : NaN
+    end
+
+    group_slopes = Float64[]
+    group_means = Float64[]
+    for g in labels
+        idx = findall(==(g), gs)
+        push!(group_means, mean(ys[idx]))
+        if length(idx) >= min_group_n && length(unique(xs[idx])) >= 2
+            push!(group_slopes, _ols_slope_intercept(xs[idx], ys[idx])[1])
+        else
+            push!(group_slopes, NaN)
+        end
+    end
+    finite_slopes = filter(isfinite, group_slopes)
+    return (
+        slope=pooled[1], intercept=pooled[2],
+        r2=_ols_r2(xs, ys, pooled[1], pooled[2]),
+        n=n, n_groups=length(labels),
+        fixed_effect_slope=fe_slope, fixed_effect_r2=fe_r2,
+        group_labels=labels, group_slopes=group_slopes,
+        slope_spread=length(finite_slopes) >= 2 ? std(finite_slopes) : NaN,
+        slope_min=isempty(finite_slopes) ? NaN : minimum(finite_slopes),
+        slope_max=isempty(finite_slopes) ? NaN : maximum(finite_slopes),
+        between_group_sd=length(group_means) >= 2 ? std(group_means) : NaN,
+    )
+end
+
+"""
+    realised_forcing_axis(index; window=:late, proxy_column=:warming_end_degc)
+
+Return `(values, column, source, label)` for the dose-response regressor. Uses
+the realised mean applied anomaly persisted by `run_climate_scenarios.jl`
+(`realised_warming_2036_2045_mean_degc` for `window=:late`, the full-horizon
+`realised_warming_2026_2045_mean_degc` for `window=:early`) when it is present
+and finite. Falls back to the `warming_end_degc` proxy otherwise and labels both
+the column and the axis so the fallback is visible in the figure.
+"""
+function realised_forcing_axis(index::DataFrame; window::Symbol=:late,
+        proxy_column::Symbol=:warming_end_degc)
+    column = window === :early ? :realised_warming_2026_2045_mean_degc :
+        window === :late ? :realised_warming_2036_2045_mean_degc :
+        throw(ArgumentError("window must be :early or :late"))
+    window_label = window === :early ? "2026-2045" : "2036-2045"
+    if hasproperty(index, column)
+        values = [_float_or_nan(v) for v in index[!, column]]
+        any(isfinite, values) && return (values=values, column=string(column),
+            source="realised",
+            label="Realised mean ΔT $window_label (°C)")
+    end
+    if hasproperty(index, proxy_column)
+        values = [_float_or_nan(v) for v in index[!, proxy_column]]
+        any(isfinite, values) && return (values=values, column=string(proxy_column),
+            source="warming_end_degc_proxy",
+            label="Warming by 2045 (°C) [proxy: basin_warming_curve, not applied forcing]")
+    end
+    throw(ArgumentError("index has neither a finite realised-forcing column " *
+        "($column) nor a $proxy_column proxy; re-run run_climate_scenarios.jl"))
+end
+
+function _fallback_endpoints(cool::Tuple{String,String}, warm::Tuple{String,String},
+        source::String)
+    return (
+        cool=(scenario=cool[1], gcm=cool[2], warming=NaN),
+        warm=(scenario=warm[1], gcm=warm[2], warming=NaN),
+        source=source, forcing_column="")
+end
+
+"""
+    select_climate_endpoints(index; forcing_column, proxy_column, scenario_col,
+                             gcm_col, fallback_cool, fallback_warm)
+
+Re-select the cool (minimum realised forcing) and warm (maximum realised
+forcing) runs from a runs index. Prefers the realised-forcing column written by
+`run_climate_scenarios.jl` (default `:realised_warming_2036_2045_mean_degc`),
+falls back to the `:warming_end_degc` proxy when the realised column is absent
+or has no finite values, and finally to the configured pairs when neither is
+available. `source` states which path was used.
+
+Usage on the next re-run: after `run_climate_scenarios.jl` has populated the
+realised columns, call
+
+    endpoints = select_climate_endpoints(CSV.read(joinpath(output_dir, "runs_index.csv"), DataFrame))
+
+and put `endpoints.cool.scenario`/`.gcm` and `endpoints.warm.scenario`/`.gcm`
+into `[obstacle_sensitivity].climate_models` (or the
+`GUADEX_SENSITIVITY_CLIMATE_MODELS` override). The current hard-coded pair is
+only the fallback for runs written before the realised columns existed. For a
+sensitivity index, pass `scenario_col=:climate_scenario`.
+"""
+function select_climate_endpoints(index::DataFrame;
+        forcing_column::Symbol=:realised_warming_2036_2045_mean_degc,
+        proxy_column::Symbol=:warming_end_degc,
+        scenario_col::Symbol=:scenario, gcm_col::Symbol=:gcm,
+        fallback_cool::Tuple{String,String}=("ssp126", "IITM-ESM"),
+        fallback_warm::Tuple{String,String}=("ssp245", "UKESM1-0-LL"),
+        exclude::Tuple{Vararg{String}}=("control",))
+    hasproperty(index, scenario_col) ||
+        throw(ArgumentError("index has no scenario column $scenario_col"))
+    hasproperty(index, gcm_col) ||
+        throw(ArgumentError("index has no gcm column $gcm_col"))
+    nrow(index) == 0 && return _fallback_endpoints(fallback_cool, fallback_warm, "empty_index")
+    keep = [string(r[scenario_col]) ∉ exclude for r in eachrow(index)]
+    sub = index[keep, :]
+    nrow(sub) == 0 && return _fallback_endpoints(fallback_cool, fallback_warm,
+        "no_warming_runs")
+
+    function _select(column::Symbol, source::String)
+        pairs = [(_float_or_nan(r[column]), i) for (i, r) in enumerate(eachrow(sub))]
+        finite = [p for p in pairs if isfinite(p[1])]
+        length(finite) < 2 && return nothing
+        sort!(finite; by=first)
+        cool, warm = finite[1], finite[end]
+        return (
+            cool=(scenario=string(sub[cool[2], scenario_col]),
+                gcm=string(sub[cool[2], gcm_col]), warming=cool[1]),
+            warm=(scenario=string(sub[warm[2], scenario_col]),
+                gcm=string(sub[warm[2], gcm_col]), warming=warm[1]),
+            source=source, forcing_column=string(column))
+    end
+
+    result = hasproperty(sub, forcing_column) ? _select(forcing_column, "realised") : nothing
+    if result === nothing && hasproperty(sub, proxy_column)
+        result = _select(proxy_column, "warming_end_degc_proxy")
+    end
+    result === nothing &&
+        (result = _fallback_endpoints(fallback_cool, fallback_warm, "configured_fallback"))
+    return result
+end
+
 # =============================================================================
 # --- Forcing vs response ---
 # =============================================================================
@@ -214,14 +434,15 @@ function plot_climate_forcing_response(runs::AbstractVector{<:ClimateBasinSeries
     final_warming = [_final_value(run, :delta_temperature_c) for run in runs]
     final_richness = [_final_value(run, :native_richness) for run in runs]
     final_biomass = [_final_value(run, :total_biomass) for run in runs]
-    final_risk = [_final_value(run, :native_extinction_risk) for run in runs]
+    final_risk = [_final_value(run, :realised_richness_loss) for run in runs]
     run_scenario = [run.scenario for run in runs]
     # The no-warming control is plotted (it is a useful reference point) but it
-    # is excluded from the correlations so they describe the 44 warming runs,
-    # matching the dose-response analysis elsewhere in the report.
+    # is excluded from the dose-response fits so they describe the warming runs,
+    # matching the analysis elsewhere in the report.
     scenario_mask = [run.scenario != "control" for run in runs]
+    run_gcm = [run.gcm for run in runs]
 
-    function _response_axis(row, col, letter, ylabel, ys, rlabel)
+    function _response_axis(row, col, letter, ylabel, ys)
         ax = Axis(fig[row, col]; width=520, height=430,
             xlabel = "Realised ΔT by 2045 (°C)", ylabel = ylabel)
         panel_letter!(ax, letter)
@@ -232,16 +453,24 @@ function plot_climate_forcing_response(runs::AbstractVector{<:ClimateBasinSeries
             scatter!(ax, x, y; color=(scenario_color(scenario), 0.85),
                 markersize=11, strokewidth=0)
         end
-        xr, yr = _pairwise_finite(final_warming[scenario_mask], ys[scenario_mask])
-        r = _pearson(xr, yr)
-        isfinite(r) && report_annotation!(ax, rlabel * " r = $(round(r, digits=3))",
-            position=:lt)
+        # Dose-response with GCM as a categorical fixed effect (no MixedModels
+        # dependency); the per-GCM slope spread is shown next to the pooled slope.
+        dose = dose_response(final_warming[scenario_mask], ys[scenario_mask],
+            run_gcm[scenario_mask])
+        if isfinite(dose.slope)
+            text = "slope = $(round(dose.slope, digits=3))"
+            isfinite(dose.slope_spread) &&
+                (text *= " ± $(round(dose.slope_spread, digits=3)) (GCM SD)")
+            text *= " per °C\nR² = $(round(dose.r2, digits=2)) " *
+                    "(pooled, n=$(dose.n), GCMs=$(dose.n_groups))"
+            report_annotation!(ax, text, position=:lt)
+        end
         return ax
     end
 
-    _response_axis(2, 2, "(d)", "Native richness (sp./site)", final_richness, "Pearson")
-    _response_axis(3, 1, "(e)", "Total biomass (units/site)", final_biomass, "Pearson")
-    _response_axis(3, 2, "(f)", "Richness loss (fraction)", final_risk, "Pearson")
+    _response_axis(2, 2, "(d)", "Native richness (sp./site)", final_richness)
+    _response_axis(3, 1, "(e)", "Total biomass (units/site)", final_biomass)
+    _response_axis(3, 2, "(f)", "Richness loss (fraction)", final_risk)
     equal_panel_columns!(fig, 1, 1)
 
     Legend(fig[4, 1:2],
@@ -473,6 +702,16 @@ function plot_climate_diagnostics(results_root::AbstractString=joinpath("results
     diagnostic_dir = joinpath(figures_dir, "diagnostics")
     mkpath(diagnostic_dir)
     written = String[]
+
+    # C3: scenario - matched-control deltas (written whenever a control run
+    # exists, so the corrected interim-route results are reported as deltas).
+    delta_table = scenario_minus_control_table(runs)
+    if !isempty(delta_table)
+        delta_path = joinpath(diagnostic_dir, "scenario_minus_control.csv")
+        CSV.write(delta_path, delta_table)
+        println("[climate_diagnostics] scenario - control deltas: $delta_path " *
+                "($(nrow(delta_table)) rows)")
+    end
 
     path = joinpath(diagnostic_dir, "forcing_and_response.png")
     saved = _safe_figure(() -> plot_climate_forcing_response(runs, path), path)

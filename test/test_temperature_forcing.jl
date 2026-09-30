@@ -76,6 +76,68 @@ end
 end
 
 # =============================================================================
+# 2c. C7 — realised applied warming anomaly
+# =============================================================================
+@testset "realised warming anomaly (C7)" begin
+    # Site × year annual-mean anomalies: sites (1.0, 2.0) in 2026, (3.0, 4.0)
+    # in 2027.  The window means are the site-and-window means.
+    warming = [1.0 3.0; 2.0 4.0]
+    years = [2026, 2027]
+    @test Guadex.mean_warming_anomaly(warming, years;
+        first_year=2026, last_year=2027) ≈ mean([1.0, 2.0, 3.0, 4.0])
+    @test Guadex.mean_warming_anomaly(warming, years;
+        first_year=2027, last_year=2027) ≈ 3.5
+
+    # The schedule overload recovers the same window mean from a daily series.
+    dates = vcat(fill(Date(2026, 1, 1), 2), fill(Date(2027, 1, 1), 2))
+    deltas = [1.0 1.0 3.0 3.0; 2.0 2.0 4.0 4.0]
+    schedule = Guadex.TemperatureSchedule(deltas, 1.0)
+    summary = Guadex.realised_warming_anomaly(schedule, dates;
+        early_window=(2026, 2027), late_window=(2027, 2027))
+    @test summary.mean_2026_2045 ≈ 2.5
+    @test summary.mean_2036_2045 ≈ 3.5
+    @test summary.n_sites == 2
+    @test summary.n_years == 2
+end
+
+# =============================================================================
+# 2d. C7 — exposure restricted to baseline-established sites
+# =============================================================================
+@testset "established_exposure_summary (C7)" begin
+    sites = ["s1", "s2", "s3"]
+    species = ["ST"]
+    dates = [Date(2026, 1, 1), Date(2026, 1, 2), Date(2026, 1, 3)]
+    # s2 is the hottest site (3 days above 20 °C) but is NOT baseline
+    # established for ST; s1 has 1 day and s3 has 0.
+    temps = [21.0 19.0 19.0;
+             40.0 40.0 40.0;
+             19.0 19.0 19.0]
+    exposure = Guadex.exposure_table(sites, species, temps, dates; upper_limits=[20.0])
+    all_sites_max = maximum(exposure.exposure_days)
+
+    species_metrics = DataFrame(
+        year=fill(2026, 3), CODIGO=sites, species=fill("ST", 3),
+        baseline_established=[true, false, true])
+    summary = Guadex.established_exposure_summary(exposure, species_metrics)
+    row = summary[1, :]
+    @test row.site_set == "baseline_established"
+    @test row.n_sites_total == 3
+    @test row.n_sites_selected == 2
+    @test row.selected_sites == "s1;s3"
+    @test row.max_exposure_days == 1.0
+    @test row.mean_exposure_days ≈ 0.5
+    # The established-site value differs from the all-sites value by design.
+    @test row.max_exposure_days != all_sites_max
+    @test all_sites_max == 3.0
+
+    # No established information → explicit all-sites fallback.
+    fallback = Guadex.established_exposure_summary(exposure, nothing)
+    @test fallback[1, :site_set] == "all_sites"
+    @test fallback[1, :n_sites_selected] == 3
+    @test fallback[1, :max_exposure_days] == 3.0
+end
+
+# =============================================================================
 # 2b. Daily forcing file loaders (WP1)
 # =============================================================================
 @testset "daily forcing loaders" begin

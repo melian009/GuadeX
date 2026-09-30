@@ -54,6 +54,7 @@ export climate_metric_column
 export ClimateBasinSeries, read_climate_basin_series
 export plot_climate_forcing_response, plot_climate_thermal_niches
 export plot_climate_community_filling, plot_climate_diagnostics
+export dose_response, select_climate_endpoints, realised_forcing_axis
 
 # Export data preparation functions
 export prepare_ode_data, save_ode_data
