@@ -28,8 +28,9 @@ export load_daily_temperature_forcing, daily_forcing_matrix
 export load_daily_forcing_any, is_wide_daily_forcing, wide_forcing_matrix, wide_baseline_means
 export daily_temperature_schedule, annual_mean_schedule, annual_mean_deltas
 export annual_mean_deltas_by_year, baseline_climatology_schedule
+export mean_warming_anomaly, realised_warming_anomaly
 export optimum_sweep_optima, exceedance_energy, calibrate_heat_stress_rate
-export exposure_days, exposure_table
+export exposure_days, exposure_table, established_exposure_summary
 
 # Export equilibrium spin-up and K sensitivity (WP4)
 export spin_up, scale_carrying_capacity, set_thermal_optima, set_heat_stress_rate
@@ -59,6 +60,7 @@ export ClimateBasinSeries, read_climate_basin_series
 export plot_climate_forcing_response, plot_climate_thermal_niches
 export plot_climate_community_filling, plot_climate_diagnostics
 export dose_response, select_climate_endpoints, realised_forcing_axis
+export scenario_minus_control, scenario_minus_control_table, SCENARIO_CONTROL_METRICS
 
 # Export data preparation functions
 export prepare_ode_data, save_ode_data
