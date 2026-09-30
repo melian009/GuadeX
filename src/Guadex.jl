@@ -64,7 +64,7 @@ export load_cedex_var, load_cedex_esc_uts, select_cedex_uts, load_obstacles
 export build_elevation_vector, build_dam_passability_matrix
 export build_site_coordinate_matrix, build_obstacle_passability_matrix
 export extract_site_temperatures, extract_habitat_suitability
-export build_intrinsic_growth_rates
+export load_site_water_temperature_baseline
 
 # Export visualization functions
 export plot_ode_solution, plot_total_biomass, plot_species_richness

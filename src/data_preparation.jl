@@ -1587,43 +1587,155 @@ function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String},
     return dams
 end
 
-"""
-    extract_site_temperatures(site_df::DataFrame, sites::Vector{String})
+# C5/E1: the model's site temperature level is the corrected per-site
+# water-temperature baseline (1986-2005) produced by the `guadex_tw` pipeline.
+# It is selected by its EXACT column name, never by a "TEMP" substring match, so
+# the legacy sub-catchment air-temperature climatology (`TEMP_MEDIA_SC`) cannot
+# be picked up accidentally.
+const DEFAULT_WATER_TEMPERATURE_FILE =
+    "guadex_tw/outputs/tables/water_temp_baseline_guadex_sites.csv"
+const WATER_TEMPERATURE_COLUMN = "tw_baseline_mean"
 
-Extract temperature data for each site.
-Uses TEMP_MEDIA_SC (mean temperature of subcatchment) if available.
 """
-function extract_site_temperatures(site_df::DataFrame, sites::Vector{String})
-    # Try to find temperature column
-    temp_col = nothing
+    load_site_water_temperature_baseline(path; value_col=WATER_TEMPERATURE_COLUMN)
 
-    # Check for various temperature column names
-    for col in names(site_df)
-        if occursin("TEMP", uppercase(col)) || occursin("TEMPERATURA", uppercase(col))
-            temp_col = col
-            break
-        end
+Load the corrected per-site water-temperature baseline (1986-2005) that defines
+the model's site temperature level (C5/E1).  The table must contain a `site_id`
+column and the exact `value_col` column (`tw_baseline_mean`); the value is joined
+to model sites by site code elsewhere.
+
+Returns a `Dict{String,Float64}`.  Fails loudly on a missing file, a missing
+column, a duplicate site or a non-finite value, so a mis-selected column (e.g.
+the legacy air-temperature `TEMP_MEDIA_SC`) or a truncated file cannot silently
+produce a wrong temperature.
+"""
+function load_site_water_temperature_baseline(path::AbstractString;
+        value_col::AbstractString=WATER_TEMPERATURE_COLUMN)
+    isfile(path) || error(
+        "water-temperature baseline file not found: $path. The model site " *
+        "temperature level is the corrected per-site water-temperature baseline " *
+        "(column '$WATER_TEMPERATURE_COLUMN'). Pass the correct " *
+        "`water_temperature_file`, or opt out explicitly with " *
+        "`water_temperature_file=nothing, require_water_temperature=false` to use " *
+        "the legacy air-temperature source.")
+    df = CSV.read(path, DataFrame)
+    hasproperty(df, :site_id) || error(
+        "water-temperature baseline $path has no `site_id` column " *
+        "(found: $(join(names(df), ", ")))")
+    hasproperty(df, Symbol(value_col)) || error(
+        "water-temperature baseline $path has no '$value_col' column " *
+        "(found: $(join(names(df), ", "))). Refusing to substitute another " *
+        "temperature column such as TEMP_MEDIA_SC.")
+
+    lookup = Dict{String,Float64}()
+    for row in eachrow(df)
+        site = string(row.site_id)
+        haskey(lookup, site) &&
+            error("water-temperature baseline $path contains duplicate site '$site'")
+        raw = row[Symbol(value_col)]
+        raw === missing &&
+            error("water-temperature baseline $path has a missing '$value_col' for site '$site'")
+        value = Float64(raw)
+        isfinite(value) || error(
+            "water-temperature baseline $path has a non-finite '$value_col' for site '$site'")
+        lookup[site] = value
+    end
+    return lookup
+end
+
+"""
+    _legacy_site_temperatures(site_df, sites, legacy_temperature_column=nothing)
+
+Explicit legacy temperature source: the named column of `site_df` when
+`legacy_temperature_column` is given (e.g. `"TEMP_MEDIA_SC"`), otherwise the
+elevation-based estimate (≈6.5 °C/km lapse rate).  Reached only via an explicit
+opt-out from the corrected water-temperature baseline.
+"""
+function _legacy_site_temperatures(site_df::DataFrame, sites::Vector{String},
+        legacy_temperature_column::Union{Nothing,AbstractString}=nothing)
+    if legacy_temperature_column !== nothing
+        hasproperty(site_df, Symbol(legacy_temperature_column)) || error(
+            "legacy temperature column '$legacy_temperature_column' not found in " *
+            "the site data (found: $(join(names(site_df), ", ")))")
+        col = Symbol(legacy_temperature_column)
+        site_to_temp = Dict(string(row.CODIGO) => Float64(row[col]) for row in eachrow(site_df))
+        return [get(site_to_temp, string(s), 15.0) for s in sites]
+    end
+    # Rough approximation: temperature decreases ~6.5°C per 1000m
+    elevations = build_elevation_vector(site_df, sites)
+    return 20.0 .- (elevations ./ 1000.0 .* 6.5)
+end
+
+"""
+    extract_site_temperatures(site_df::DataFrame, sites::Vector{String}; kwargs...)
+
+Return the site temperature level used by the model (C5/E1).
+
+By default the level is the corrected per-site water-temperature baseline
+(1986-2005) read from `water_temperature_file` and selected by the exact column
+`tw_baseline_mean`, joined to `sites` by site code.  The baseline file contains
+776 sites while the model has 775 (`1.30.20` is excluded from the model), so
+extra rows are ignored; a model site missing from the baseline is an error by
+default rather than a silent fallback.
+
+# Keyword arguments
+- `water_temperature_file`: corrected baseline CSV
+  (default [`DEFAULT_WATER_TEMPERATURE_FILE`](@ref)).  `nothing` disables it.
+- `require_water_temperature`: when `true` (default) the file, the exact column
+  and every model site are mandatory; a missing site raises an error.  Set to
+  `false` only for synthetic use, which falls back per missing site to the
+  explicit legacy source.
+- `legacy_temperature_column`: exact `site_df` column to use as the legacy
+  source (e.g. `"TEMP_MEDIA_SC"`); `nothing` uses the elevation estimate.
+- `value_col`: baseline column name; defaults to `tw_baseline_mean`.
+
+Legacy behaviour is therefore available only on an explicit opt-out, and
+`TEMP_MEDIA_SC` is never selected implicitly.
+"""
+function extract_site_temperatures(site_df::DataFrame, sites::Vector{String};
+        water_temperature_file::Union{Nothing,AbstractString}=DEFAULT_WATER_TEMPERATURE_FILE,
+        require_water_temperature::Bool=true,
+        legacy_temperature_column::Union{Nothing,AbstractString}=nothing,
+        value_col::AbstractString=WATER_TEMPERATURE_COLUMN)
+
+    if water_temperature_file === nothing
+        require_water_temperature && error(
+            "no water-temperature source configured. Pass `water_temperature_file` " *
+            "(default '$DEFAULT_WATER_TEMPERATURE_FILE'), or opt out explicitly with " *
+            "`water_temperature_file=nothing, require_water_temperature=false` to use " *
+            "the legacy temperature source.")
+        println("Site temperature level: corrected water-temperature baseline disabled; " *
+                "using explicit legacy source " *
+                (legacy_temperature_column === nothing ? "(elevation estimate)" :
+                 "(column '$legacy_temperature_column')"))
+        return _legacy_site_temperatures(site_df, sites, legacy_temperature_column)
     end
 
-    if temp_col === nothing
-        # Use elevation-based temperature estimate
-        # Rough approximation: temperature decreases ~6.5°C per 1000m
-        println("No temperature column found, using elevation-based estimate")
-        elevations = build_elevation_vector(site_df, sites)
-        temps = 20.0 .- (elevations ./ 1000.0 .* 6.5)
-        return temps
-    end
-
-    # Extract temperatures
-    site_to_temp = Dict(row.CODIGO => row[Symbol(temp_col)] for row in eachrow(site_df))
-
-    temperatures = Float64[]
-    for site in sites
-        if haskey(site_to_temp, site)
-            push!(temperatures, site_to_temp[site])
+    lookup = load_site_water_temperature_baseline(water_temperature_file; value_col=value_col)
+    temperatures = Vector{Float64}(undef, length(sites))
+    missing_sites = String[]
+    for (k, site) in enumerate(sites)
+        key = string(site)
+        if haskey(lookup, key)
+            temperatures[k] = lookup[key]
         else
-            push!(temperatures, 15.0)  # Default temperature
+            push!(missing_sites, key)
+            temperatures[k] = NaN
         end
+    end
+
+    if !isempty(missing_sites)
+        require_water_temperature && error(
+            "water-temperature baseline $water_temperature_file does not cover " *
+            "$(length(missing_sites)) model site(s): $(join(missing_sites, ", ")). " *
+            "A missing site must not silently receive another temperature; pass " *
+            "`require_water_temperature=false` only to allow an explicit legacy fallback.")
+        fallback = _legacy_site_temperatures(site_df, sites, legacy_temperature_column)
+        for k in eachindex(temperatures)
+            isnan(temperatures[k]) && (temperatures[k] = fallback[k])
+        end
+        @warn "water-temperature baseline is missing model sites; used the explicit " *
+              "legacy fallback for: $(join(missing_sites, ", "))"
     end
 
     return temperatures
@@ -2023,6 +2135,14 @@ Prepare all data needed for the ODE metacommunity model.
 - `obstacle_include_ambiguous_status`: when `true` the structures with an
   unconfirmed `ESTADO` code (SC/DM/ND/OT/blank) are kept as barriers instead of
   being excluded; they remain flagged `status_class = "ambiguous"`.
+- `water_temperature_file`: corrected per-site water-temperature baseline (1986-2005)
+  used as the model's site temperature level (C5/E1); selected by the exact column
+  `tw_baseline_mean`. Pass `nothing` to opt out.
+- `require_water_temperature`: when `true` (default) the baseline file, its exact
+  column and every model site are mandatory (missing data raises an error).
+- `legacy_temperature_column`: explicit legacy `site_df` column (e.g.
+  `"TEMP_MEDIA_SC"`) used only when the corrected baseline is disabled or (with
+  `require_water_temperature=false`) incomplete; `nothing` uses the elevation estimate.
 
 ## Returns a NamedTuple with:
 - params: MetacommunityParams struct
@@ -2070,7 +2190,10 @@ function prepare_ode_data(;
     heat_stress_rate::Float64 = 0.0,
     carrying_capacity_base_scaling::Float64 = 10.0,
     carrying_capacity_scaling::Float64 = 1.0,
-    thermal_optima_override::Union{Nothing,AbstractVector} = nothing
+    thermal_optima_override::Union{Nothing,AbstractVector} = nothing,
+    water_temperature_file::Union{Nothing,String} = DEFAULT_WATER_TEMPERATURE_FILE,
+    require_water_temperature::Bool = true,
+    legacy_temperature_column::Union{Nothing,String} = nothing,
 )
     println("="^60)
     println("Preparing data for ODE metacommunity model")
@@ -2228,8 +2351,14 @@ function prepare_ode_data(;
 
     # 8. Extract environmental parameters
     println("\n[8/12] Extracting environmental parameters...")
-    temperatures = extract_site_temperatures(site_df, sites)
+    temperatures = extract_site_temperatures(site_df, sites;
+        water_temperature_file=water_temperature_file,
+        require_water_temperature=require_water_temperature,
+        legacy_temperature_column=legacy_temperature_column)
     habitat_suitability = extract_habitat_suitability(site_df, sites)
+    println("Site temperature level source: " *
+            (water_temperature_file === nothing ? "explicit legacy / elevation" :
+             "corrected water-temperature baseline $water_temperature_file"))
     println("Temperature range: $(minimum(temperatures)) - $(maximum(temperatures))")
 
     # 9. Build intrinsic growth rates

@@ -183,6 +183,73 @@ end
 end
 
 # =============================================================================
+# 4b. C5/E1: one corrected water-temperature series for the whole model
+# =============================================================================
+const WT_BASELINE_FILE = joinpath(@__DIR__, "..", "guadex_tw", "outputs", "tables",
+    "water_temp_baseline_guadex_sites.csv")
+const WT_WIDE_FILE = joinpath(@__DIR__, "..", "guadex_tw", "outputs", "tables",
+    "water_temp_daily_guadex_sites_wide.csv")
+
+@testset "corrected site water-temperature baseline (C5/E1)" begin
+    @test isfile(WT_BASELINE_FILE)
+    lookup = Guadex.load_site_water_temperature_baseline(WT_BASELINE_FILE)
+    @test length(lookup) == 776
+    @test haskey(lookup, "1.30.20")   # extra baseline row, excluded from the model
+
+    # Exact-column selection: a table without `tw_baseline_mean` must error, so a
+    # wrong column (e.g. TEMP_MEDIA_SC) can never be selected silently.
+    mktempdir() do tmp
+        wrong = joinpath(tmp, "wrong.csv")
+        CSV.write(wrong, DataFrame(site_id=["a"], TEMP_MEDIA_SC=[11.0]))
+        @test_throws Exception Guadex.load_site_water_temperature_baseline(wrong)
+    end
+
+    # Trout sites: sites with a non-zero baseline brown-trout density.  The
+    # corrected mean is now ≈12.83 °C (pre-E22 pre-correction value 11.7 °C).
+    dens = CSV.read(DENSITY_FILE, DataFrame)
+    trout = [string(r.CODIGO) for r in eachrow(dens)
+             if r.CODIGO in keys(lookup) && !ismissing(r.ST_DEN) && r.ST_DEN > 0.0]
+    @test length(trout) == 36
+    trout_mean = mean([lookup[s] for s in trout])
+    @test isapprox(trout_mean, 12.830498685857533; atol=0.01)
+end
+
+@testset "model temperature equals corrected daily series (C5/E1)" begin
+    lookup = Guadex.load_site_water_temperature_baseline(WT_BASELINE_FILE)
+    site_df = Guadex.load_site_data(CONNECTIVITY_FILE, ENVIRONMENTAL_FILE)
+    sites = String.(site_df.CODIGO)
+    sample = sites[[1, 100, 400]]
+    levels = [lookup[s] for s in sample]
+
+    cols = vcat([:date, :scenario], Symbol.(sample))
+    df = CSV.read(WT_WIDE_FILE, DataFrame; select=cols)
+    df.date = Date.(df.date)
+
+    fdates, ftemps = Guadex.wide_forcing_matrix(df, sample; scenario="ssp585")
+    bdates, btemps = Guadex.wide_forcing_matrix(df, sample; scenario="historical")
+
+    # The corrected baseline is exactly the 1986-2005 mean of the historical
+    # daily series (no double correction, no offset).
+    bmask = [1986 <= year(d) <= 2005 for d in bdates]
+    for i in eachindex(sample)
+        @test isapprox(mean(btemps[i, bmask]), levels[i]; atol=1e-6)
+    end
+
+    # Reference the anomaly to the SAME per-site mean used as the model level.
+    sched, bmeans = Guadex.daily_temperature_schedule(ftemps;
+        dates=fdates, baseline_start=1986, baseline_end=2005,
+        baseline_means=levels)
+    @test bmeans == levels
+
+    # level + anomaly reconstructs the corrected daily series at sample days.
+    for i in eachindex(sample), day in (1, 500, 3000, length(fdates))
+        t = Float64(day - 1)   # the schedule stores one node per day here
+        model_T = levels[i] + Guadex.temperature_delta(sched, i, t)
+        @test isapprox(model_T, ftemps[i, day]; atol=1e-9)
+    end
+end
+
+# =============================================================================
 # 5. Quasi-extinction (WP5)
 # =============================================================================
 @testset "quasi_extinction_flags" begin

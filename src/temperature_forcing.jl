@@ -181,7 +181,7 @@ end
 # =============================================================================
 
 """
-    daily_temperature_schedule(temps; dates, baseline_start, baseline_end)
+    daily_temperature_schedule(temps; dates, baseline_start, baseline_end, ...)
 
 Build a [`TemperatureSchedule`](@ref) from an `n_sites × n_days` matrix of
 absolute daily water temperatures.  The anomaly stored in the schedule is
@@ -190,15 +190,30 @@ relative to each site's own mean over the baseline window `baseline_start` ..
 discarded and the site's observed temperature level is preserved when the
 anomaly is added to `MetacommunityParams.temperatures`.
 
+The per-site reference mean can be supplied in two ways:
+
+* `baseline_means`: the per-site 1986-2005 mean directly.  Pass the SAME vector
+  used as `MetacommunityParams.temperatures` (the corrected `tw_baseline_mean`
+  level) so that `level + anomaly` reconstructs the absolute daily series
+  exactly, with no offset and no double correction (C5/E1).
+* `baseline_temps`/`baseline_dates`: a separate baseline daily series whose
+  baseline-window mean is used (the legacy behaviour).
+
 Returns `(schedule, baseline_means)`.
 """
 function daily_temperature_schedule(temps::AbstractMatrix;
         dates::AbstractVector, baseline_start::Int, baseline_end::Int,
         baseline_temps::Union{Nothing,AbstractMatrix}=nothing,
-        baseline_dates::Union{Nothing,AbstractVector}=nothing)
+        baseline_dates::Union{Nothing,AbstractVector}=nothing,
+        baseline_means::Union{Nothing,AbstractVector}=nothing)
     size(temps, 2) == length(dates) ||
         error("temps has $(size(temps, 2)) day columns but $(length(dates)) dates")
-    if baseline_temps === nothing
+    if baseline_means !== nothing
+        length(baseline_means) == size(temps, 1) ||
+            error("baseline_means has $(length(baseline_means)) entries but temps " *
+                  "has $(size(temps, 1)) sites")
+        baseline_means = Float64.(collect(baseline_means))
+    elseif baseline_temps === nothing
         mask = [baseline_start <= year(d) <= baseline_end for d in dates]
         any(mask) || error("no days in baseline window $baseline_start-$baseline_end; " *
                            "supply baseline_temps/baseline_dates for a separate baseline series")

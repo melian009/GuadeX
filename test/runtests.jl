@@ -23,6 +23,7 @@ const OBSTACLES_FILE = joinpath(DATA_DIR, "obstacles_1658_Obstaculos_No_Completa
 include("test_graph_construction.jl")
 include("test_ode.jl")
 include("test_temperature_forcing.jl")
+include("test_driver_schedules.jl")
 include("test_data_preparation.jl")
 include("test_parameters.jl")
 include("test_on_path_graph.jl")

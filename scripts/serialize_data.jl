@@ -22,11 +22,11 @@ using LinearAlgebra
 using DifferentialEquations
 using Statistics
 
-include("src/OdeModel.jl")
-include("src/Visualization.jl")
-
-using .OdeModel
-using .Visualization
+# The shared (corrected) data-preparation and ODE implementations live in the
+# `Guadex` package module.  Import the module under its own name (not `using`,
+# whose exported names would clash with the legacy local copies below) so this
+# script can call the single corrected temperature extractor introduced by C5.
+import Guadex
 
 const SPECIES_CODES = [
   "SA", "LS", "ST", "SP", "IL", "PW", "CP", "AA", "AH", "LR", "MC", "AB", "IO",
@@ -379,33 +379,13 @@ function build_dam_passability_matrix(site_df::DataFrame, sites::Vector{String},
     return dams
 end
 
-function extract_site_temperatures(site_df::DataFrame, sites::Vector{String})
-    temp_col = nothing
-    for col in names(site_df)
-        if occursin("TEMP", uppercase(col)) || occursin("TEMPERATURA", uppercase(col))
-            temp_col = col
-            break
-        end
-    end
-
-    if temp_col === nothing
-        println("No temperature column found, using elevation-based estimate")
-        elevations = build_elevation_vector(site_df, sites)
-        temps = 20.0 .- (elevations ./ 1000.0 .* 6.5)
-        return temps
-    end
-
-    site_to_temp = Dict(row.CODIGO => row[Symbol(temp_col)] for row in eachrow(site_df))
-    temperatures = Float64[]
-    for site in sites
-        if haskey(site_to_temp, site)
-            push!(temperatures, site_to_temp[site])
-        else
-            push!(temperatures, 15.0)
-        end
-    end
-    return temperatures
-end
+# NOTE (C5): the private `extract_site_temperatures` that used to live here
+# selected the first `TEMP*`/`TEMPERATURA*` column (the legacy
+# `TEMP_MEDIA_SC` air-temperature climatology) and silently ignored the
+# corrected per-site water-temperature baseline.  It has been removed in favour
+# of the shared, corrected `Guadex.extract_site_temperatures`, which selects the
+# exact `tw_baseline_mean` column and fails loudly rather than substituting a
+# legacy column (see `prepare_data` below).
 
 function extract_habitat_suitability(site_df::DataFrame, sites::Vector{String})
     site_to_iet = Dict(row.CODIGO => row.IET for row in eachrow(site_df))
@@ -630,7 +610,10 @@ function prepare_data(;
     dams = build_dam_passability_matrix(site_df, sites, distance_matrix, elevations)
 
     println("\n[8/12] Extracting environmental parameters...")
-    temperatures = extract_site_temperatures(site_df, sites)
+    # C5: the shared corrected extractor (exact `tw_baseline_mean` column, join
+    # by site code, fail loudly on a missing site/column); never the legacy
+    # `TEMP_MEDIA_SC` substring match.
+    temperatures = Guadex.extract_site_temperatures(site_df, sites)
     habitat_suitability = extract_habitat_suitability(site_df, sites)
     println("Temperature range: $(minimum(temperatures)) - $(maximum(temperatures))")
 
@@ -646,7 +629,7 @@ function prepare_data(;
     carrying_capacity = build_carrying_capacity(density_df, site_df, sites, species_codes)
 
     println("\n[12/12] Precomputing dispersal matrix...")
-    dispersal_matrix = precompute_dispersal_matrix(
+    dispersal_matrix = Guadex.precompute_dispersal_matrix(
         n_sites,
         Matrix(distance_matrix),
         elevations,
@@ -660,7 +643,7 @@ function prepare_data(;
     println("Creating MetacommunityParams...")
     println("="^60)
 
-    params = MetacommunityParams(
+    params = Guadex.MetacommunityParams(
         n_sites,
         n_species,
         interaction_matrix,

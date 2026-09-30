@@ -253,33 +253,128 @@ end
         @test elev[3] == 500.0  # default for missing site
     end
 
-    @testset "extract_site_temperatures with TEMP_MEDIA_SC" begin
+    @testset "extract_site_temperatures selects tw_baseline_mean, not TEMP_MEDIA_SC" begin
+        # C5/E1: the level is the corrected water-temperature baseline, chosen by
+        # its exact column name.  Even when the legacy air-temperature column is
+        # present, it must NOT be selected.
+        site_df = DataFrame(
+            CODIGO = ["site1", "site2", "site3"],
+            TEMP_MEDIA_SC = [11.18, 12.44, 13.58],
+            ALTITUD = [500.0, 600.0, 700.0]
+        )
+        sites = ["site1", "site2", "site3"]
+        mktempdir() do tmp
+            path = joinpath(tmp, "water_temp_baseline.csv")
+            CSV.write(path, DataFrame(
+                site_id = ["site1", "site2", "site3"],
+                tw_baseline_mean = [12.80, 13.55, 14.20],
+                TEMP_MEDIA_SC = [11.18, 12.44, 13.58]
+            ))
+            temps = Guadex.extract_site_temperatures(site_df, sites;
+                water_temperature_file=path)
+            @test temps ≈ [12.80, 13.55, 14.20]
+            @test temps != [11.18, 12.44, 13.58]
+        end
+    end
+
+    @testset "extract_site_temperatures fails loudly on missing file/column/site" begin
+        site_df = DataFrame(
+            CODIGO = ["site1", "site2"],
+            TEMP_MEDIA_SC = [11.18, 12.44],
+            ALTITUD = [500.0, 600.0]
+        )
+        mktempdir() do tmp
+            # (a) expected file missing
+            @test_throws Exception Guadex.extract_site_temperatures(site_df, ["site1"];
+                water_temperature_file=joinpath(tmp, "missing.csv"))
+
+            # (b) wrong column only (TEMP_MEDIA_SC): must error, never substitute
+            wrong = joinpath(tmp, "wrong.csv")
+            CSV.write(wrong, DataFrame(site_id=["site1", "site2"],
+                TEMP_MEDIA_SC=[11.18, 12.44]))
+            err = try
+                Guadex.extract_site_temperatures(site_df, ["site1", "site2"];
+                    water_temperature_file=wrong)
+                nothing
+            catch e
+                e
+            end
+            @test err !== nothing
+            @test occursin("tw_baseline_mean", sprint(showerror, err))
+
+            # (c) duplicate site
+            dup = joinpath(tmp, "dup.csv")
+            CSV.write(dup, DataFrame(site_id=["site1", "site1"],
+                tw_baseline_mean=[12.0, 13.0]))
+            @test_throws Exception Guadex.load_site_water_temperature_baseline(dup)
+
+            # (d) a model site missing from the baseline is an error by default
+            partial = joinpath(tmp, "partial.csv")
+            CSV.write(partial, DataFrame(site_id=["site1"], tw_baseline_mean=[12.8]))
+            @test_throws Exception Guadex.extract_site_temperatures(site_df,
+                ["site1", "site2"]; water_temperature_file=partial)
+
+            # ... but is allowed only via an explicit opt-out + legacy column.
+            temps = Guadex.extract_site_temperatures(site_df, ["site1", "site2"];
+                water_temperature_file=partial, require_water_temperature=false,
+                legacy_temperature_column="TEMP_MEDIA_SC")
+            @test temps ≈ [12.8, 12.44]
+        end
+    end
+
+    @testset "extract_site_temperatures explicit legacy opt-out" begin
         site_df = DataFrame(
             CODIGO = ["site1", "site2", "site3"],
             TEMP_MEDIA_SC = [11.18, 12.44, 13.58],
             ALTITUD = [500.0, 600.0, 700.0]
         )
         sites = ["site1", "site2", "site4"]
-        temps = Guadex.extract_site_temperatures(site_df, sites)
+        temps = Guadex.extract_site_temperatures(site_df, sites;
+            water_temperature_file=nothing, require_water_temperature=false,
+            legacy_temperature_column="TEMP_MEDIA_SC")
         @test length(temps) == 3
         @test temps[1] ≈ 11.18
         @test temps[2] ≈ 12.44
         @test temps[3] ≈ 15.0  # default for missing site
+
+        # No legacy column -> elevation estimate (explicit opt-out only).
+        elev_df = DataFrame(CODIGO=["site1", "site2"], ALTITUD=[0.0, 1000.0])
+        elev = Guadex.extract_site_temperatures(elev_df, ["site1", "site2"];
+            water_temperature_file=nothing, require_water_temperature=false)
+        @test elev[1] ≈ 20.0
+        @test elev[2] ≈ 13.5
+
+        # Disabling the file without the explicit opt-out must fail.
+        @test_throws Exception Guadex.extract_site_temperatures(site_df, sites;
+            water_temperature_file=nothing)
     end
 
-    @testset "extract_site_temperatures fallback (no temp column)" begin
-        site_df = DataFrame(
-            CODIGO = ["site1", "site2"],
-            ALTITUD = [0.0, 1000.0],
-            OTHER_DATA = [1.0, 2.0]
+    @testset "prepare_ode_data uses corrected site water temperature" begin
+        baseline_file = joinpath(@__DIR__, "..", "guadex_tw", "outputs", "tables",
+            "water_temp_baseline_guadex_sites.csv")
+        @test isfile(baseline_file)
+        lookup = Guadex.load_site_water_temperature_baseline(baseline_file)
+        @test length(lookup) == 776          # 776 rows, incl. 1.30.20
+        @test haskey(lookup, "1.30.20")
+
+        data = Guadex.prepare_ode_data(
+            connectivity_file=CONNECTIVITY_FILE,
+            density_file=DENSITY_FILE,
+            species_chars_file=SPECIES_CHARS_FILE,
+            environmental_file=ENVIRONMENTAL_FILE,
+            distance_file=DISTANCE_FILE,
+            interaction_file=INTERACTION_FILE,
+            upstream_cost=0.01
         )
-        sites = ["site1", "site2"]
-        temps = Guadex.extract_site_temperatures(site_df, sites)
-        @test length(temps) == 2
-        # Elevation-based estimate: 20 - (0/1000 * 6.5) = 20.0
-        @test temps[1] ≈ 20.0
-        # 20 - (1000/1000 * 6.5) = 13.5
-        @test temps[2] ≈ 13.5
+        @test length(data.sites) == 775
+        @test !("1.30.20" in data.sites)     # excluded from the model
+        for k in (1, 100, 400, length(data.sites))
+            @test data.params.temperatures[k] ≈ lookup[data.sites[k]]
+        end
+        # And the level is NOT the legacy air-temperature climatology.
+        air = Dict(string(r.CODIGO) => coalesce(r.TEMP_MEDIA_SC, NaN)
+                   for r in eachrow(data.site_df))
+        @test !isapprox(data.params.temperatures[1], air[data.sites[1]]; atol=0.5)
     end
 
     @testset "extract_habitat_suitability" begin
