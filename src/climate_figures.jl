@@ -23,7 +23,7 @@ the mean across runs and the bands are the 10-90% / 25-75% across runs, so the
 spread is always the across-GCM uncertainty of the level aggregate.
 
 Pooling raw units instead pins the central value to the modal unit for discrete or
-zero-inflated metrics (richness, extinction risk), rendering the sub-basin /
+zero-inflated metrics (richness, realised richness loss), rendering the sub-basin /
 water-body / site panels flat even when the aggregate changes.  The per-run
 figures (`run_level_stats`) still show the within-run across-unit spread.
 """
@@ -56,7 +56,7 @@ const LEVEL_GROUP_COLUMNS = Dict(
 # (`VIEWER_METRICS` in src/outputs.jl) rendered by the climate figures, so labels
 # and units cannot drift between the viewer export and the figures.
 const CLIMATE_METRIC_KEYS = (:native_richness, :invasive_richness,
-    :native_extinction_risk, :total_biomass, :temperature_c)
+    :realised_richness_loss, :total_biomass, :temperature_c)
 
 const CLIMATE_METRICS = [definition for definition in VIEWER_METRICS
                          if definition[1] in CLIMATE_METRIC_KEYS]
@@ -75,7 +75,7 @@ const SCENARIO_COLORS = Dict(
 const CLIMATE_REPORT_LABELS = Dict(
     :native_richness => "Native richness (sp./site)",
     :invasive_richness => "Invasive richness (sp./site)",
-    :native_extinction_risk => "Richness loss (fraction)",
+    :realised_richness_loss => "Richness loss (fraction)",
     :total_biomass => "Total biomass (units/site)",
     :temperature_c => "Water temp. (°C)",
 )
@@ -437,8 +437,8 @@ contributing runs (`n_models`).
 
 Aggregating per run *before* pooling is what makes nested levels meaningful.  The
 previous implementation pooled every unit of every run and took quantiles, so for
-discrete or zero-inflated metrics (richness, extinction risk) the central value
-was the modal unit (e.g. 3 species, or 0 risk) for every year and the panel
+discrete or zero-inflated metrics (richness, realised richness loss) the central value
+was the modal unit (e.g. 3 species, or 0 loss) for every year and the panel
 rendered as a flat line.  Averaging within a run removes that pinning, and the
 bands then describe the across-GCM spread of the level aggregate - the same
 quantity the basin level has always shown.

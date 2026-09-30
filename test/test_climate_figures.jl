@@ -17,7 +17,7 @@ function _write_run(root, scenario, gcm, years, basin_values)
         year=years,
         n_sites=fill(10, length(years)),
         mean_native_richness=basin_values,
-        mean_native_extinction_risk=fill(0.1, length(years)),
+        mean_realised_richness_loss=fill(0.1, length(years)),
         mean_total_biomass=basin_values .* 10.0,
     )
     CSV.write(joinpath(level_dir, "level_basin.csv"), basin)
@@ -33,7 +33,7 @@ function _write_run(root, scenario, gcm, years, basin_values)
         year=unit_years,
         n_sites=fill(5, length(unit_years)),
         mean_native_richness=unit_values,
-        mean_native_extinction_risk=fill(0.1, length(unit_years)),
+        mean_realised_richness_loss=fill(0.1, length(unit_years)),
         mean_total_biomass=unit_values .* 10.0,
     )
     CSV.write(joinpath(level_dir, "level_subcatchment.csv"), subcatchment)
@@ -44,7 +44,7 @@ function _write_run(root, scenario, gcm, years, basin_values)
         year=unit_years,
         n_sites=fill(5, length(unit_years)),
         mean_native_richness=unit_values,
-        mean_native_extinction_risk=fill(0.1, length(unit_years)),
+        mean_realised_richness_loss=fill(0.1, length(unit_years)),
         mean_total_biomass=unit_values .* 10.0,
     )
     CSV.write(joinpath(level_dir, "level_water_body.csv"), water_body)
@@ -59,7 +59,7 @@ function _write_run(root, scenario, gcm, years, basin_values)
         invasive_biomass=[1.0, 2.0, 1.0, 3.0],
         total_biomass=[6.0, 9.0, 7.0, 12.0],
         native_richness_relative=[1.0, 1.0, 1.0, 1.0],
-        native_extinction_risk=[0.0, 0.0, 0.0, 0.0],
+        realised_richness_loss=[0.0, 0.0, 0.0, 0.0],
         temperature_c=[15.0, 16.0, 16.0, 17.0],
         delta_temperature_c=[0.0, 0.0, 1.0, 1.0],
     )
@@ -130,7 +130,7 @@ end
         year=repeat(years; inner=10),
         n_sites=fill(1, 20),
         mean_native_richness=vcat(sub_2026, sub_2045),
-        mean_native_extinction_risk=zeros(20),
+        mean_realised_richness_loss=zeros(20),
         mean_total_biomass=vcat(sub_2026, sub_2045) .* 10.0,
     ))
     CSV.write(joinpath(level_dir, "level_basin.csv"), DataFrame(
@@ -138,7 +138,7 @@ end
         year=years,
         n_sites=fill(10, 2),
         mean_native_richness=[1.6, 4.6],
-        mean_native_extinction_risk=zeros(2),
+        mean_realised_richness_loss=zeros(2),
         mean_total_biomass=[16.0, 46.0],
     ))
     CSV.write(joinpath(root, "runs_index.csv"),

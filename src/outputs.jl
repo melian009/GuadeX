@@ -19,17 +19,19 @@ Outputs written by [`export_run_outputs`](@ref):
     <run_dir>/levels/level_subcatchment.csv
     <run_dir>/levels/level_water_body.csv
     <run_dir>/levels/level_basin.csv
-    <run_dir>/viewer/guadex_results_timeseries.csv
+    <run_dir>/viewer/guadex_results_<metric>_timeseries.csv   # one metric per file
     <run_dir>/viewer/guadex_results_metrics.json
     <run_dir>/viewer/guadex_results_<metric>.json
-    <run_dir>/viewer/level_subcatchment_timeseries.json
-    <run_dir>/viewer/level_water_body_timeseries.json
-    <run_dir>/viewer/level_basin_timeseries.json
+    <run_dir>/viewer/level_<level>_mean_<metric>_timeseries.json          # group-keyed
+    <run_dir>/viewer/level_<level>_mean_<metric>_by_site_timeseries.json  # renderable
+    <run_dir>/viewer/species_<sp>_<metric>_timeseries.json                # species-level
     <run_dir>/run_metadata.json
 
 The viewer files are keyed exactly as `viz/src/data/ResultsModel.js` expects:
 `{name, unit, steps, data}` for time series and `{name, data}` for per-site
-metrics, with site keys equal to `CODIGO`.
+metrics, with site keys equal to `CODIGO`.  Each `viewer/*_timeseries.csv` file
+holds a single metric (`CODIGO,step,value`) so the viewer's time slider spans the
+years of one metric rather than one entry per metric × year (minor #14).
 """
 
 const GUADEX_BASIN_ID = "ES050"
@@ -246,16 +248,34 @@ function species_indices(species::AbstractVector, codes::AbstractVector)
     return [i for (i, sp) in enumerate(species) if lowercase(string(sp)) in wanted]
 end
 
-_snapshot_index(times::AbstractVector, target::Real) =
-    clamp(searchsortedfirst(times, target), 1, length(times))
+function _snapshot_index(times::AbstractVector, target::Real; atol::Real=1.0e-6)
+    idx = clamp(searchsortedfirst(times, target), 1, length(times))
+    # The `saveat` grid can place the intended point an ulp below `target`
+    # (e.g. `365/12` accumulated twelve times, or a rounded interval like
+    # 30.4167).  `searchsortedfirst` would then skip it and report the next
+    # grid point, shifting the snapshot by a step.  Snap to the preceding grid
+    # point only when it is, to within round-off, exactly the requested time, so
+    # alignment stays exact rather than nearest-neighbour.
+    if Float64(times[idx]) != Float64(target) && idx > 1 &&
+            abs(Float64(times[idx - 1]) - Float64(target)) <= atol
+        idx -= 1
+    end
+    return idx
+end
 
+# End-of-year reporting offsets (E5).  Offset `k` is the snapshot at
+# `t = k · days_per_year`, i.e. the state at the end of year `k`, so the default
+# grid is 1-based (`1:last_year`) and matches the drivers, which were moved from
+# 0-based to 1-based offsets in E5.  The previous 0-based `0:last_year` grid
+# reported the pre-forcing initial state as the first row.
 function _report_offsets(times::AbstractVector, days_per_year::Real)
     last_year = floor(Int, times[end] / days_per_year)
-    return collect(0:last_year)
+    return collect(1:last_year)
 end
 
 """
-    quasi_extinction_flags(density_series; threshold, baseline_density, q=0.1, persistence=3)
+    quasi_extinction_flags(density_series; threshold, baseline_density, q=0.1,
+                           persistence=3, established=baseline_density > threshold)
 
 Boolean flags for one site × species series: `true` from the moment the density
 has been below `max(presence_threshold, q · baseline_density)` for `persistence`
@@ -263,9 +283,17 @@ consecutive annual snapshots.  `baseline_density` is the spun-up (or t = 0)
 reference density used to define a collapse relative to the species' own local
 abundance, so the 0.1 presence threshold does not hide sub-threshold declines
 (WP5).
+
+A site where the species was **not established** in the baseline — baseline
+density at or below the presence threshold — is never flagged: a site that was
+never occupied cannot be quasi-extinct (E6).  `established` defaults to that
+test and can be passed explicitly when the caller has already computed the mask.
 """
 function quasi_extinction_flags(density_series::AbstractVector;
-        threshold::Real, baseline_density::Real, q::Real=0.1, persistence::Int=3)
+        threshold::Real, baseline_density::Real,
+        established::Bool=Float64(baseline_density) > Float64(threshold),
+        q::Real=0.1, persistence::Int=3)
+    established || return falses(length(density_series))
     cutoff = max(Float64(threshold), q * Float64(baseline_density))
     flags = falses(length(density_series))
     run = 0
@@ -387,8 +415,11 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
     quasi = falses(n_sites, n_species, length(offsets))
     for i in 1:n_sites, s in 1:n_species
         series = [snapshot_mats[k][i, s] for k in 1:length(offsets)]
+        # E6: only sites where the species was established in the baseline can
+        # go quasi-extinct; never-occupied sites are excluded.
         quasi[i, s, :] .= quasi_extinction_flags(series;
             threshold=threshold, baseline_density=baseline[i, s],
+            established=baseline[i, s] > threshold,
             q=quasi_extinction_q, persistence=quasi_extinction_persistence)
     end
 
@@ -422,8 +453,11 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
             total_biomass_relative = total_biomass_baseline[i] > 0 ?
                 total_biomass / total_biomass_baseline[i] : 1.0
             native_quasi_extinct = isempty(native_idx) ? 0 : count(quasi[i, native_idx, k])
-            native_quasi_extinct_fraction = isempty(native_idx) ? NaN :
-                native_quasi_extinct / length(native_idx)
+            # E6: divide by the native species established at this site in the
+            # baseline, not by every modelled native species.
+            native_established = native_baseline[i]
+            native_quasi_extinct_fraction = native_established > 0 ?
+                native_quasi_extinct / native_established : NaN
             temp_base = temperature_baseline === nothing ? NaN : Float64(temperature_baseline[i])
             # A missing warming matrix means "no projected change", so report
             # the baseline temperature rather than an unknown (NaN) value.
@@ -440,13 +474,14 @@ function compute_site_metrics(times::AbstractVector, states::AbstractVector,
                 subzone=levels.subzone[i],
                 basin=levels.basin[i],
                 native_richness=native_rich,
+                native_baseline_richness=native_baseline[i],
                 invasive_richness=invasive_rich,
                 total_richness=total_rich,
                 native_biomass=native_biomass,
                 invasive_biomass=invasive_biomass,
                 total_biomass=total_biomass,
                 native_richness_relative=relative,
-                native_extinction_risk=max(0.0, 1.0 - relative),
+                realised_richness_loss=max(0.0, 1.0 - relative),
                 native_biomass_relative=native_biomass_relative,
                 total_biomass_relative=total_biomass_relative,
                 native_occupancy=native_occupancy,
@@ -474,7 +509,8 @@ end
         year_offsets, year_labels, baseline_species_density, q, persistence)
 
 Per site × species annual table (WP5): density, thresholded presence, relative
-abundance against the spun-up baseline, the quasi-extinction flag and the
+abundance against the spun-up baseline, whether the species was established in
+the baseline (`baseline_established`), the quasi-extinction flag and the
 time-to-quasi-extinction for each site/species.  `export_run_outputs` writes this
 as `levels/species_timeseries.csv`.
 """
@@ -503,12 +539,18 @@ function compute_species_metrics(times::AbstractVector, states::AbstractVector,
     snapshot_mats = [reshape(states[_snapshot_index(times, Float64(offset) * days_per_year)],
         n_sites, n_species) for offset in offsets]
 
+    # E6: baseline-established mask, threaded into the flags and stored in the
+    # table so the denominator used by `quasi_extinction_summary` is auditable.
+    baseline_established = baseline .> threshold
+
     qe = falses(n_sites, n_species, length(offsets))
     time_to_qe = Matrix{Union{Missing,Int}}(missing, n_sites, n_species)
     for i in 1:n_sites, s in 1:n_species
         series = [snapshot_mats[k][i, s] for k in 1:length(offsets)]
         flags = quasi_extinction_flags(series; threshold=threshold,
-            baseline_density=baseline[i, s], q=quasi_extinction_q,
+            baseline_density=baseline[i, s],
+            established=baseline_established[i, s],
+            q=quasi_extinction_q,
             persistence=quasi_extinction_persistence)
         qe[i, s, :] .= flags
         time_to_qe[i, s] = time_to_quasi_extinction(flags; year_labels=labels)
@@ -526,6 +568,7 @@ function compute_species_metrics(times::AbstractVector, states::AbstractVector,
                 species=string(sp),
                 density=density,
                 baseline_density=base,
+                baseline_established=baseline_established[i, s],
                 relative_density=base > 0 ? density / base : NaN,
                 present=density > threshold,
                 quasi_extinct=qe[i, s, k],
@@ -537,13 +580,22 @@ function compute_species_metrics(times::AbstractVector, states::AbstractVector,
 end
 
 """
-    quasi_extinction_summary(species_metrics)
+    quasi_extinction_summary(species_metrics; threshold=0.1)
 
 One row per species: final-year occupancy and quasi-extinct site fraction,
 biomass change against the baseline, and the median time to quasi-extinction
 (over sites that reached it).
+
+`quasi_extinct_fraction` is computed over the **baseline-established** sites
+only, i.e. the sites where the species' baseline density is above the presence
+threshold (E6).  `occupancy_final` and `n_sites` still cover every modelled
+site, while `n_sites_established` exposes the denominator.  When a species was
+established at no site in the baseline there is no site at which it could go
+quasi-extinct, and the fraction is reported as `0.0` (never `NaN` and never
+`1.0`); the established mask is taken from the `baseline_established` column
+when present and otherwise recomputed as `baseline_density > threshold`.
 """
-function quasi_extinction_summary(species_metrics::DataFrame)
+function quasi_extinction_summary(species_metrics::DataFrame; threshold::Real=0.1)
     nrow(species_metrics) == 0 && return DataFrame()
     years = sort(unique(species_metrics.year))
     final_year = years[end]
@@ -555,16 +607,22 @@ function quasi_extinction_summary(species_metrics::DataFrame)
         times = filter(isfinite, times)
         base_biomass = sum(base.baseline_density)
         final_biomass = sum(final_rows.density)
+        n_sites = nrow(final_rows)
+        established = hasproperty(final_rows, :baseline_established) ?
+            Bool.(final_rows.baseline_established) :
+            (Float64.(final_rows.baseline_density) .> Float64(threshold))
+        n_sites_established = count(established)
         push!(rows, (
             species=string(first(sub.species)),
-            n_sites=nrow(final_rows),
+            n_sites=n_sites,
+            n_sites_established=n_sites_established,
             baseline_biomass=base_biomass,
             final_biomass=final_biomass,
             relative_biomass_change=base_biomass > 0 ? final_biomass / base_biomass - 1.0 : NaN,
-            occupancy_final=nrow(final_rows) == 0 ? NaN :
-                count(final_rows.present) / nrow(final_rows),
-            quasi_extinct_fraction=nrow(final_rows) == 0 ? NaN :
-                count(final_rows.quasi_extinct) / nrow(final_rows),
+            occupancy_final=n_sites == 0 ? NaN :
+                count(final_rows.present) / n_sites,
+            quasi_extinct_fraction=n_sites_established == 0 ? 0.0 :
+                count(final_rows.quasi_extinct .& established) / n_sites_established,
             median_time_to_quasi_extinction=isempty(times) ? missing : median(times),
         ))
     end
@@ -659,7 +717,7 @@ const VIEWER_METRICS = [
     (:native_richness, "Native richness", "species"),
     (:invasive_richness, "Invasive richness", "species"),
     (:total_richness, "Total richness", "species"),
-    (:native_extinction_risk, "Native richness loss (relative)", "fraction"),
+    (:realised_richness_loss, "Realised richness loss (relative)", "fraction"),
     (:native_biomass, "Native biomass", "density"),
     (:invasive_biomass, "Invasive biomass", "density"),
     (:total_biomass, "Total biomass", "density"),
@@ -692,21 +750,39 @@ function _viewer_site_series(site_metrics::DataFrame, metric::Symbol)
     return steps, data
 end
 
+const VIEWER_LEVEL_METRICS = (:native_richness, :realised_richness_loss, :total_biomass)
+const VIEWER_SPECIES_METRICS = (:density, :relative_density, :present, :quasi_extinct)
+
+_species_metric_value(v) = v isa Bool ? (v ? 1.0 : 0.0) :
+    (v isa Real && isfinite(float(v)) ? Float64(v) : NaN)
+
 """
-    write_viewer_outputs(site_metrics, level_tables, output_dir; name, primary_metric)
+    write_viewer_outputs(site_metrics, output_dir; name, primary_metric,
+        level_tables, species_metrics, site_levels)
 
-Write the files the `viz/` explorer consumes.  A wide long CSV carries every
-viewer metric at every step (the explorer detects the `step` column and creates
-one variable per metric), plus one canonical time-series JSON for the primary
-metric and a per-site metric JSON at the final step.
+Write the files the `viz/` explorer consumes.
 
-When `level_tables` is supplied, per-level time-series JSON files are also
-written so non-site levels can be attached to the viewer later.
+* one `guadex_results_<metric>_timeseries.csv` (`CODIGO,step,value`) per metric,
+  so each viewer slider spans the years of a single metric instead of mixing
+  every metric × year in one control (minor #14);
+* the canonical single-variable JSON for `primary_metric` and the per-site
+  metric JSON at the final step;
+* per-level time-series JSON keyed by group id (`level_<level>_mean_<metric>_...`);
+* `level_<level>_mean_<metric>_by_site_timeseries.json`, the same aggregate
+  repeated onto every member site, so the existing site layer can *render* the
+  sub-catchment / water-body / basin aggregate (minor #14);
+* `species_<sp>_<metric>_timeseries.json`, one site-keyed time series per metric
+  per species, built from the WP5 `species_metrics` table (minor #14).
+
+All time-series JSON files use the `{name, unit, steps, data}` shape expected by
+`viz/src/data/ResultsModel.js`, with `data` keyed by `CODIGO`.
 """
 function write_viewer_outputs(site_metrics::DataFrame, output_dir::AbstractString;
         name::AbstractString="GuadeX simulation output",
-        primary_metric::Symbol=:native_extinction_risk,
-        level_tables::Union{Nothing,Dict}=nothing)
+        primary_metric::Symbol=:realised_richness_loss,
+        level_tables::Union{Nothing,Dict}=nothing,
+        species_metrics::Union{Nothing,DataFrame}=nothing,
+        site_levels=nothing)
     mkpath(output_dir)
     steps = _viewer_steps(site_metrics)
     codes = sort(unique(string.(site_metrics.CODIGO)))
@@ -720,27 +796,25 @@ function write_viewer_outputs(site_metrics::DataFrame, output_dir::AbstractStrin
         end
     end
 
-    # 1. Wide long CSV keyed by CODIGO + step (viewer CSV parser).  Use CSV.jl
-    # so site codes and values are quoted/escaped correctly.
-    csv_path = joinpath(output_dir, "guadex_results_timeseries.csv")
-    n_rows = length(codes) * length(steps)
-    codigo_col = Vector{String}(undef, n_rows)
-    step_col = Vector{Int}(undef, n_rows)
-    value_cols = Dict(metric => Vector{Float64}(undef, n_rows) for metric in metric_syms)
-    r = 0
-    for code in codes, step in steps
-        r += 1
-        codigo_col[r] = code
-        step_col[r] = Int(step)
-        for metric in metric_syms
-            value_cols[metric][r] = lookup[(code, Int(step), metric)]
-        end
-    end
-    csv_table = DataFrame(CODIGO=codigo_col, step=step_col)
+    # 1. One single-variable CSV per metric, keyed by CODIGO + step.  A single
+    # wide CSV with 15 metric columns and a `step` column is read by the viewer
+    # as one key per (metric, year) pair — 15 metrics × 20 years in one slider.
+    # Splitting it keeps each file a proper single-series time series.
     for metric in metric_syms
-        csv_table[!, metric] = value_cols[metric]
+        n_rows = length(codes) * length(steps)
+        codigo_col = Vector{String}(undef, n_rows)
+        step_col = Vector{Int}(undef, n_rows)
+        value_col = Vector{Float64}(undef, n_rows)
+        r = 0
+        for code in codes, step in steps
+            r += 1
+            codigo_col[r] = code
+            step_col[r] = Int(step)
+            value_col[r] = lookup[(code, Int(step), metric)]
+        end
+        CSV.write(joinpath(output_dir, "guadex_results_$(metric)_timeseries.csv"),
+            DataFrame(CODIGO=codigo_col, step=step_col, value=value_col))
     end
-    CSV.write(csv_path, csv_table)
 
     # 2. Canonical single-variable time series (matches viz/README example).
     primary_label = name
@@ -768,27 +842,72 @@ function write_viewer_outputs(site_metrics::DataFrame, output_dir::AbstractStrin
     end
     _write_metrics_json(joinpath(output_dir, "guadex_results_metrics.json"), name, metrics_data)
 
-    # 4. Optional per-level time series (JSON keyed by group id), one file per
-    # metric so the viewer can attach non-site levels later.
+    # 4. Per-level aggregates: keep the group-keyed JSON (canonical) and add a
+    # site-expanded copy so the site layer can actually render them.
     if level_tables !== nothing
         for (level, table) in level_tables
             nrow(table) == 0 && continue
             id_col = level == :basin ? nothing : level
-            for metric in (:native_richness, :native_extinction_risk, :total_biomass)
+            group_of_site = if level == :basin
+                fill(GUADEX_BASIN_ID, length(codes))
+            elseif site_levels === nothing || !hasproperty(site_levels, level)
+                nothing
+            else
+                string.(getproperty(site_levels, level))
+            end
+            for metric in VIEWER_LEVEL_METRICS
                 col = Symbol("mean_", metric)
                 hasproperty(table, col) || continue
-                data = Dict{String,Vector{Any}}()
+                group_lookup = Dict{Tuple{String,Int},Float64}()
                 for row in eachrow(table)
                     key = id_col === nothing ? GUADEX_BASIN_ID : string(row[id_col])
-                    series = get!(data, key, fill(NaN, length(steps)))
-                    pos = findfirst(==(row.year), steps)
-                    pos === nothing && continue
                     v = row[col]
-                    series[pos] = (v isa Real && isfinite(float(v))) ? Float64(v) : NaN
+                    group_lookup[(key, Int(row.year))] =
+                        (v isa Real && isfinite(float(v))) ? Float64(v) : NaN
+                end
+                data = Dict{String,Vector{Any}}()
+                for (key, year) in keys(group_lookup)
+                    data[key] = Any[get(group_lookup, (key, Int(s)), NaN) for s in steps]
                 end
                 _write_timeseries_json(joinpath(output_dir,
-                        "level_$(level)_$(col)_timeseries.json"),
+                        "level_$(level)_mean_$(metric)_timeseries.json"),
                     "GuadeX $(level) $(metric)", "", string.(steps), data)
+
+                group_of_site === nothing && continue
+                site_data = Dict{String,Vector{Any}}()
+                for (i, code) in enumerate(codes)
+                    g = group_of_site[i]
+                    site_data[code] = Any[get(group_lookup, (g, Int(s)), NaN) for s in steps]
+                end
+                _write_timeseries_json(joinpath(output_dir,
+                        "level_$(level)_mean_$(metric)_by_site_timeseries.json"),
+                    "GuadeX $(level) $(metric) (aggregate by site)", "",
+                    string.(steps), site_data)
+            end
+        end
+    end
+
+    # 5. Species-level projections: one site-keyed time series per metric per
+    # species (minor #14), from the WP5 species_metrics table.
+    if species_metrics !== nothing && nrow(species_metrics) > 0
+        series_steps = sort(unique(Int.(species_metrics.year)))
+        species_order = sort(unique(string.(species_metrics.species)))
+        for metric in VIEWER_SPECIES_METRICS
+            hasproperty(species_metrics, metric) || continue
+            sp_lookup = Dict{Tuple{String,String,Int},Float64}()
+            for row in eachrow(species_metrics)
+                sp_lookup[(string(row.CODIGO), string(row.species), Int(row.year))] =
+                    _species_metric_value(row[metric])
+            end
+            for sp in species_order
+                data = Dict{String,Vector{Any}}()
+                for code in codes
+                    data[code] = Any[get(sp_lookup, (code, sp, Int(s)), NaN)
+                                     for s in series_steps]
+                end
+                _write_timeseries_json(joinpath(output_dir,
+                        "species_$(sp)_$(metric)_timeseries.json"),
+                    "$(name) · $(sp) $(metric)", "", string.(series_steps), data)
             end
         end
     end
@@ -913,7 +1032,7 @@ function export_run_outputs(output_dir::AbstractString;
         habitat_suitability::Union{Nothing,AbstractVector}=nothing,
         upstream_cost::Union{Nothing,Real}=nothing,
         run_metadata::AbstractDict=Dict{String,Any}(),
-        primary_metric::Symbol=:native_extinction_risk,
+        primary_metric::Symbol=:realised_richness_loss,
         viewer_name::AbstractString="GuadeX simulation output",
         require_crosswalk::Bool=false,
         migratory_species::AbstractVector=String[],
@@ -925,8 +1044,16 @@ function export_run_outputs(output_dir::AbstractString;
 
     crosswalk = load_site_level_crosswalk(crosswalk_path)
     levels = site_level_vectors(sites, site_df, crosswalk)
-    assigned_water_bodies = count(!=(GUADEX_UNASSIGNED_WATER_BODY), levels.water_body)
-    if require_crosswalk && (isempty(levels.water_body) || assigned_water_bodies == 0)
+    # `levels.water_body` has one entry per site, so this counts SITES with an
+    # assigned water body, not distinct water bodies.
+    sites_with_assigned_water_body =
+        count(!=(GUADEX_UNASSIGNED_WATER_BODY), levels.water_body)
+    water_body_ids = Set(levels.water_body)
+    n_assigned_water_bodies = count(!=(GUADEX_UNASSIGNED_WATER_BODY), water_body_ids)
+    # True number of water-body levels: assigned ids plus the UNASSIGNED category.
+    n_water_bodies = n_assigned_water_bodies +
+        (GUADEX_UNASSIGNED_WATER_BODY in water_body_ids ? 1 : 0)
+    if require_crosswalk && (isempty(levels.water_body) || sites_with_assigned_water_body == 0)
         error("no sites resolved to a water body; refusing to write an " *
               "all-UNASSIGNED water-body level (crosswalk: $crosswalk_path)")
     end
@@ -969,14 +1096,21 @@ function export_run_outputs(output_dir::AbstractString;
 
     # WP5: exposure diagnostics (days above each species' empirical upper limit).
     exposure = nothing
+    exposure_summary = nothing
     if daily_forcing !== nothing && species_upper_limits !== nothing
         exposure = exposure_table(sites, species, daily_forcing.temps, daily_forcing.dates;
             upper_limits=species_upper_limits)
         CSV.write(joinpath(output_dir, "levels", "exposure_sites.csv"), exposure)
+        # C7: restrict the reported exposure to the sites where each species was
+        # baseline established (E6), and report mean/median/max there rather than
+        # the basin maximum.  The `site_set` column names the sites used.
+        exposure_summary = established_exposure_summary(exposure, species_metrics)
+        CSV.write(joinpath(output_dir, "levels", "exposure_summary.csv"), exposure_summary)
     end
 
     write_viewer_outputs(site_metrics, joinpath(output_dir, "viewer");
-        name=viewer_name, primary_metric=primary_metric, level_tables=level_tables)
+        name=viewer_name, primary_metric=primary_metric, level_tables=level_tables,
+        species_metrics=species_metrics, site_levels=levels)
 
     metadata = Dict{String,Any}()
     for (k, v) in run_metadata
@@ -986,10 +1120,23 @@ function export_run_outputs(output_dir::AbstractString;
     metadata["n_species"] = length(species)
     metadata["levels"] = ["sampling_point", "subcatchment", "water_body", "basin"]
     metadata["crosswalk_file"] = crosswalk_path
-    metadata["crosswalk_water_bodies"] = assigned_water_bodies
+    metadata["sites_with_assigned_water_body"] = sites_with_assigned_water_body
+    metadata["n_assigned_water_bodies"] = n_assigned_water_bodies
+    metadata["n_water_bodies"] = n_water_bodies
     metadata["migratory_species"] = String.(migratory_species)
     metadata["quasi_extinction_q"] = Float64(quasi_extinction_q)
     metadata["quasi_extinction_persistence"] = quasi_extinction_persistence
+    # E6: only baseline-established sites enter the quasi-extinction fraction.
+    metadata["quasi_extinction_denominator"] = "baseline_established_sites"
+    metadata["quasi_extinction_zero_established_fraction"] = 0.0
+    # C7: the reported exposure is over the baseline-established sites of each
+    # species, not the basin maximum; `exposure_summary.csv` names the site set.
+    if exposure_summary !== nothing
+        metadata["exposure_site_set"] = isempty(exposure_summary) ? "all_sites" :
+            string(first(exposure_summary.site_set))
+        metadata["exposure_summary_statistic"] =
+            "mean/median/max days above the species thermal limit over the exposure site set"
+    end
     metadata["baseline_reference"] = baseline_species_density === nothing ? "t0" : "supplied"
     outputs = [
         "levels/level_sampling_point.csv",
@@ -998,11 +1145,14 @@ function export_run_outputs(output_dir::AbstractString;
         "levels/level_basin.csv",
         "levels/species_timeseries.csv",
         "levels/quasi_extinction_summary.csv",
-        "viewer/guadex_results_timeseries.csv",
+        "viewer/guadex_results_<metric>_timeseries.csv",
         "viewer/guadex_results_metrics.json",
         "viewer/guadex_results_$(primary_metric).json",
+        "viewer/level_<level>_mean_<metric>_by_site_timeseries.json",
+        "viewer/species_<sp>_<metric>_timeseries.json",
     ]
     exposure === nothing || push!(outputs, "levels/exposure_sites.csv")
+    exposure_summary === nothing || push!(outputs, "levels/exposure_summary.csv")
     metadata["outputs"] = outputs
     _write_value_json(joinpath(output_dir, "run_metadata.json"), metadata)
 
@@ -1011,6 +1161,7 @@ function export_run_outputs(output_dir::AbstractString;
         species_metrics=species_metrics,
         quasi_extinction_summary=quasi_summary,
         exposure=exposure,
+        exposure_summary=exposure_summary,
         level_tables=level_tables,
         levels=levels,
         output_dir=output_dir,
