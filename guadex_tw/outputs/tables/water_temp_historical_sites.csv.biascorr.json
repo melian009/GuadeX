@@ -1,0 +1,9 @@
+{
+  "file": "water_temp_historical_sites.csv",
+  "correction_id": "a9679aefe70b5af9",
+  "variant": "LOBO_Model2_elevation",
+  "applied_utc": "2026-09-30T10:28:39Z",
+  "n_rows": 39944,
+  "before_mean": 14.044223037938213,
+  "after_mean": 15.162799800440066
+}
