@@ -124,6 +124,7 @@ export class AppUI {
 
   togglePanel() {
     this.el.panel.classList.toggle('collapsed')
+    this.handlers.onPanelToggle?.(this.el.panel.classList.contains('collapsed'))
   }
 
   setLoadingText(text) {

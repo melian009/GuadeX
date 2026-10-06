@@ -97,12 +97,14 @@ export class SitesLayer {
    * @param {(i:number, v:number)=>THREE.Color} colorFn
    * @param {number} heightScale max column height in scene units
    * @param {Uint8Array|null} hiddenMask 1 = hide the site
+   * @param {Float32Array|null} heightValues optional separate 0..1 heights
    */
-  apply(values, colorFn, heightScale, hiddenMask = null) {
+  apply(values, colorFn, heightScale, hiddenMask = null, heightValues = null) {
     for (let i = 0; i < this.count; i++) {
       this.hidden[i] = hiddenMask ? hiddenMask[i] : 0
       const v = values ? values[i] : null
-      this.heights[i] = v == null || Number.isNaN(v) ? 0.6 : 1 + v * heightScale
+      const hv = heightValues ? heightValues[i] : v
+      this.heights[i] = hv == null || Number.isNaN(hv) ? 0.6 : 1 + hv * heightScale
       const c = colorFn(i, v)
       this.setColor(i, c.r, c.g, c.b)
     }

@@ -17,6 +17,23 @@ let sitesLayer = null
 const layers = {}
 let metricByKey = {}
 let baseMetricGroups = []
+let lastBounds = null
+let panelRefitTimer = 0
+
+/** Horizontal pixels hidden by the control panel (0 when collapsed/mobile-wide). */
+function panelInset() {
+  const panel = ui?.el.panel
+  if (!panel || panel.classList.contains('collapsed')) return 0
+  const rect = panel.getBoundingClientRect()
+  if (!rect.width) return 0
+  return Math.max(0, window.innerWidth - rect.left)
+}
+
+/** Re-frame the basin in the currently visible area (after a panel toggle). */
+function refitView() {
+  if (!lastBounds || !sm) return
+  sm.fitBounds(lastBounds, { padding: 1.06, insetRight: panelInset() })
+}
 
 const state = {
   relief: true,
@@ -192,11 +209,17 @@ function renderSites() {
   const categorical = ctx.categorical && !numeric
   const { min, max } = computeStats(ctx)
   const span = max - min || 1
+  // Diverging variables (or an explicitly diverging scheme) use a symmetric
+  // domain so zero is the neutral colour and column height tracks |value|.
+  const diverging = !categorical && (state.ramp === 'rdbu' || (min < 0 && max > 0))
+  const M = Math.max(Math.abs(min), Math.abs(max)) || 1
 
   const n = store.sites.length
   const norm = new Float32Array(n)
+  const heightNorm = new Float32Array(n)
   const raw = new Array(n)
   const hidden = new Uint8Array(n)
+  let dataCount = 0
   for (let i = 0; i < n; i++) {
     const s = store.sites[i]
     let v = ctx.get(s)
@@ -205,28 +228,41 @@ function renderSites() {
       v = Number.isFinite(num) ? num : v
     }
     raw[i] = v
+    const hasValue = categorical ? v != null && v !== '' : typeof v === 'number' && Number.isFinite(v)
+    if (hasValue) dataCount++
     if (typeof v === 'number' && Number.isFinite(v)) {
-      norm[i] = (v - min) / span
+      if (diverging) {
+        norm[i] = Math.max(0, Math.min(1, (v + M) / (2 * M)))
+        heightNorm[i] = Math.abs(v) / M
+      } else {
+        norm[i] = Math.max(0, Math.min(1, (v - min) / span))
+        heightNorm[i] = norm[i]
+      }
     } else {
       norm[i] = NaN
+      heightNorm[i] = NaN
     }
-    if (state.onlyData && (v == null || v === '' || (typeof v === 'number' && !Number.isFinite(v)))) hidden[i] = 1
+    if (state.onlyData && !hasValue) hidden[i] = 1
   }
 
+  const zeroColor = new THREE.Color(0x6b7685)
   const colorFor = (i, v) => {
     if (categorical) return new THREE.Color(categoricalColor(String(raw[i] ?? '—')))
     if (v == null || Number.isNaN(v)) return new THREE.Color(0x3a4658)
+    if (diverging && raw[i] === 0) return zeroColor.clone()
     return rampThreeColor(state.ramp, v)
   }
 
-  sitesLayer.apply(norm, colorFor, state.heightScale, hidden)
+  sitesLayer.apply(norm, colorFor, state.heightScale, hidden, heightNorm)
   sitesLayer.setHighlight(state.selectedSiteId ? store.sites.findIndex((s) => s.id === state.selectedSiteId) : -1)
 
-  updateLegend(ctx, min, max, categorical, raw)
+  updateLegend(ctx, min, max, categorical, raw, { diverging, M, dataCount })
   return { ctx, min, max, raw }
 }
 
-function updateLegend(ctx, min, max, categorical, raw) {
+function updateLegend(ctx, min, max, categorical, raw, { diverging = false, M = 1, dataCount = 0 } = {}) {
+  const total = store.sites.length
+  const dataCaption = state.results ? `${dataCount} of ${total} sites with data` : `${total} sites`
   if (categorical) {
     const uniq = new Map()
     for (const v of raw) {
@@ -240,9 +276,9 @@ function updateLegend(ctx, min, max, categorical, raw) {
     ui.setLegend({
       title: ctx.label,
       ramp: state.ramp,
-      min: fmt(min),
-      max: fmt(max),
-      caption: [ctx.unit, `${store.sites.length} sites`].filter(Boolean).join(' · '),
+      min: diverging ? fmt(-M) : fmt(min),
+      max: diverging ? fmt(M) : fmt(max),
+      caption: [ctx.unit, diverging ? '0 = neutral' : null, dataCaption].filter(Boolean).join(' · '),
     })
   }
 }
@@ -252,37 +288,10 @@ function updateLegend(ctx, min, max, categorical, raw) {
 /* ------------------------------------------------------------------ */
 
 function updateCatchments() {
-  const ctx = metricContext()
-  const byWaterBody = new Map()
-  for (const s of store.sites) {
-    if (!s.waterBody) continue
-    const v = ctx.get(s)
-    if (typeof v !== 'number' || !Number.isFinite(v)) continue
-    const arr = byWaterBody.get(s.waterBody) ?? []
-    arr.push(v)
-    byWaterBody.set(s.waterBody, arr)
-  }
-  const { min, max } = computeStats(ctx)
-  const span = max - min || 1
-  const categorical = state.ramp === 'categorical'
-  const base = new THREE.Color(0x1d3347)
-  const cache = new Map()
-
-  layers.catchments.instance.setColorFunction((fi, props) => {
-    if (categorical) {
-      if (!props.id || !byWaterBody.has(props.id)) return base
-      const vals = byWaterBody.get(props.id)
-      const counts = {}
-      for (const v of vals) counts[v] = (counts[v] ?? 0) + 1
-      const mode = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0]
-      return new THREE.Color(categoricalColor(mode))
-    }
-    const vals = props.id ? cache.get(props.id) ?? byWaterBody.get(props.id) : null
-    if (!vals || !vals.length) return base
-    if (props.id) cache.set(props.id, vals)
-    const mean = vals.reduce((a, b) => a + b, 0) / vals.length
-    return rampThreeColor(state.ramp, (mean - min) / span)
-  })
+  // Water bodies stay a neutral, semi-transparent base colour so the site
+  // columns and their colour ramp remain legible (reviewer A2).
+  const layer = layers.catchments?.instance
+  if (layer && layer.colorFn) layer.setColorFunction(null)
 }
 
 /* ------------------------------------------------------------------ */
@@ -463,13 +472,29 @@ function loadResultsPayload(payload, name) {
   }
   state.results = model
   state.source = 'results'
+  // A simulation run only covers the sites it produced, so show just those.
+  state.onlyData = true
+  ui.el.chkOnlyData.checked = true
   ui.el.selSource.value = 'results'
   state.timeIndex = 0
   state.metric = model.mode === 'timeseries' ? '__series__' : (model.keys[0]?.key ?? 'value')
   ensureMetricForSource()
   rebuildMetricOptions()
   ui.setTime(model.mode === 'timeseries' ? model.keys.map((k) => k.label) : null, 0)
-  ui.setResultsStatus(`Loaded “${model.name}” — ${model.values.size} sites, ${model.keys.length} ${model.mode === 'timeseries' ? 'steps' : 'metrics'}.`, 'ok')
+  // Files keyed by basin/sub-catchment/water-body aggregates match no site
+  // code, so the site layer would draw nothing despite the loaded counts.
+  const siteCodes = new Set()
+  for (const s of store.sites) {
+    if (s.id != null) siteCodes.add(String(s.id))
+    if (s.code != null) siteCodes.add(String(s.code))
+  }
+  let matched = 0
+  for (const key of model.values.keys()) if (siteCodes.has(String(key))) matched++
+  if (siteCodes.size && matched === 0) {
+    ui.setResultsStatus(`0 of ${model.values.size} keys match site codes — this file is aggregated by sub-catchment/water body/basin and cannot be drawn on the site layer.`, 'err')
+  } else {
+    ui.setResultsStatus(`Loaded “${model.name}” — ${model.values.size} sites, ${model.keys.length} ${model.mode === 'timeseries' ? 'steps' : 'metrics'}.`, 'ok')
+  }
   renderAll()
 }
 
@@ -483,6 +508,8 @@ async function loadResultsFromUrl(url) {
 function clearResults() {
   state.results = null
   state.source = 'base'
+  state.onlyData = false
+  ui.el.chkOnlyData.checked = false
   ui.el.selSource.value = 'base'
   state.timeIndex = 0
   ensureMetricForSource()
@@ -557,7 +584,7 @@ async function buildScene(data) {
       name: 'catchments',
       features: data.features.catchments,
       color: 0x24425c,
-      opacity: 0.95,
+      opacity: 0.5,
       heightAt: drape,
       outlineColor: 0x74a8d6,
       outlineOpacity: 0.35,
@@ -657,7 +684,17 @@ async function buildScene(data) {
 
   registerPickables()
   setLayerVisibility()
-  sm.fitBounds(manifest.bounds, { padding: 1.25 })
+  ui.setLayerToggles([
+    { id: 'catchments', label: 'Water bodies', count: data.features.catchments.length, swatch: '#2b4256', visible: layers.catchments.visible },
+    { id: 'rivers', label: 'Rivers & streams', count: data.features.rivers.length, swatch: '#6cc6ff', visible: layers.rivers.visible },
+    { id: 'reservoirs', label: 'Reservoirs & lakes', count: data.features.reservoirs.length, swatch: '#1f7fa8', visible: layers.reservoirs.visible },
+    { id: 'gwb', label: 'Groundwater bodies', count: data.features.gwb.length, swatch: '#8f7fe0', visible: layers.gwb.visible },
+    { id: 'transitional', label: 'Transitional waters', count: data.features.transitional.length, swatch: '#53d6b4', visible: layers.transitional.visible },
+    { id: 'coastal', label: 'Coastal waters', count: data.features.coastal.length, swatch: '#6f9be0', visible: layers.coastal.visible },
+    { id: 'sites', label: 'Sampling sites', count: store.sites.length, swatch: '#6fe3cd', visible: true },
+  ])
+  lastBounds = manifest.bounds
+  sm.fitBounds(manifest.bounds, { padding: 1.06, insetRight: panelInset() })
 
   buildMetricCatalogue(manifest, store.sites)
   rebuildMetricOptions()
@@ -764,10 +801,14 @@ function scheduleExaggeration() {
 
 const handlers = {
   onLayerToggle: (id, visible) => {
+    if (id === 'sites') { sitesLayer?.setVisible(visible); return }
     if (!layers[id]) return
     layers[id].visible = visible
     layers[id].instance.setVisible(visible)
-    if (id === 'catchments') renderAll()
+  },
+  onPanelToggle: () => {
+    clearTimeout(panelRefitTimer)
+    panelRefitTimer = setTimeout(refitView, 320)
   },
   onReliefToggle: (v) => {
     state.relief = v

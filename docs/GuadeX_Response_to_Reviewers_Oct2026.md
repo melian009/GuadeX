@@ -493,10 +493,11 @@ Evidence: `src/temperature_forcing.jl`; report §3.4.
     `test/test_temperature_forcing.jl`. Residual: the dead `SPECIES_CODES` constant in
     `scripts/serialize_data.jl` still duplicates `"AA"` and omits `"AAL"`; the live species list
     is resolved elsewhere and does include `AAL` (status §5.7).
-14. **Viewer.** *Accepted.* Species-level time-series export and aggregate rendering were added
-    (e.g. `results/.../export/viewer/species_<sp>_*_timeseries.json`), and the site count is
-    corrected to **775** in the report. Remaining viewer cosmetic issues (mixed metric/year
-    slider) are noted.
+14. **Viewer.** *Accepted.* Species-level and site-keyed aggregate time-series export were added
+    (e.g. `results/.../export/viewer/species_<sp>_*_timeseries.json` and
+    `level_<level>_mean_<metric>_by_site_timeseries.json`), and the site count is corrected to
+    **775** in the report. The September viewer cosmetic issues (mixed metric/year slider) and
+    the further presentation points in the reviewers' later viewer annex are addressed in §2.6.
 
 ### 2.4 Statements in the reports that would benefit from revision
 
@@ -542,6 +543,33 @@ All rows of the review's statements table were reviewed and, where they were cor
 | Obstacles from the inventory `IF` index | **Not adopted** | `IF` semantics are unconfirmed (max 7.97; **547/1658** non-numeric rows in the repository, vs the review's 445); `IF/10` cannot be implemented safely (§3, item 17). |
 | River-line graph rebuild | Partly adopted | `SW_Line_4C_.shp` has no flow-direction attribute or elevation; the on-path fallback was used and the preferred flow-directed build is deferred (§4). |
 | Per-GCM controls, Sobol, input rebuilds | Partly adopted | Matched per-design control is in the corrected design; global Sobol toolkit + pilot implemented, production run deferred; E14/E17/E18 options implemented, E17 rate-table rebuild, E19 hydrology and E21 lagged refit deferred (§4). |
+
+### 2.6 Response to the September viewer annex (A1–A8, B1–B7)
+
+The reviewers' second September document, *GuadeX: Issues Found in the Viewer and in Its Output
+Files*, is an annex to the same review. Its Part B simply restates the C/E issues, so it is
+covered by the point-by-point answers above; its Part A (viewer presentation and file
+organisation) is answered here. The full adjudication is in
+`docs/GuadeX_Review_Assessment_Sept2026.md` §4 and the implementation record in
+`docs/GuadeX_Correction_Status_Sept2026.md` §2.2.
+
+| Annex item | Assessment | Outcome |
+|---|---|---|
+| A1 zoom drift / panel / cursor | Accepted | Cursor-centred zoom, panel-aware framing and arrow-key panning implemented in `viz/`; Help text corrected. |
+| A2 sites hard to see; empty layer list | Accepted | The empty layer list was a code-wiring defect (a list builder never called), now fixed; water bodies made neutral/low-opacity; zero values greyed. |
+| A3 1,037 vs 775 default and legend | Accepted | "Only sites with data" is now on by default when results load, with a dynamic "N of total sites with data" legend; the report already used 775/289/774. |
+| A4 unclear filenames | Partly accepted | Machine filenames are deep-link keys and are retained; the human label (`name`) is now descriptive, and a numbered catalogue is provided (`docs/viewer_outputs_catalogue.md`). |
+| A5 aggregate files not drawable | Accepted, already fixed | The corrected exporter writes site-keyed `_by_site` copies of every aggregate; the viewer now warns when a file's keys match no site. |
+| A6 diverging scale not centred on zero | Accepted | Symmetric `[−M,+M]` domain, height proportional to absolute value, grey zeros and a legend neutral value. |
+| A7 `native_extinction_risk` misnamed | Accepted, already fixed | The corrected metric is `realised_richness_loss`; the report explicitly disclaims extinction-probability language (E8); the viewer demo fixture was renamed. |
+| A8 no per-species viewer output | Accepted, already fixed | Per-species site-keyed `species_<sp>_<metric>_timeseries.json` are exported for every run. |
+| B1–B7 | Same as C/E | B1, B4, B7 already addressed; B2, B3, B5, B6 partly, with the residuals (pre-2026 offset; common transient and deferred E3; thermal-breadth ×0.3 confound; per-site reporting) recorded as limitations. |
+
+Two Part A points were narrower than stated: A4 primarily concerns a human-readable label, not
+the machine keys (which are the viewer's discovery/deep-link contract), and A2's empty list was
+a wiring bug rather than an outdated deployment. Recommended, non-blocking residuals: per-site
+Δ distributions and gain/loss counts for the obstacle sweep (B6), and dropping the unused
+`warming_end_degc` proxy column (B2).
 
 ---
 

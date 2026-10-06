@@ -753,6 +753,20 @@ end
 const VIEWER_LEVEL_METRICS = (:native_richness, :realised_richness_loss, :total_biomass)
 const VIEWER_SPECIES_METRICS = (:density, :relative_density, :present, :quasi_extinct)
 
+# A4: human-readable words for the `name` field the viewer shows in its legend.
+# Machine filenames are unchanged; only the embedded description is spelled out.
+const VIEWER_LEVEL_LABELS = Dict(
+    :subcatchment => "sub-catchment mean",
+    :water_body => "water-body mean",
+    :basin => "basin mean",
+)
+const VIEWER_SPECIES_LABELS = Dict(
+    :density => "density",
+    :relative_density => "relative density",
+    :present => "presence",
+    :quasi_extinct => "quasi-extinct flag",
+)
+
 _species_metric_value(v) = v isa Bool ? (v ? 1.0 : 0.0) :
     (v isa Real && isfinite(float(v)) ? Float64(v) : NaN)
 
@@ -817,11 +831,13 @@ function write_viewer_outputs(site_metrics::DataFrame, output_dir::AbstractStrin
     end
 
     # 2. Canonical single-variable time series (matches viz/README example).
+    # A4: the embedded `name` is the legend text, so spell out run + metric.
+    metric_labels = Dict(m => l for (m, l, _) in VIEWER_METRICS)
     primary_label = name
     primary_unit = ""
     for (metric, label, unit) in VIEWER_METRICS
         if metric == primary_metric
-            primary_label = label
+            primary_label = "$(name) · $(label)"
             primary_unit = unit
         end
     end
@@ -871,7 +887,9 @@ function write_viewer_outputs(site_metrics::DataFrame, output_dir::AbstractStrin
                 end
                 _write_timeseries_json(joinpath(output_dir,
                         "level_$(level)_mean_$(metric)_timeseries.json"),
-                    "GuadeX $(level) $(metric)", "", string.(steps), data)
+                    "$(name) · $(get(VIEWER_LEVEL_LABELS, level, string(level))) " *
+                    "$(get(metric_labels, metric, string(metric)))",
+                    "", string.(steps), data)
 
                 group_of_site === nothing && continue
                 site_data = Dict{String,Vector{Any}}()
@@ -881,8 +899,10 @@ function write_viewer_outputs(site_metrics::DataFrame, output_dir::AbstractStrin
                 end
                 _write_timeseries_json(joinpath(output_dir,
                         "level_$(level)_mean_$(metric)_by_site_timeseries.json"),
-                    "GuadeX $(level) $(metric) (aggregate by site)", "",
-                    string.(steps), site_data)
+                    "$(name) · $(get(VIEWER_LEVEL_LABELS, level, string(level))) " *
+                    "$(get(metric_labels, metric, string(metric))) " *
+                    "(same aggregate repeated for every member site)",
+                    "", string.(steps), site_data)
             end
         end
     end
@@ -907,7 +927,8 @@ function write_viewer_outputs(site_metrics::DataFrame, output_dir::AbstractStrin
                 end
                 _write_timeseries_json(joinpath(output_dir,
                         "species_$(sp)_$(metric)_timeseries.json"),
-                    "$(name) · $(sp) $(metric)", "", string.(series_steps), data)
+                    "$(name) · $(sp) $(get(VIEWER_SPECIES_LABELS, metric, string(metric)))",
+                    "", string.(series_steps), data)
             end
         end
     end
@@ -1108,8 +1129,26 @@ function export_run_outputs(output_dir::AbstractString;
         CSV.write(joinpath(output_dir, "levels", "exposure_summary.csv"), exposure_summary)
     end
 
+    # A4: when no explicit viewer name was supplied, derive a descriptive one
+    # from the run metadata (scenario / stage / case / GCM) so the `name` field
+    # inside every viewer JSON identifies the experiment, not just "simulation".
+    effective_viewer_name = viewer_name
+    if viewer_name == "GuadeX simulation output" && !isempty(run_metadata)
+        detail = String[]
+        for key in ("scenario", "stage", "case", "exploitation_scenario",
+                    "passability_scenario", "gcm")
+            haskey(run_metadata, key) || continue
+            value = run_metadata[key]
+            value === nothing && continue
+            text = string(value)
+            (isempty(text) || text in detail) && continue
+            push!(detail, text)
+        end
+        isempty(detail) || (effective_viewer_name = "GuadeX · " * join(detail, " · "))
+    end
+
     write_viewer_outputs(site_metrics, joinpath(output_dir, "viewer");
-        name=viewer_name, primary_metric=primary_metric, level_tables=level_tables,
+        name=effective_viewer_name, primary_metric=primary_metric, level_tables=level_tables,
         species_metrics=species_metrics, site_levels=levels)
 
     metadata = Dict{String,Any}()

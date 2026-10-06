@@ -2,6 +2,13 @@
 
 **Adjudication of `docs/GuadeX_Review_and_Corrections_Sept2026.md` against the repository at commit `9702169`.**
 
+**Addendum (2026-10-06): adjudication of the accompanying viewer annex.** The reviewer's second
+document, *GuadeX: Issues Found in the Viewer and in Its Output Files*
+(`report/202609_feedback/GuadeX_Viewer_Issues_Sept2026.pdf`; `.docx` source of the same name,
+with a supplementary bundle), is adjudicated in **section 4**, against the corrected working
+tree (HEAD `61fcd4c` plus the uncommitted viewer/export fixes recorded in
+`docs/GuadeX_Correction_Status_Sept2026.md`).
+
 This document records, point by point, which of the reviewer's claims are supported by the
 code, data and published outputs and which are not. It is deliberately not a rubber stamp:
 the reviewer is right about the substance of most of the critical issues, but several
@@ -234,3 +241,73 @@ The reviewer's weaknesses are in the details and in the proposed remedies:
 None of this rescues the September results. It means the review should be adopted as a
 **diagnostic agenda with corrections**, not applied literally. The companion plan separates
 the fixes that are safe to implement now from those that need redesign or a team decision.
+
+---
+
+## 4. Adjudication of the September 2026 viewer annex (A1–A8, B1–B7)
+
+The reviewer's second document, *GuadeX: Issues Found in the Viewer and in Its Output Files*
+(`report/202609_feedback/GuadeX_Viewer_Issues_Sept2026.pdf`, with an accompanying supplementary
+bundle), is an annex to the same technical review. It was produced by loading the **September**
+viewer bundle (`report_viewer_exports`, 20 runs) into the published viewer
+(https://melian009.github.io/GuadeX/) on 29 September 2026. It has two parts:
+
+- **Part A (A1–A8)** — presentation of the viewer and organisation/naming of the output files.
+  These are new observations about the *viewer and its exports*, not about the model.
+- **Part B (B1–B7)** — the same calculation issues already in the technical review
+  (`C1–C7`, `E1–E24`), shown from the files. The annex says so explicitly; nothing in Part B is
+  a new technical finding.
+
+The annex was adjudicated against the corrected working tree (`viz/` viewer source,
+`src/outputs.jl` export pipeline, the corrected `results/*_corrected/` exports) and, for
+Part B, against the already-implemented corrections and the October report. Verdicts use the
+same scale as section 1.
+
+### 4.1 Part A — viewer presentation and file organisation
+
+| ID | Issue | Verdict | Finding |
+|----|-------|---------|---------|
+| A1 | Zoom drifts the map under the panel; zoom not cursor-centred; panning hidden | **FAIR** | Real viewer defect. `SceneManager.fitBounds` centred on the whole window, `zoomToCursor` was off, arrow-key panning was unbound and Shift+drag panning was undocumented. Fixed in `viz/src/core/SceneManager.js` (cursor zoom, panel-aware fitting, key panning) and `viz/src/main.js` (panel-inset re-framing), with the Help text corrected. `npm run smoke` and `npm run build` pass. |
+| A2 | Sites hard to see; the layer list is empty; water bodies use the sites' colour ramp | **FAIR** | Real. The empty layer list was a **wiring bug** — `AppUI.setLayerToggles` was defined but never called — not a stale deployment. Fixed: the list is populated (7 layers), water bodies are neutral at 0.5 opacity, and zero values draw as grey points in the diverging path. |
+| A3 | All 1,037 survey sites shown by default; legend always "1037 sites" | **FAIR (viewer); report already correct** | `onlyData` defaulted to false and the legend counted every point. Fixed: `onlyData` auto-enables when results load and the legend is dynamic, "`<n>` of `<total>` sites with data". The README already distinguished the 1,037 GIS sites from the 775 modelled sites, and the October report uses 775 / 289 / 774 throughout; only the viewer default was wrong. |
+| A4 | Filenames do not state their content; name mismatches the displayed variable | **PARTLY FAIR** | The filenames are lexical keys: the viewer discovers them by pattern and deep links point at them, so the annex's wholesale rename would break the pipeline and links. The substantive defect — the human-readable label — is fixed by composing a descriptive `name` field inside each JSON (`"<run label> · <level/species> <human metric>"`) and by a new numbered catalogue, `docs/viewer_outputs_catalogue.md`, which maps every file class and records the reviewer's scheme as an old→proposed table. The filename-vs-variable mismatch was the A7 naming defect. |
+| A5 | 180 of 240 files are aggregated by basin/sub-catchment/water-body and cannot be drawn | **FAIR as observed (September); already addressed** | The corrected exporter writes site-keyed copies of every aggregate, `level_<level>_mean_<metric>_by_site_timeseries.json` (`src/outputs.jl:901`), verified on disk (775 `CODIGO` keys). The canonical group-keyed class (`level_*_timeseries.json`, keys `ES050`/`1.1`/`ES050MSPF...`) is retained for provenance and plots and is non-drawable by design; the viewer now warns when zero keys match site codes. The September files need no conversion. |
+| A6 | Diverging colour/height range not centred on zero; height measured from the minimum | **FAIR** | Real. Colour used `(v−min)/(max−min)` and height `1+normalised·scale`. Fixed: diverging variables use a symmetric domain `[−M, +M]` with `M = max abs(value)`, so zero is the neutral colour; height is proportional to absolute value; zeros render as neutral-grey points; the legend states the neutral value. Non-diverging metrics are unchanged. |
+| A7 | The variable `native_extinction_risk` is not an extinction risk | **FAIR; already addressed** | The corrected pipeline contains no `native_extinction_risk`: the metric is `realised_richness_loss` (`src/outputs.jl`), labelled "Realised richness loss (relative)", and the October report consistently calls it realised richness loss and states it is *not* an extinction probability (E8; report §2.6, Limitations 5). No `*native_extinction_risk*` file exists under any `*_corrected` corpus, and the viewer's demo fixture was renamed. Residual: pre-correction artefacts with the old name remain on disk under `results/climate_experiments/` (not regenerated; `results/` is not part of the release). |
+| A8 | The viewer files contain no per-species results | **FAIR as observed (September); already addressed** | The corrected exporter writes `species_<sp>_<metric>_timeseries.json` for `density`, `relative_density`, `present` and `quasi_extinct`, site-keyed (`src/outputs.jl:929`); 24 species × 4 = 96 files per corrected run, verified on disk. The viewer renders them under the species controls. |
+
+### 4.2 Part B — calculation issues seen through the files
+
+Part B restates the technical review. The September numbers it quotes are those of the
+pre-correction bundle and are superseded; the mapping is:
+
+| ID | Maps to | Verdict | Finding |
+|----|---------|---------|---------|
+| B1 | C5, E1 | **Already addressed** | Site level is now the bias-corrected per-site water series `tw_baseline_mean` (`src/data_preparation.jl` `extract_site_temperatures`), not `TEMP_MEDIA_SC`. The September "775 sites / 69 values, sub-catchment 33 all 15.17 °C" is superseded; corrected basin mean 15.82 °C (9.79–18.06 °C), trout-site mean 12.8305 °C. |
+| B2 | C7, E5, E24 | **Partly** | The corrected run persists the *realised* per-run warming and uses it as the dose–response regressor; E5 end-of-year reporting is fixed; SSP5-8.5 is no longer labelled cooler than SSP2-4.5. Residual: the 2026 increment is already non-zero (the pre-2026 offset of the projection products vs the 1986–2005 baseline; Limitations 11), and an unused `warming_end_degc` proxy column remains beside the realised columns in `runs_index.csv`. |
+| B3 | E2, E4 | **Partly** | The corrected interim route reports every scenario as `scenario − control`, so the common transient cancels in the reported deltas; the September control-vs-warming richness figures are superseded. Residual: the control transient is real and large (control −35.5 % total, −40.8 % native biomass; Limitations 2/11), and per-combination historical burn-ins (E3) remain deferred. |
+| B4 | C1–C3, E13 | **Already addressed** | The corrected route starts from the **observed** 2006–2009 community (`projection_route = "interim_observed"`), so the September burn-in occupancy table (LG 168 vs 45, GH absent, LS 576 vs 351, …) no longer describes the corrected 2026 state. The C1 direction fix and the `absence_growth_fraction = 1.0` decision are in place. Residual: provisional/uncalibrated (Limitations 2), with no pre-registered occupancy target. |
+| B5 | E4 | **Partly** | The corrected alternative-interaction sweep starts each matrix from the same observed state, so the September pre-warming divergence (2026 richness 2.43/0.83/0.15) is largely removed and the corrected contrast is small (−1.6 % native biomass, +4.0 % invasive). Residual: the sweep still uses a thermal-breadth ×0.3 multiplier and a 3-year spin-up with no matched no-warming control, so interaction structure is confounded (documented; report §2.5, Limitations 11). |
+| B6 | E3, E12 | **Partly** | The mechanism is fixed (multiplicative passability, E12; on-path tree, C4) and the October report presents sub-catchment / water-body distributions and explicitly qualifies the basin mean as a net redistribution that "cannot uniquely separate" immigration, emigration and suppressed invasive dispersal. Residual: there is still no per-site Δ distribution/map or explicit gain/loss site counts; this is the strongest actionable recommendation of the annex. |
+| B7 | E6 | **Already addressed** | Quasi-extinction is evaluated only over sites where the species was baseline-established (`src/outputs.jl` `baseline_established`), with a `0.0` fraction for species absent everywhere in the baseline. The September "0.75 / 1 − occupancy / r = 0.999" behaviour is superseded; corrected trout fractions are 0.278–0.306. |
+
+### 4.3 Net assessment of the annex
+
+- **Part A is genuinely useful and internally sound.** All eight items were reproduced as valid.
+  Five concerned the viewer/export and are now fixed in this round (A1, A2, A3, A6 in `viz/`; A4
+  catalogue and descriptive labels); three (A5, A7, A8) were already fixed by the corrected
+  pipeline. No Part A item was a misunderstanding. Two were narrower than stated: A4 primarily
+  concerns a human-readable label rather than the machine keys (which are deep-link targets), and
+  A2's empty layer list was a wiring bug (`setLayerToggles` never called), not an outdated
+  deployment.
+- **Part B contains no new technical claims.** B1, B4 and B7 are already addressed by the
+  corrections; B2, B3, B5 and B6 are valid concerns whose mechanisms are fixed but whose
+  residuals are already documented as limitations (B2 pre-2026 offset; B3 common transient and
+  the deferred E3 per-combination burn-in; B5 the ×0.3 thermal-breadth confound; B6 per-site
+  reporting).
+- **Recommended residual actions (none blocking):** (i) publish per-site Δ distributions and
+  gain/loss site counts for the obstacle sweep (B6); (ii) drop or rename the unused
+  `warming_end_degc` proxy column in the runs index (B2); (iii) optionally generate a
+  human-facing descriptive-name copy of the viewer exports from
+  `docs/viewer_outputs_catalogue.md` (A4). None of these reopens or rescues the September
+  results; they close out the annex.
