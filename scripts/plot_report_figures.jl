@@ -313,8 +313,13 @@ function matrix_robustness2!(path)
             end
         end
     end
-    # No legend: the two bars per matrix are described in the caption (blue =
-    # low upstream cost 0.01, orange = high upstream cost 0.50).
+    # Legend for the two upstream-cost bars drawn inside each matrix row.
+    # Colours come from COST_COLORS (blue = low cost 0.01, orange = high 0.50);
+    # the labels carry the meaning (a horizontal Makie legend drops its title).
+    Legend(fig[3, 2:3],
+        [PolyElement(color=COST_COLORS[0.01]), PolyElement(color=COST_COLORS[0.5])],
+        ["Low upstream cost (0.01)", "High upstream cost (0.50)"];
+        orientation=:horizontal, framevisible=false)
     equal_panel_columns!(fig, 0.45, 1, 1)
     save_report(fig, path; size=(1600, 1500))
 end

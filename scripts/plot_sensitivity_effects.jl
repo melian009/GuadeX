@@ -505,7 +505,12 @@ for (j, f) in enumerate(RANK_FACTORS), (i, m) in enumerate(METRICS)
     sub = norm[(norm.factor .== f) .& (norm.metric .== m), :]
     isempty(sub) || (Mmat[i, j] = sub.importance[1])
 end
-hm = heatmap!(ax_hm, 1:length(RANK_FACTORS), 1:length(METRICS), Mmat;
+# `heatmap` associates its first coordinate with the matrix's first dimension,
+# so a raw 8x7 Mmat drawn against 1:7 / 1:8 is transposed and its cell centres
+# fall half a cell away from the integer tick positions used by the text
+# annotations below.  Transposing the matrix makes cell (j, i) hold Mmat[i, j]
+# and centres every value annotation at (j, i).
+hm = heatmap!(ax_hm, 1:length(RANK_FACTORS), 1:length(METRICS), permutedims(Mmat);
     colormap=:viridis, colorrange=(0, 1))
 for i in 1:length(METRICS), j in 1:length(RANK_FACTORS)
     isnan(Mmat[i, j]) && continue

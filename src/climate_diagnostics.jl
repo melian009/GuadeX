@@ -620,21 +620,24 @@ function plot_climate_thermal_niches(species_chars_file::AbstractString,
         native_codes::AbstractVector{<:AbstractString}=String[],
         extra_codes::AbstractVector{<:AbstractString}=String[],
         warming_delta::Real=1.0)
+    report_theme!()
     thermal = _read_species_thermal_table(species_chars_file)
     site_temps = _read_site_temperatures_baseline(site_table_path)
 
-    fig = Figure(size=(1150, 720))
-    ax = Axis(fig[1, 1];
-        title="Native thermal niches vs site temperature",
-        xlabel="Water temperature (°C)", ylabel="Thermal suitability / relative frequency",
-        titlesize=13)
+    lo, hi = 8.0, 26.0
 
-    t_grid = range(minimum(site_temps; init=8.0) - 1, maximum(site_temps; init=20.0) + 3;
-        length=300)
+    # Match the report-plot rendering of Fig. 1 (fig01_thermal_niches): explicit
+    # panel size, legend outside the axes, and no descriptive title (the LaTeX
+    # caption carries the explanation).
+    fig = Figure(size=(1700, 1050))
+    ax = Axis(fig[1, 1]; width=760, height=650,
+        xlabel="Water temperature (°C)",
+        ylabel="Thermal suitability / rel. frequency")
+
+    t_grid = range(lo - 0.5, hi + 1.0; length=300)
 
     # Site-temperature distribution as translucent bars behind the curves.
     if !isempty(site_temps)
-        lo, hi = 8.0, 26.0
         edges = collect(lo:1.0:hi)
         counts = zeros(Int, length(edges) - 1)
         for t in site_temps
@@ -659,41 +662,48 @@ function plot_climate_thermal_niches(species_chars_file::AbstractString,
         push!(get!(groups, (round(p.optimum, digits=4), round(p.sigma, digits=4)),
             String[]), uppercase(string(code)))
     end
+    # Legend handles are built explicitly so the legend lives outside the axes,
+    # exactly as in Fig. 1 rather than as an in-panel axis legend.
+    handles = Any[PolyElement(color=(:gray, 0.35))]
+    labels = String["Site-temperature distribution (relative frequency)"]
     for (i, (key, codes)) in enumerate(sort(collect(groups); by=first))
         optimum, sigma = key
         curve = [exp(-(t - optimum)^2 / (2 * sigma^2)) for t in t_grid]
-        label = length(codes) == 1 ? "$(only(codes)): opt $(round(optimum, digits=1))" :
-            "opt $(round(optimum, digits=1)) ×$(length(codes)) ($(join(codes, ",")))"
-        lines!(ax, t_grid, curve; color=palette[mod1(i, length(palette))],
-            linewidth=2.2, label=label)
+        colour = palette[mod1(i, length(palette))]
+        lines!(ax, t_grid, curve; color=colour, linewidth=2.6)
+        push!(handles, LineElement(color=colour, linewidth=2.6))
+        push!(labels, length(codes) == 1 ? "$(only(codes)): optimum $(round(optimum, digits=1)) °C" :
+            "optimum $(round(optimum, digits=1)) °C ×$(length(codes)) ($(join(codes, ",")))")
     end
 
     # Context species that drive some local declines but are not in the metric.
-    for (i, code) in enumerate(extra_codes)
+    for code in extra_codes
         key = lowercase(string(code))
         haskey(thermal, key) || continue
         p = thermal[key]
         curve = [exp(-(t - p.optimum)^2 / (2 * p.sigma^2)) for t in t_grid]
-        lines!(ax, t_grid, curve; color=(:black, 0.55), linewidth=2.0,
-            linestyle=:dash, label="$(code) (not in native metric)")
+        lines!(ax, t_grid, curve; color=(:black, 0.55), linewidth=2.0, linestyle=:dash)
+        push!(handles, LineElement(color=(:black, 0.55), linewidth=2.0, linestyle=:dash))
+        push!(labels, "$(uppercase(string(code))) (not in native metric)")
     end
 
     if !isempty(site_temps)
         baseline = mean(site_temps)
-        vlines!(ax, [baseline]; color=:black, linewidth=1.6, linestyle=:dot)
-        vlines!(ax, [baseline + warming_delta]; color=:crimson, linewidth=1.6, linestyle=:dot)
-        text!(ax, baseline - 0.1, 1.04; text="baseline $(round(baseline, digits=1))°C",
-            align=(:right, :bottom), fontsize=10)
-        text!(ax, baseline + warming_delta + 0.1, 1.04;
-            text="+$(round(warming_delta, digits=2))°C → $(round(baseline + warming_delta, digits=1))°C",
-            align=(:left, :bottom), fontsize=10, color=:crimson)
+        vlines!(ax, [baseline]; color=:black, linewidth=2.0, linestyle=:dot)
+        vlines!(ax, [baseline + warming_delta]; color=:crimson, linewidth=2.0, linestyle=:dot)
+        text!(ax, baseline - 0.15, 1.06;
+            text="Baseline mean $(round(baseline, digits=1)) °C",
+            align=(:right, :bottom), fontsize=REPORT_ANNOTATION_FONTSIZE)
+        text!(ax, baseline + warming_delta + 0.15, 1.06;
+            text="+$(round(warming_delta, digits=2)) °C → $(round(baseline + warming_delta, digits=1)) °C",
+            align=(:left, :bottom), fontsize=REPORT_ANNOTATION_FONTSIZE, color=:crimson)
     end
     ylims!(ax, 0.0, 1.12)
-    axislegend(ax; position=:rt, nbanks=2, fontsize=8, framevisible=true)
 
-    Label(fig[0, :],
-        "Thermal niches explain the warming response: most richness species optima lie above current water temperatures",
-        fontsize=13, font=:bold)
+    Legend(fig[1, 2], handles, labels; framevisible=false,
+        title="Native species (optimum)", titlefontsize=REPORT_LEGEND_FONTSIZE, nbanks=1)
+    equal_panel_columns!(fig, 1, 0.55)
+    resize_to_layout!(fig)
     return _save_climate_figure(fig, output_path)
 end
 
