@@ -21,6 +21,8 @@
 \setlength{\parskip}{3pt}
 \captionsetup{font=footnotesize,labelfont=bf}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\pendingrerun}[1]{%
+\par\medskip\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\small #1}}\par\medskip}
 
 \definecolor{riverblue}{HTML}{1F5A85}
 \definecolor{waterlight}{HTML}{EAF4FA}
@@ -40,6 +42,8 @@
 \begin{tcolorbox}[colback=riverblue!9,colframe=riverblue!70!black,title=\textbf{The decision in one minute},fonttitle=\bfseries]
 The simulations do not support a single basin-wide rule of ``remove all barriers'' or ``keep all barriers''. They show that the effect of a barrier depends on the network around it and on invasive-species pressure. The most immediate warming signal is a decline in cold-water brown trout, not a rapid loss of total fish richness. Management should therefore combine three actions: protect cool headwater refuges, assess barrier projects at local network scale, and pair connectivity improvements with invasive-species control.
 \end{tcolorbox}
+
+\pendingrerun{\textbf{Do not circulate this brief yet.} This brief must not be circulated until the corrected model has been re-run. The interaction direction and scaling, the water-temperature level, the initial state, the network construction and the warming axis have been corrected in the code, but the corrected run has not yet been completed, so the quantitative statements below (the brown-trout decline, the exposure days and the invasive-favouring magnitudes) will change. In particular, the brief's three messages depend on the trout result (C5/C6/C7), the barrier-context result (C4/E3) and the interaction result (C1/C2/C3), none of which is yet re-run.}
 
 \section*{What was assessed?}
 
@@ -74,27 +78,27 @@ The analysis represents 775 sites and 24 fish species across the Guadalquivir Ri
 \section*{Three findings that matter for decisions}
 
 \begin{tcolorbox}[colback=actiongreen,colframe=green!45!black,title=\textbf{1. Protect cold-water refuges now},fonttitle=\bfseries]
-Brown trout biomass fell by 9--11\% across the warming scenarios, compared with 0.2\% in the no-warming control. The decline was accompanied by more days above the trout upper thermal limit. This is the clearest early warning in the basin model. Protect headwaters, high-elevation reaches, riparian shade and reliable summer refuges even though basin-wide richness changes little.
+Brown trout biomass fell by 9--11\% across the warming scenarios in the pre-correction run, compared with 0.2\% in the no-warming control; that decline must be recomputed after the corrected re-run. The decline was accompanied by more days above the trout upper thermal limit. This is the clearest early warning in the basin model. Protect headwaters, high-elevation reaches, riparian shade and reliable summer refuges even though basin-wide richness changes little.
 \end{tcolorbox}
 
 \begin{tcolorbox}[colback=warningorange,colframe=orange!60!black,title=\textbf{2. Assess every barrier in its network context},fonttitle=\bfseries]
-The effect of blocking a barrier changed from negative to positive as background upstream movement cost increased. This does not mean that blocking barriers is beneficial. It means that the same intervention can have different outcomes depending on the surrounding network, native rescue routes and invasive dispersal. Evaluate proposed removal, passage improvement or restriction at reach and sub-catchment scale, not from the basin average alone.
+In the pre-correction run, the effect of blocking a barrier changed from negative to positive as background upstream movement cost increased; this sign reversal is pending the corrected re-run. This does not mean that blocking barriers is beneficial. It means that the same intervention can have different outcomes depending on the surrounding network, native rescue routes and invasive dispersal. Evaluate proposed removal, passage improvement or restriction at reach and sub-catchment scale, not from the basin average alone.
 \end{tcolorbox}
 
 \begin{tcolorbox}[colback=riskred,colframe=red!55!black,title=\textbf{3. Pair connectivity work with invasive control},fonttitle=\bfseries]
-In the deliberately strong invasive-favouring scenario, native biomass fell by about 90\% while invasive biomass increased almost tenfold and total biomass changed much less. This is a warning about structural risk, not a prediction. Where passage is improved, strengthen surveillance and control of invasive fish at likely source reaches and reservoirs.
+In the deliberately strong invasive-favouring scenario (pre-correction run), native biomass fell by about 90\% while invasive biomass increased almost tenfold and total biomass changed much less. These magnitudes are pending the corrected re-run, in which the interaction direction and scaling have been corrected. This is a warning about structural risk, not a prediction. Where passage is improved, strengthen surveillance and control of invasive fish at likely source reaches and reservoirs.
 \end{tcolorbox}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]{../results/sensitivity_obstacles/report_plots/fig_passability_uc_heatmaps.png}
-\caption{\textbf{How a barrier effect depends on the surrounding network.} Change in each response metric caused by altering obstacle passability, measured against the baseline-passability run for the same model and upstream cost. Within every panel the rows are the four passability states (baseline, improved, reduced, blocked) and the columns are the four upstream movement costs (0.01, 0.05, 0.10, 0.50). Panels are arranged as four rows of metrics and two columns of climate endpoints: (a) cool and (b) warm for total biomass, (c) cool and (d) warm for native biomass, (e) cool and (f) warm for native richness, and (g) cool and (h) warm for brown-trout (ST) final biomass. The cool endpoint is SSP1-2.6/IITM-ESM and the warm endpoint is SSP2-4.5/UKESM1. Each cell states the raw difference in model units (the baseline row is zero by construction); its colour is that difference divided by the panel's 95th percentile, so colours compare within a panel but not between panels. In the native-biomass row (c, d), blocking and reducing passability move from negative at low cost to positive at high cost, whereas improving passage is negative at every cost. This supports site-specific assessment; it does not identify barrier construction as a conservation action.}
+\caption{\textbf{How a barrier effect depends on the surrounding network.} Change in each response metric caused by altering obstacle passability, measured against the baseline-passability run for the same model and upstream cost. Within every panel the rows are the four passability states (baseline, improved, reduced, blocked) and the columns are the four upstream movement costs (0.01, 0.05, 0.10, 0.50). Panels are arranged as four rows of metrics and two columns of climate endpoints: (a) cool and (b) warm for total biomass, (c) cool and (d) warm for native biomass, (e) cool and (f) warm for native richness, and (g) cool and (h) warm for brown-trout (ST) final biomass. The cool endpoint is SSP1-2.6/IITM-ESM and the warm endpoint is SSP2-4.5/UKESM1. Each cell states the raw difference in model units (the baseline row is zero by construction); its colour is that difference divided by the panel's 95th percentile, so colours compare within a panel but not between panels. In the native-biomass row (c, d), blocking and reducing passability move from negative at low cost to positive at high cost, whereas improving passage is negative at every cost. These relationships are pending the corrected re-run (interaction direction and network construction apply). This supports site-specific assessment; it does not identify barrier construction as a conservation action.}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth,height=0.72\textheight,keepaspectratio]{../results/climate_scenarios_k1x_burnin/figures/report_plots/fig12_st_climate_response.png}
-\caption{\textbf{Warming sentinel: brown trout.} Each point is one climate-model/pathway run (11 GCMs $\times$ 4 pathways) plotted against the imposed basin-mean warming by 2045; the black diamond is the no-warming control. Panel (a): relative change in basin brown trout (ST) biomass as a percentage of its spun-up baseline, with the dashed ordinary-least-squares fit of about $-9.2$\% per $^\circ$C ($R^2=0.65$). Panel (b): absolute final ST biomass in model units. Panel (c): maximum number of days per year above the species' 20~$^\circ$C upper thermal limit, with the control value (131 days) as a dotted reference line. Brown trout declines consistently with warming while thermal exposure rises, so species-level monitoring detects change that aggregate richness misses.}
+\caption{\textbf{Warming sentinel: brown trout.} Each point is one climate-model/pathway run (11 GCMs $\times$ 4 pathways) plotted against the imposed basin-mean warming by 2045 (pre-correction axis; pending the corrected re-run); the black diamond is the no-warming control. Panel (a): relative change in basin brown trout (ST) biomass as a percentage of its spun-up baseline, with the dashed ordinary-least-squares fit of about $-9.2$\% per $^\circ$C ($R^2=0.65$); this fit is pending the corrected re-run. Panel (b): absolute final ST biomass in model units. Panel (c): maximum number of days per year above the species' 20~$^\circ$C upper thermal limit, with the pre-correction control value (131 days) as a dotted reference line; these exposure values are also pending the corrected re-run. Brown trout declines with warming while thermal exposure rises, so species-level monitoring detects change that aggregate richness misses.}
 \end{figure}
 
 \clearpage
@@ -105,7 +109,7 @@ The positive basin-level effect of blocking at high upstream cost is not uniform
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]{../results/sensitivity_obstacles/report_plots/fig_subcatchment_waterbody_effects.png}
-\caption{\textbf{Local gains and losses hidden by the basin average.} Blocked-minus-baseline change in native biomass (model units) for the warm endpoint, high upstream cost and year 2045. Panel (a) shows the 10 most negative and 10 most positive of the 77 sub-catchments (20 bars); panel (b) shows the 10 most negative and 10 most positive of the 289 water bodies (20 bars). Bars are sorted from most negative to most positive; red bars are losses and green bars are gains. The basin-mean effect is a net of both signs, so a positive average must not be read as a uniform benefit to native fish; decisions belong at sub-catchment or water-body scale.}
+\caption{\textbf{Local gains and losses hidden by the basin average.} Blocked-minus-baseline change in native biomass (model units) for the warm endpoint, high upstream cost and end of 2045 ($t=7300$); these local values are pending the corrected re-run. Panel (a) shows the 10 most negative and 10 most positive of the 77 sub-catchments (20 bars); panel (b) shows the 10 most negative and 10 most positive of the 289 water bodies (20 bars). Bars are sorted from most negative to most positive; red bars are losses and green bars are gains. The basin-mean effect is a net of both signs, so a positive average must not be read as a uniform benefit to native fish; decisions belong at sub-catchment or water-body scale.}
 \end{figure}
 
 \begin{center}
@@ -117,7 +121,7 @@ Management question & Evidence from the simulations & Practical response \\
 Where should passage be improved? & Where native rescue is limited, invasive pressure is low, and cool refuges remain connected. & Prioritise local projects after reach-level assessment; do not use a basin-wide average as the sole criterion. \\
 What should accompany passage improvement? & Increased movement can redistribute both native and invasive biomass. & Add invasive surveillance, rapid response, and source-population control to passage projects. \\
 Where should warming adaptation start? & Trout responds strongly while aggregate richness is nearly flat. & Monitor cold-water specialists and protect headwater and shaded reaches. \\
-What should be avoided? & The model does not simulate drought, flow change or extinction probability. & Do not treat these results as a standalone legal status assessment or an extinction forecast. \\
+What should be avoided? & The model does not simulate drought or flow change, and does not estimate an extinction probability; its richness-loss output is a deterministic realised contraction (no replicates). & Do not treat these results as a standalone legal status assessment or an extinction forecast. \\
 \bottomrule
 \end{tabularx}
 \end{center}

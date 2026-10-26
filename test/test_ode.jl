@@ -99,6 +99,48 @@ end
 end
 
 # =============================================================================
+# 2b. Dispersal operator: mass conservation and structure (minor #13)
+# =============================================================================
+@testset "dispersal operator: mass conservation and structure" begin
+    n_sites, n_species = 3, 2
+    distances = [0.0 1000.0 2500.0; 1000.0 0.0 1500.0; 2500.0 1500.0 0.0]
+    elevations = [10.0, 60.0, 25.0]
+    D_daily = 10.0 / 365.0
+    dispersal = Guadex.precompute_dispersal_matrix(
+        n_sites, distances, elevations, 0.01, ones(n_sites, n_sites), D_daily)
+
+    # Structure: no self-loops, non-negative rates, and exactly the off-diagonal
+    # pairs the builder is supposed to produce (6 of them for a dense 3×3).
+    @test all(iszero, diag(dispersal))
+    @test all(>=(0), nonzeros(dispersal))
+    @test nnz(dispersal) == 6
+    # Downstream movement (to a lower elevation) is unpenalised; upstream
+    # movement is reduced by 1/(1 + c·Δz).
+    @test dispersal[1, 3] ≈ D_daily * 1.0 / 2.5
+    @test dispersal[2, 1] ≈ D_daily * (1.0 / (1.0 + 0.01 * 50.0)) / 1.0
+    @test dispersal[3, 2] ≈ D_daily * 1.0 / 1.5
+
+    # Mass conservation: switch off growth, interactions and heat stress so the
+    # RHS is the dispersal operator alone, and verify total mass is invariant.
+    params = Guadex.MetacommunityParams(
+        n_sites, n_species,
+        zeros(n_species, n_species),   # no species interactions
+        dispersal,
+        [1.0, 1.0],                    # dispersal scaling
+        zeros(n_sites, n_species),     # no growth
+        fill(20.0, n_sites),           # temperatures
+        ones(n_sites),                 # habitat suitability
+        fill(20.0, n_species),         # thermal optima
+        fill(5.0, n_species),          # thermal sigmas
+        fill(100.0, n_sites))          # carrying capacity
+    u = [3.0, 1.0, 4.0, 1.0, 5.0, 9.0]
+    du = zeros(length(u))
+    Guadex.metacommunity_ode!(du, u, params, 0.0)
+    @test sum(du) ≈ 0.0 atol=1e-12
+    @test any(!iszero, du)             # dispersal is actually redistributing mass
+end
+
+# =============================================================================
 # 3. MetacommunityParams construction
 # =============================================================================
 @testset "MetacommunityParams" begin
@@ -204,8 +246,9 @@ end
         du = zeros(2, 2)
         Guadex.metacommunity_ode!(du, u0, p_no_interact, 0.0)
 
-        # logistic_term = clamp(1 - 35/30, -1, 2) = -0.167
-        # growth = N * r_eff * logistic_term < 0
+        # Interactions are zero here, so the corrected LV bracket reduces to
+        # logistic_term = clamp(1 - 35/30, -1, 2) = -0.167 and growth is still
+        # N * r_eff * logistic_term < 0 (issue C2 leaves this limit unchanged).
         @test du[1, 1] < 0.0
         @test du[1, 2] < 0.0
         @test du[2, 1] < 0.0
@@ -324,6 +367,114 @@ end
         # Verify median is 10.0 (for documentation consistency)
         vals = collect(values(rates))
         @test Statistics.median(vals) ≈ 10.0
+    end
+end
+
+# =============================================================================
+# 4b. Competitive Lotka-Volterra interaction form (issue C2)
+# =============================================================================
+# The corrected default places the interaction term INSIDE the intrinsic-growth
+# bracket:  dN/dt = N * (r_eff * clamp(1 - total/K + sum_j alpha_sj N_j/K) - heat).
+# The legacy form added it OUTSIDE growth.  These tests pin the corrected
+# behaviour and guard the legacy switch.
+@testset "interaction form: competitive Lotka-Volterra (C2)" begin
+    # --- single species, one site, no dispersal, alpha = 0 ---------------
+    # With interactions inside growth the single-species equilibrium is N* = K.
+    @testset "single species equilibrium is K" begin
+        p = Guadex.MetacommunityParams(
+            1, 1, [0.0;;], sparse([1], [1], [0.0], 1, 1),
+            [1.0], [0.05;;], [20.0], [1.0], [20.0], [5.0], [100.0])
+
+        # The corrected form must be the constructor default.
+        @test p.interaction_inside_growth
+        @test p.interaction_inside_growth == true
+
+        prob = ODEProblem(Guadex.metacommunity_ode!, [1.0;;], (0.0, 600.0), p)
+        sol = solve(prob, Tsit5(), saveat=10.0)
+        @test sol.u[end][1] ≈ 100.0 rtol=1e-3
+    end
+
+    # --- defining property: per-capita growth equals the LV bracket -------
+    # The old form put the interaction term outside growth and fails this
+    # identity, so it is the core regression guard for C2.
+    @testset "per-capita growth matches r_eff*(1 - total/K + sum alpha N/K)" begin
+        alpha = [-0.2 -0.3; -0.1 -0.2]
+        growth = [0.1 0.2]  # 1 site x 2 species
+        K = 100.0
+        p = Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], growth, [20.0], [1.0], [20.0, 20.0], [5.0, 5.0], [K])
+
+        u0 = [10.0 5.0]
+        total = sum(u0)
+        du = zeros(1, 2)
+        Guadex.metacommunity_ode!(du, u0, p, 0.0)
+
+        for s in 1:2
+            interaction = sum(alpha[s, j] * u0[j] / K for j in 1:2)
+            expected_percap = growth[1, s] * (1.0 - total / K + interaction)
+            @test du[1, s] / u0[s] ≈ expected_percap rtol=1e-10
+        end
+    end
+
+    # --- r_eff scaling ----------------------------------------------------
+    # In the corrected form r_eff multiplies the whole bracket, so doubling
+    # r_eff doubles the per-capita growth rate.  Under the legacy form the
+    # interaction term was added outside r_eff, so this did NOT hold.
+    @testset "per-capita growth doubles when r_eff doubles" begin
+        alpha = [-0.2 -0.3; -0.1 -0.2]
+        K = 100.0
+        lv(g; form=true) = Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], g, [20.0], [1.0], [20.0, 20.0], [5.0, 5.0], [K],
+            [-Inf, -Inf], [Inf, Inf], 0.0, form)
+
+        u0 = [10.0 5.0]
+        du1 = zeros(1, 2)
+        du2 = zeros(1, 2)
+        Guadex.metacommunity_ode!(du1, u0, lv([0.1 0.2]), 0.0)
+        Guadex.metacommunity_ode!(du2, u0, lv([0.2 0.4]), 0.0)
+        for s in 1:2
+            @test du2[1, s] / du1[1, s] ≈ 2.0 rtol=1e-10
+        end
+
+        # Legacy form must NOT scale linearly: the additive interaction term
+        # stays fixed when r_eff doubles.
+        du1_leg = zeros(1, 2)
+        du2_leg = zeros(1, 2)
+        Guadex.metacommunity_ode!(du1_leg, u0, lv([0.1 0.2]; form=false), 0.0)
+        Guadex.metacommunity_ode!(du2_leg, u0, lv([0.2 0.4]; form=false), 0.0)
+        for s in 1:2
+            ratio = du2_leg[1, s] / du1_leg[1, s]
+            @test abs(ratio - 2.0) > 1e-6
+        end
+    end
+
+    # --- legacy switch reproduces the old expression exactly --------------
+    @testset "legacy switch reproduces interaction-outside-growth" begin
+        alpha = [-0.2 -0.3; -0.1 -0.2]
+        growth = [0.1 0.2]
+        K = 100.0
+        make(form) = Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], growth, [20.0], [1.0], [20.0, 20.0], [5.0, 5.0], [K],
+            [-Inf, -Inf], [Inf, Inf], 0.0, form)
+
+        u0 = [10.0 5.0]
+        total = sum(u0)
+        du_corrected = zeros(1, 2)
+        du_legacy = zeros(1, 2)
+        Guadex.metacommunity_ode!(du_corrected, u0, make(true), 0.0)
+        Guadex.metacommunity_ode!(du_legacy, u0, make(false), 0.0)
+
+        for s in 1:2
+            interaction = sum(alpha[s, j] * u0[j] / K for j in 1:2)
+            # Old form: r_eff * clamp(1 - total/K) + interaction, all outside.
+            expected_legacy = growth[1, s] * clamp(1.0 - total / K, -1.0, 2.0) + interaction
+            @test du_legacy[1, s] / u0[s] ≈ expected_legacy rtol=1e-10
+            # And the two forms genuinely differ when alpha != 0.
+            @test !isapprox(du_corrected[1, s], du_legacy[1, s])
+        end
     end
 end
 
@@ -505,4 +656,105 @@ end
     du_hot = zeros(1, 1)
     Guadex.metacommunity_ode!(du_hot, u0, make_params(32.0; k=0.01), 0.0)
     @test du_hot[1] < du_heat[1]
+end
+
+# =============================================================================
+# 8. E4: composition-aware burn-in convergence rule
+# =============================================================================
+@testset "spin_up convergence rule (E4)" begin
+    # Synthetic 1-site × 2-species pair: total biomass is conserved (100 -> 100)
+    # but the cells exchange mass, so composition is still drifting.
+    prev = [50.0, 50.0]
+    cur = [55.0, 45.0]
+    basin_drift = abs(sum(cur) - sum(prev)) / sum(prev)
+    comp_drift = Guadex.composition_q95_change(prev, cur, 1, 2)
+    @test basin_drift < 1e-12          # total-biomass criterion is satisfied
+    @test comp_drift > 1e-2            # composition criterion is not
+    # The old basin-only rule would stop; the new both-criteria rule must not.
+    @test Guadex.spin_up_converged(:basin, 20; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_drift, composition_change=comp_drift,
+        q95_change=comp_drift, max_change=comp_drift) == true
+    @test Guadex.spin_up_converged(:both, 20; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_drift, composition_change=comp_drift,
+        q95_change=comp_drift, max_change=comp_drift) == false
+
+    # A synthetic pair that has converged in both respects.
+    prev_ok = [100.0, 100.0]
+    cur_ok = [100.000001, 99.999999]
+    basin_ok = abs(sum(cur_ok) - sum(prev_ok)) / sum(prev_ok)
+    comp_ok = Guadex.composition_q95_change(prev_ok, cur_ok, 1, 2)
+    @test basin_ok < 1e-6
+    @test comp_ok < 1e-3
+    @test Guadex.spin_up_converged(:both, 20; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_ok, composition_change=comp_ok,
+        q95_change=comp_ok, max_change=comp_ok) == true
+
+    # Minimum years is respected even when both criteria are already met.
+    @test Guadex.spin_up_converged(:both, 9; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_ok, composition_change=comp_ok,
+        q95_change=comp_ok, max_change=comp_ok) == false
+    @test Guadex.spin_up_converged(:both, 10; min_years=10, tol=1e-6,
+        composition_tol=1e-3, basin_change=basin_ok, composition_change=comp_ok,
+        q95_change=comp_ok, max_change=comp_ok) == true
+
+    # Definition/floor: a cell below the active floor in both years is excluded
+    # from the robust statistic but still counted by the raw all-cells statistic.
+    prev_flick = [10.0, 1e-6, 10.0]
+    cur_flick = [10.0, 1e-5, 10.0]
+    @test Guadex.composition_q95_change(prev_flick, cur_flick, 1, 3) == 0.0
+    @test Guadex.composition_q95_change_all_cells(prev_flick, cur_flick, 1, 3) > 1.0
+    diag = Guadex.composition_diagnostics(prev_flick, cur_flick, 1, 3)
+    @test diag.active_cells == 2
+    @test diag.q95 == 0.0
+    @test diag.q95_all_cells > 1.0
+    # A cell exactly at the floor is excluded (`>` not `>=`).
+    @test Guadex.composition_q95_change([10.0, 0.05], [10.0, 0.1], 1, 2) == 0.0
+    # With a floor below every cell the robust statistic equals the all-cells one.
+    @test Guadex.composition_q95_change(prev, cur, 1, 2; active_floor=1e-12) ≈
+        Guadex.composition_q95_change_all_cells(prev, cur, 1, 2)
+    @test Guadex.spin_up_composition_active_floor() == 0.1
+
+    # Robust converges while the raw all-cells statistic does not: one near-empty
+    # flickering cell dominates the all-cells percentile but is excluded robustly.
+    stable = fill(10.0, 20)
+    prev_f = copy(stable); prev_f[1] = 1e-6
+    cur_f = copy(stable); cur_f[1] = 1e-5
+    robust_f = Guadex.composition_q95_change(prev_f, cur_f, 1, 20)
+    all_f = Guadex.composition_q95_change_all_cells(prev_f, cur_f, 1, 20)
+    @test robust_f < 1e-3
+    @test all_f > 1e-3
+
+    # Converse: the all-cells statistic converges while the robust one does not.
+    # Only 1% of cells are active (above the floor) and genuinely drifting; the
+    # other 99% are near-empty with negligible change, so the raw percentile is
+    # tiny while the robust percentile over the active cells is large.
+    prev_a = fill(1e-3, 1000); cur_a = fill(1e-3, 1000)
+    prev_a[1:10] .= 10.0
+    cur_a[1:10] .= 10.0 .* exp(1.0)
+    robust_a = Guadex.composition_q95_change(prev_a, cur_a, 1, 1000)
+    all_a = Guadex.composition_q95_change_all_cells(prev_a, cur_a, 1, 1000)
+    @test all_a < 1e-3
+    @test robust_a > 1e-3
+
+    # End-to-end on a cheap 1-site × 1-species system: default is the stricter
+    # two-criteria rule, min_years is enforced, and the legacy rule is available.
+    dispersal = sparse([1], [1], [0.0], 1, 1)
+    p = Guadex.MetacommunityParams(1, 1, [0.0;;], dispersal, [1.0], [0.05;;],
+        [20.0], [1.0], [20.0], [5.0], [100.0])
+    res = spin_up(p; initial_state = [1.0], max_years = 20, tol = 1e-5,
+        composition_tol = 1e-5, min_years = 5)
+    @test res.converged
+    @test res.years >= 5
+    @test res.criteria == [:basin, :composition]
+    @test res.last_composition_change < 1e-5
+
+    res_late = spin_up(p; initial_state = [1.0], max_years = 20, tol = 1e-5,
+        composition_tol = 1e-5, min_years = 12)
+    @test res_late.converged
+    @test res_late.years >= 12
+
+    res_legacy = spin_up(p; initial_state = [1.0], max_years = 20, tol = 1e-5,
+        composition_tol = 1e-5, min_years = 2, criterion = :basin)
+    @test res_legacy.converged
+    @test res_legacy.criteria == [:basin]
 end

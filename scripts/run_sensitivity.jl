@@ -42,6 +42,12 @@ const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOL
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
 
+# C4: dispersal-graph construction method from the [connectivity] section.
+const CONNECTIVITY_METHOD = SimulationParameters.connectivity_method(GUADEX_PARAMS)
+
+# E13-E16/E18: opt-in biological-assumption options (all legacy by default).
+const BIOLOGICAL_OPTIONS = SimulationParameters.biological_options(GUADEX_PARAMS)
+
 # =============================================================================
 # --- Define Parameter Grid ---
 # Grid values and scenario names are read from the [run_sensitivity] section
@@ -205,7 +211,14 @@ data_base = prepare_ode_data(
     obstacle_mode = OBSTACLE_MODE,
     obstacle_matching_tolerance = OBSTACLE_MATCHING_TOLERANCE,
     obstacle_passability = OBSTACLE_PASSABILITY,
-    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY
+    obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY,
+    connectivity_method = CONNECTIVITY_METHOD,
+    absence_growth_fraction = BIOLOGICAL_OPTIONS.absence_growth_fraction,
+    pool_capacity_mode = BIOLOGICAL_OPTIONS.pool_capacity_mode,
+    fishless_dificil_capacity = BIOLOGICAL_OPTIONS.fishless_dificil_capacity,
+    nonreproducing_local_growth = BIOLOGICAL_OPTIONS.nonreproducing_local_growth,
+    exclude_fishfarm_eel_records = BIOLOGICAL_OPTIONS.exclude_fishfarm_eel_records,
+    salinity_envelope = BIOLOGICAL_OPTIONS.salinity_envelope
 )
 
 total_runs = length(upstream_costs) * length(exploitation_scenarios) * length(passability_scenarios)
@@ -279,7 +292,8 @@ for uc in upstream_costs
                     "exploitation_scenario" => exp_name,
                     "passability_scenario" => pass_name,
                     "simulation_years" => SIMULATION_YEARS,
-                    "obstacle_mode" => string(OBSTACLE_MODE)))
+                    "obstacle_mode" => string(OBSTACLE_MODE),
+                    "biological_options" => SimulationParameters.biological_options_dict(GUADEX_PARAMS)))
 
             println("  Saved to: $run_dir")
         end

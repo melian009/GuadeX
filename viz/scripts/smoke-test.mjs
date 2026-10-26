@@ -38,12 +38,16 @@ check('timeseries keys = steps', ts.keys.length === 3 && ts.keys[0].key === '202
 check('timeseries site count', ts.values.size === sites.length, `(${ts.values.size})`)
 const st = ts.stats.get('2100')
 check('timeseries stats', st && st.min != null && st.max != null && !st.categorical, `(min ${st?.min} max ${st?.max})`)
+check('timeseries shared scale across steps',
+  ts.globalStats && ts.globalStats.min === 0.02 && ts.globalStats.max === 0.708,
+  `(min ${ts.globalStats?.min} max ${ts.globalStats?.max})`)
 
 // --- results: metrics ----------------------------------------------
 const mt = normaliseResults(read('results.demo-metrics.json'), 'demo')
 check('metrics mode', mt.mode === 'metrics')
 check('metrics keys', mt.keys.length === 4, `(${mt.keys.map((k) => k.key).join(', ')})`)
 check('metrics numeric', !mt.stats.get('native_richness').categorical)
+check('metrics has no shared time scale', mt.globalStats == null)
 
 // --- results: JSON array per site ---------------------------------
 const arr = normaliseResults({ name: 'X', steps: ['a', 'b'], data: { '1.1.2': [1, 2] } }, 'inline')
@@ -54,12 +58,29 @@ const csvLong = 'CODIGO,step,value\n1.1.2,2026,0.1\n1.1.2,2050,0.3\n1.1.3,2026,0
 const cl = normaliseResults(csvLong, 'long.csv')
 check('csv long -> timeseries', cl.mode === 'timeseries' && cl.keys.length === 2)
 check('csv long pivot', cl.values.get('1.1.2')['2050'] === 0.3)
+check('csv long single series has shared scale', cl.globalStats != null)
 
 // --- results: CSV wide with quoted field --------------------------
 const csvWide = 'CODIGO,risk,population\n"1.1.2",0.31,"4200"\n1.1.3,0.22,9800\n'
 const cw = normaliseResults(csvWide, 'wide.csv')
 check('csv wide -> metrics', cw.mode === 'metrics' && cw.keys.length === 2)
 check('csv wide values', cw.values.get('1.1.2').risk === 0.31 && cw.values.get('1.1.2').population === 4200)
+
+// --- species-level and site-expanded aggregate time series ---------
+const speciesTs = normaliseResults(
+  { name: 'AB density', unit: '', steps: ['2026', '2027'],
+    data: { '1.1.2': [1, 2], '1.1.3': [0, 0.5] } },
+  'species_AB_density_timeseries.json')
+check('species-level timeseries mode', speciesTs.mode === 'timeseries')
+check('species-level series keyed by site', speciesTs.values.get('1.1.2')['2027'] === 2)
+
+const aggTs = normaliseResults(
+  { name: 'level basin native_richness', unit: '', steps: ['2026', '2027'],
+    data: { '1.1.2': [3, 3], '1.1.3': [3, 3] } },
+  'level_basin_mean_native_richness_by_site_timeseries.json')
+check('by-site aggregate is renderable',
+  aggTs.mode === 'timeseries' && aggTs.values.size === 2,
+  `(${aggTs.values.size} sites)`)
 
 // --- categorical JSON ---------------------------------------------
 const cat = normaliseResults({ name: 'status', data: { a: 'high', b: 'low', c: 'high' } }, 'cat')

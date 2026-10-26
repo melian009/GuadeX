@@ -688,14 +688,14 @@ for (const s of sites) {
   const base = Math.max(0.02, Math.min(0.8, 0.08 + 0.055 * ex - 0.00004 * elev + 0.12 * (noise - 0.5)))
   demoSeries[s.id] = demoSteps.map((_, i) => Math.round(Math.min(0.99, base * Math.pow(1.45, i)) * 1000) / 1000)
   demoMetrics[s.id] = {
-    extinction_risk_2100: demoSeries[s.id][2],
+    richness_loss_2100: demoSeries[s.id][2],
     native_richness: na,
     exotic_richness: ex,
     exotic_fraction: na + ex > 0 ? Math.round((ex / (na + ex)) * 1000) / 1000 : 0,
   }
 }
 await writeJson('results.demo-timeseries.json', {
-  name: 'DEMO — native fish extinction risk (synthetic)',
+  name: 'DEMO — realised richness loss (synthetic)',
   unit: 'probability',
   description: 'SYNTHETIC demo data generated from exotic richness, elevation and a hash of the site code. Not a model result — replace with your own simulation output.',
   steps: demoSteps,

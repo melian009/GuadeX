@@ -28,13 +28,18 @@ export load_daily_temperature_forcing, daily_forcing_matrix
 export load_daily_forcing_any, is_wide_daily_forcing, wide_forcing_matrix, wide_baseline_means
 export daily_temperature_schedule, annual_mean_schedule, annual_mean_deltas
 export annual_mean_deltas_by_year, baseline_climatology_schedule
+export mean_warming_anomaly, realised_warming_anomaly
 export optimum_sweep_optima, exceedance_energy, calibrate_heat_stress_rate
-export exposure_days, exposure_table
+export exposure_days, exposure_table, established_exposure_summary
 
 # Export equilibrium spin-up and K sensitivity (WP4)
 export spin_up, scale_carrying_capacity, set_thermal_optima, set_heat_stress_rate
 export set_dispersal_matrix, set_interaction_matrix, set_thermal_sigma_multiplier
 export with_temperature_baseline, site_totals
+export spin_up_criteria, spin_up_converged, composition_q95_change
+export composition_q95_change_all_cells, composition_diagnostics
+export spin_up_composition_active_floor
+export projection_route, interim_observed_spin_up
 
 # Export four-level reporting / viewer output functions
 export load_site_level_crosswalk, site_level_vectors, species_indices
@@ -54,22 +59,36 @@ export climate_metric_column
 export ClimateBasinSeries, read_climate_basin_series
 export plot_climate_forcing_response, plot_climate_thermal_niches
 export plot_climate_community_filling, plot_climate_diagnostics
+export dose_response, select_climate_endpoints, realised_forcing_axis
+export scenario_minus_control, scenario_minus_control_table, SCENARIO_CONTROL_METRICS
 
 # Export data preparation functions
 export prepare_ode_data, save_ode_data
 export load_species_characteristics, load_site_data, load_species_density_data
-export load_interaction_matrix, build_distance_matrix
+export load_interaction_matrix, build_distance_matrix, build_interaction_long_table
+export build_on_path_distance_matrix, ON_PATH_DEFAULT_RTOL, ON_PATH_DEFAULT_ATOL
 export load_cedex_var, load_cedex_esc_uts, select_cedex_uts, load_obstacles
 export build_elevation_vector, build_dam_passability_matrix
 export build_site_coordinate_matrix, build_obstacle_passability_matrix
 export extract_site_temperatures, extract_habitat_suitability
-export build_intrinsic_growth_rates
+export load_site_water_temperature_baseline
+export build_intrinsic_growth_rates, observed_density_matrix
+export drop_fishfarm_eel_records, apply_salinity_envelope, build_carrying_capacity
 
 # Export visualization functions
 export plot_ode_solution, plot_total_biomass, plot_species_richness
 export plot_avg_total_biomass, plot_avg_species_richness
 export plot_sites_map, plot_site_connectivity_map, plot_subcatchment_network
 export plot_combined_analysis, save_figure
+
+# Export stable run-identity digests (E9/E10)
+export stable_digest, code_version, file_fingerprint, parameter_digest
+
+# Export global sensitivity toolkit (E7): Latin hypercube + Sobol indices
+export GlobalSensitivityRNG, latin_hypercube, lhs_samples, rescale_columns, rescale_row
+export SaltelliDesign, saltelli_design, saltelli_sample_matrix, n_model_runs
+export sobol_indices_from_outputs, sobol_analyze
+export scale_intrinsic_growth_rate, scale_dispersal, basin_response_metrics
 
 # Export the shared report-figure style (large fonts, panel letters, no titles)
 export report_theme!, panel_letter!, report_annotation!, trim_figure!, equal_panel_columns!
@@ -85,6 +104,8 @@ include("visualize_graph.jl")
 include("ode_model.jl")
 include("temperature_forcing.jl")
 include("spin_up.jl")
+include("global_sensitivity.jl")
+include("run_identity.jl")
 include("data_preparation.jl")
 include("outputs.jl")
 include("visualization.jl")

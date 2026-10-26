@@ -42,6 +42,9 @@ const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOL
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
 
+# C4: dispersal-graph construction method from the [connectivity] section.
+const CONNECTIVITY_METHOD = SimulationParameters.connectivity_method(GUADEX_PARAMS)
+
 const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
 const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
 const MIGRATORY_SPECIES = String.(get(GUADEX_PARAMS["species"], "migratory", String[]))
@@ -68,6 +71,14 @@ if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
     println("  K: base $(SETTINGS.carrying_capacity_base_scaling)x * WP4 $(SETTINGS.carrying_capacity_scaling)x")
     println("  heat stress:     enabled=$(SETTINGS.heat_stress_enabled) calibrate=$(SETTINGS.heat_stress_calibrate)")
     println("  burn-in:         max $(SETTINGS.spin_up_max_years) yr, tol=$(SETTINGS.spin_up_tol), criterion=:$(SETTINGS.spin_up_criterion)")
+    println("  route:           :$(SETTINGS.projection_route)" *
+            (SETTINGS.projection_route === :interim_observed ?
+                " ($(SETTINGS.interim_spin_up_years) baseline yr, E4 bypassed)" : " (E4 stop rule)"))
+    println("  connectivity:    :$(CONNECTIVITY_METHOD)")
+    println("  biology:         absence_growth_fraction=$(SETTINGS.absence_growth_fraction), " *
+            "pool=$(SETTINGS.pool_capacity_mode), dificil=$(SETTINGS.fishless_dificil_capacity), " *
+            "nonrep=$(SETTINGS.nonreproducing_local_growth), eel=$(SETTINGS.exclude_fishfarm_eel_records), " *
+            "salinity=$(SETTINGS.salinity_envelope)")
     println("  output:          $(SETTINGS.output_dir)")
     exit(0)
 end
@@ -78,6 +89,10 @@ println("  horizon:        $(SETTINGS.start_year)-$(SETTINGS.end_year)")
 println("  climate models: $(join([climate_model_tag(m) for m in CLIMATE_MODELS], ", "))")
 println("  K: base $(SETTINGS.carrying_capacity_base_scaling)x * WP4 $(SETTINGS.carrying_capacity_scaling)x observed")
 println("  heat stress:    enabled=$(SETTINGS.heat_stress_enabled) calibrate=$(SETTINGS.heat_stress_calibrate)")
+println("  route:          :$(SETTINGS.projection_route)" *
+        (SETTINGS.projection_route === :interim_observed ?
+            " ($(SETTINGS.interim_spin_up_years) baseline yr)" : ""))
+println("  output:         $(SETTINGS.output_dir)")
 println("="^70)
 
 # =============================================================================
@@ -94,8 +109,15 @@ data_base = prepare_ode_data(
     obstacle_matching_tolerance = OBSTACLE_MATCHING_TOLERANCE,
     obstacle_passability = OBSTACLE_PASSABILITY,
     obstacle_downstream_passability = OBSTACLE_DOWNSTREAM_PASSABILITY,
+    connectivity_method = CONNECTIVITY_METHOD,
     carrying_capacity_base_scaling = SETTINGS.carrying_capacity_base_scaling,
-    carrying_capacity_scaling = SETTINGS.carrying_capacity_scaling
+    carrying_capacity_scaling = SETTINGS.carrying_capacity_scaling,
+    absence_growth_fraction = SETTINGS.absence_growth_fraction,
+    pool_capacity_mode = SETTINGS.pool_capacity_mode,
+    fishless_dificil_capacity = SETTINGS.fishless_dificil_capacity,
+    nonreproducing_local_growth = SETTINGS.nonreproducing_local_growth,
+    exclude_fishfarm_eel_records = SETTINGS.exclude_fishfarm_eel_records,
+    salinity_envelope = SETTINGS.salinity_envelope
 )
 
 n_sites = data_base.params.n_sites
@@ -166,10 +188,18 @@ for model in CLIMATE_MODELS
         model.scenario, model.gcm;
         baseline_start=SETTINGS.baseline_period_start,
         baseline_end=SETTINGS.baseline_period_end,
+        baseline_means=data_base.params.temperatures,
         days_per_year=SETTINGS.days_per_year,
         year_labels=SETTINGS.year_labels)
     warming_end = maximum(forcing.warming[:, end])
-    println("  warming by $(SETTINGS.end_year): $(round(warming_end, digits=3)) degC")
+    # C7: realised site-and-window mean applied anomaly (the dose-response
+    # regressor), as opposed to the max-over-sites end-of-horizon value above.
+    realised = realised_warming_anomaly(forcing.warming, SETTINGS.year_labels;
+        early_window=(SETTINGS.start_year, SETTINGS.end_year),
+        late_window=(max(SETTINGS.start_year, SETTINGS.end_year - 9), SETTINGS.end_year))
+    println("  warming by $(SETTINGS.end_year): $(round(warming_end, digits=3)) degC " *
+            "(max over sites); realised mean $(round(realised.mean_2036_2045, digits=3)) degC " *
+            "over $(realised.n_sites) sites")
 
     for uc in UPSTREAM_COSTS
         for pass_name in PASSABILITY_NAMES
@@ -185,7 +215,13 @@ for model in CLIMATE_MODELS
             println("\n[$current_run/$total_runs] $run_label")
 
             fingerprint = sensitivity_run_fingerprint(SETTINGS, model;
-                upstream_cost=uc, passability_scenario=pass_name)
+                upstream_cost=uc, passability_scenario=pass_name, params=params,
+                digest_options=Dict{String,Any}(
+                    "obstacle_mode" => string(OBSTACLE_MODE),
+                    "obstacle_matching_tolerance_m" => OBSTACLE_MATCHING_TOLERANCE,
+                    "obstacle_passability" => OBSTACLE_PASSABILITY,
+                    "obstacle_downstream_passability" => OBSTACLE_DOWNSTREAM_PASSABILITY,
+                    "obstacles_file" => basename(OBSTACLES_FILE)))
 
             if !FORCE_RERUN && sensitivity_run_status(run_dir, fingerprint)
                 println("  skipped (complete and fingerprint matches; " *
@@ -210,6 +246,9 @@ for model in CLIMATE_MODELS
                     temperature_baseline=params.temperatures, warming=forcing.warming,
                     heat_stress_k=k_heat,
                     spin_up=SETTINGS.spin_up, spin_up_years=spin.years, spin_up_converged=spin.converged,
+                    spin_up_total_biomass_change=spin.last_basin_change,
+                    spin_up_composition_q95_change=spin.last_composition_change,
+                    spin_up_criteria=join(String.(spin.criteria), ";"),
                     carrying_capacity_base_scaling=SETTINGS.carrying_capacity_base_scaling,
                     carrying_capacity_scaling=SETTINGS.carrying_capacity_scaling,
                     thermal_optima_fraction=SETTINGS.thermal_optima_fraction,
@@ -219,7 +258,8 @@ for model in CLIMATE_MODELS
                     obstacle_passability=OBSTACLE_PASSABILITY,
                     obstacle_downstream_passability=OBSTACLE_DOWNSTREAM_PASSABILITY,
                     obstacle_matched_count=count(data_base.obstacle_mapping_diagnostics.matched),
-                    obstacle_total_count=nrow(data_base.obstacle_mapping_diagnostics))
+                    obstacle_total_count=nrow(data_base.obstacle_mapping_diagnostics),
+                    parameter_digest=fingerprint["parameter_digest"])
 
                 export_sensitivity_run(run_dir;
                     data_base=data_base, sol=sol, params=scenario_params, forcing=forcing,
@@ -232,13 +272,21 @@ for model in CLIMATE_MODELS
                         upstream_cost=uc, passability_scenario=pass_name,
                         warming_end=warming_end, heat_stress_k=k_heat,
                         spin_years=spin.years, spin_converged=spin.converged,
-                        obstacle_mode=OBSTACLE_MODE))
+                        spin_basin_change=spin.last_basin_change,
+                        spin_composition_change=spin.last_composition_change,
+                        spin_composition_change_all_cells=spin.last_composition_change_all_cells,
+                        spin_composition_active_cells=spin.composition_active_cells,
+                        spin_criteria=spin.criteria,
+                        obstacle_mode=OBSTACLE_MODE, realised=realised,
+                        extras=Dict{String,Any}(
+                            "parameter_digest" => fingerprint["parameter_digest"])))
                 mark_sensitivity_run_complete(run_dir, fingerprint)
                 println("  saved to: $run_dir")
             end
 
             row = index_row_values(run_dir, SETTINGS, model;
-                upstream_cost=uc, passability_scenario=pass_name, warming_end=warming_end)
+                upstream_cost=uc, passability_scenario=pass_name, warming_end=warming_end,
+                spin=spin, realised=realised)
             upsert_index_row!(index_df, row)
             CSV.write(index_path, index_df)
         end

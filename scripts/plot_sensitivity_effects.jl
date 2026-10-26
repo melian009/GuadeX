@@ -21,8 +21,10 @@ using Guadex
 # alt-interaction sweep: matrix x model x upstream_cost x passability =
 # 3x2x2x4 = 48), so a standard sum-of-squares decomposition is valid *inside*
 # a sweep.  Across the two sweeps the thermal-sigma multiplier (0.3) is fully
-# confounded with the sweep AND with a shorter burn-in (21 vs 373 years), so
-# the sigma effect is reported as a confounded contrast, not a clean effect.
+# confounded with the sweep AND with a shorter burn-in (the per-matrix burn-in
+# years recorded in each run's metadata / burnin_summary.csv are all far shorter
+# than the 373-year climate/obstacle burn-in), so the sigma effect is reported
+# as a confounded contrast, not a clean effect.
 #
 # Writes:
 #   results/sensitivity_obstacles/report_plots/parameter_effect_rank.csv
@@ -33,14 +35,31 @@ using Guadex
 #   results/sensitivity_obstacles/report_plots/fig_interaction_effects.png
 # =============================================================================
 
-const ROOT = joinpath("results", "sensitivity_obstacles")
+include(joinpath(@__DIR__, "plot_paths.jl"))
+
+# Input roots are overridable from the environment; the defaults reproduce the
+# legacy (pre-correction) results exactly.  See scripts/plot_paths.jl.
+const ROOT = report_output_root("GUADEX_SENSITIVITY_OUTPUT_DIR",
+    joinpath("results", "sensitivity_obstacles"))
+const ALT_ROOT = report_output_root("GUADEX_ALT_OUTPUT_DIR",
+    joinpath("results", "sensitivity_obstacles", "alt_interactions"))
 const MAIN_INDEX = joinpath(ROOT, "runs_index.csv")
-const ALT_INDEX = joinpath(ROOT, "alt_interactions", "runs_index.csv")
+const ALT_INDEX = joinpath(ALT_ROOT, "runs_index.csv")
 const REPORT_DIR = joinpath(ROOT, "report_plots")
 mkpath(REPORT_DIR)
+println("plot_sensitivity_effects roots: sensitivity=$ROOT alt=$ALT_ROOT")
 
-function save_report(fig, path; size)
-    Makie.save(path, fig; size=size, px_per_unit=2)
+# Axes in this script have explicit width/height, so the requested Figure size
+# can be smaller than the space the panels plus their labels, legends and
+# colourbars actually occupy.  Makie then clips the overflowing content at the
+# canvas edge (the cause of the tornado figure being cut off top and bottom).
+# `resize_to_layout!` grows the scene to the tight bounding box of the layout,
+# including every protrusion, so nothing is lost while font sizes and panel
+# dimensions stay exactly as authored.  `size` is accepted for call-site
+# compatibility but no longer overrides the fitted size.
+function save_report(fig, path; size=nothing)
+    resize_to_layout!(fig)
+    Makie.save(path, fig; px_per_unit=2)
     trim_figure!(path)
     println("Figure saved to: $path")
 end
@@ -50,7 +69,7 @@ const METRICS = [
     "basin_native_biomass",
     "basin_invasive_biomass",
     "basin_native_richness",
-    "basin_native_extinction_risk",
+    "basin_realised_richness_loss",
     "st_relative_biomass_change",
     "st_final_biomass",
     "st_quasi_extinct_fraction",
@@ -61,7 +80,7 @@ const METRIC_LABELS = Dict(
     "basin_native_biomass" => "Basin native biomass",
     "basin_invasive_biomass" => "Basin invasive biomass",
     "basin_native_richness" => "Basin native richness",
-    "basin_native_extinction_risk" => "Native extinction risk",
+    "basin_realised_richness_loss" => "Realised richness loss",
     "st_relative_biomass_change" => "ST relative biomass change",
     "st_final_biomass" => "ST final biomass",
     "st_quasi_extinct_fraction" => "ST quasi-extinct fraction",
@@ -486,7 +505,12 @@ for (j, f) in enumerate(RANK_FACTORS), (i, m) in enumerate(METRICS)
     sub = norm[(norm.factor .== f) .& (norm.metric .== m), :]
     isempty(sub) || (Mmat[i, j] = sub.importance[1])
 end
-hm = heatmap!(ax_hm, 1:length(RANK_FACTORS), 1:length(METRICS), Mmat;
+# `heatmap` associates its first coordinate with the matrix's first dimension,
+# so a raw 8x7 Mmat drawn against 1:7 / 1:8 is transposed and its cell centres
+# fall half a cell away from the integer tick positions used by the text
+# annotations below.  Transposing the matrix makes cell (j, i) hold Mmat[i, j]
+# and centres every value annotation at (j, i).
+hm = heatmap!(ax_hm, 1:length(RANK_FACTORS), 1:length(METRICS), permutedims(Mmat);
     colormap=:viridis, colorrange=(0, 1))
 for i in 1:length(METRICS), j in 1:length(RANK_FACTORS)
     isnan(Mmat[i, j]) && continue

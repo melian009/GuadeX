@@ -40,7 +40,7 @@ const START_YEAR = Int(get(CFG, "start_year", 2026))
 const END_YEAR = Int(get(CFG, "end_year", 2045))
 const SIMULATION_YEARS = END_YEAR - START_YEAR + 1
 const T_END = Float64(SIMULATION_YEARS * DAYS_PER_YEAR)
-const YEAR_OFFSETS = collect(0:(SIMULATION_YEARS - 1))
+const YEAR_OFFSETS = collect(1:SIMULATION_YEARS)
 const YEAR_LABELS = collect(START_YEAR:END_YEAR)
 const SAVE_INTERVAL_DAYS = 365.0 / 12.0
 const PRESENCE_THRESHOLD = 0.1
@@ -58,6 +58,12 @@ const K_BASE_SCALING = Float64(get(CFG, "carrying_capacity_base_scaling", 10.0))
 const OPTIMUM_FRACTIONS = Float64.(get(CFG, "optimum_fractions", [0.0, 0.25, 0.5, 0.75, 1.0]))
 const SPIN_UP_MAX_YEARS = Int(get(CFG, "spin_up_max_years", 50))
 const SPIN_UP_TOL = Float64(get(CFG, "spin_up_tol", 1.0e-6))
+# E4: stricter two-criteria stop rule (basin + composition) with a minimum
+# number of years; kept explicit so the staged driver can opt into the legacy
+# "basin" rule from its configuration.
+const SPIN_UP_CRITERION = Symbol(lowercase(string(get(CFG, "spin_up_criterion", "both"))))
+const SPIN_UP_COMPOSITION_TOL = Float64(get(CFG, "spin_up_composition_tol", 1.0e-2))
+const SPIN_UP_MIN_YEARS = Int(get(CFG, "spin_up_min_years", 10))
 const BASE_OUTPUT_DIR = string(get(CFG, "output_dir", "results/climate_experiments"))
 const PROJECTION_FILE = string(get(CFG, "temperature_projections_file",
     "guadex_tw/outputs/tables/water_temp_future_2045.csv"))
@@ -73,6 +79,9 @@ const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
 const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
 const MIGRATORY_SPECIES = String.(get(GUADEX_PARAMS["species"], "migratory", String[]))
 
+# E13-E16/E18: opt-in biological-assumption options (all legacy by default).
+const BIOLOGICAL_OPTIONS = SimulationParameters.biological_options(GUADEX_PARAMS)
+
 println("="^70)
 println("Staged climate experiments (WP6): $(join(STAGES, ", "))")
 println("  scenario: $EXPERIMENT_SCENARIO; GCMs: $(join(EXPERIMENT_GCMS, ", "))")
@@ -87,19 +96,25 @@ data_base = prepare_ode_data(
     cedex_esc_uts_file = get(GUADEX_PARAMS["inputs"], "cedex_esc_uts_file", nothing),
     obstacles_file = get(GUADEX_PARAMS["inputs"], "obstacles_file", nothing),
     obstacle_mode = Symbol(get(GUADEX_PARAMS["obstacles"], "mode", "legacy")),
+    connectivity_method = SimulationParameters.connectivity_method(GUADEX_PARAMS),
     obstacle_matching_tolerance = Float64(get(GUADEX_PARAMS["obstacles"], "matching_tolerance_m", 2000.0)),
     obstacle_passability = Float64(get(GUADEX_PARAMS["obstacles"], "upstream_passability", 0.1)),
     obstacle_downstream_passability = Float64(get(GUADEX_PARAMS["obstacles"], "downstream_passability", 0.5)),
-    carrying_capacity_base_scaling = K_BASE_SCALING
+    carrying_capacity_base_scaling = K_BASE_SCALING,
+    absence_growth_fraction = BIOLOGICAL_OPTIONS.absence_growth_fraction,
+    pool_capacity_mode = BIOLOGICAL_OPTIONS.pool_capacity_mode,
+    fishless_dificil_capacity = BIOLOGICAL_OPTIONS.fishless_dificil_capacity,
+    nonreproducing_local_growth = BIOLOGICAL_OPTIONS.nonreproducing_local_growth,
+    exclude_fishfarm_eel_records = BIOLOGICAL_OPTIONS.exclude_fishfarm_eel_records,
+    salinity_envelope = BIOLOGICAL_OPTIONS.salinity_envelope
 )
 n_sites = data_base.params.n_sites
 n_species = data_base.params.n_species
 println("Effective carrying-capacity base multiplier: $(K_BASE_SCALING)x observed " *
         "(E3 effective grid: $(join(K_BASE_SCALING .* K_SCALING_GRID, ", "))x)")
 
-density_cols = [Symbol("$(sp)_DEN") for sp in data_base.species]
-density_df_filtered = filter(row -> row.CODIGO in data_base.sites, data_base.density_df)
-u0_obs = max.(replace(Matrix(density_df_filtered[:, density_cols]), NaN => 0.0), 0.0)
+# Align the observed state to model sites by code (minor #3), not by row order.
+u0_obs = observed_density_matrix(data_base.density_df, data_base.sites, data_base.species)
 u0_flat = vec(u0_obs)
 
 saveat = unique(vcat(collect(0.0:SAVE_INTERVAL_DAYS:T_END), T_END))
@@ -114,7 +129,7 @@ index_df = isfile(index_path) ? CSV.read(index_path, DataFrame) : DataFrame(
     stage=String[], case=String[], scenario=String[], gcm=String[],
     forcing_mode=String[], heat_stress_k=Float64[], k_scaling=Float64[],
     optimum_fraction=Float64[], end_basin_biomass=Float64[],
-    end_native_richness=Float64[], end_native_extinction_risk=Float64[],
+    end_native_richness=Float64[], end_realised_richness_loss=Float64[],
     run_dir=String[])
 
 function record_case(; stage, case_name, scenario, gcm, forcing_mode, k, k_scaling,
@@ -128,14 +143,14 @@ function record_case(; stage, case_name, scenario, gcm, forcing_mode, k, k_scali
         if !isempty(final)
             biomass = final[1, :mean_total_biomass]
             richness = final[1, :mean_native_richness]
-            risk = final[1, :mean_native_extinction_risk]
+            risk = final[1, :mean_realised_richness_loss]
         end
     end
     filter!(row -> !(row.stage == stage && row.case == case_name), index_df)
     push!(index_df, (stage=stage, case=case_name, scenario=scenario, gcm=gcm,
         forcing_mode=forcing_mode, heat_stress_k=k, k_scaling=k_scaling,
         optimum_fraction=fraction, end_basin_biomass=biomass,
-        end_native_richness=richness, end_native_extinction_risk=risk, run_dir=run_dir))
+        end_native_richness=richness, end_realised_richness_loss=risk, run_dir=run_dir))
     CSV.write(index_path, index_df)
 end
 
@@ -165,7 +180,9 @@ function solve_case(; stage, case_name, params, schedule, u0, warming,
             (temps=forcing_temps, dates=forcing_dates),
         run_metadata=merge(Dict("script" => "run_climate_experiments.jl",
             "stage" => stage, "case" => case_name,
-            "carrying_capacity_base_scaling" => K_BASE_SCALING), metadata))
+            "carrying_capacity_base_scaling" => K_BASE_SCALING,
+            "biological_options" => SimulationParameters.biological_options_dict(GUADEX_PARAMS)),
+            metadata))
     return run_dir
 end
 
@@ -181,7 +198,9 @@ function spin_for(params)
             days_per_year=Float64(DAYS_PER_YEAR))
     s = spin_up(params; initial_state=u0_flat, schedule=sched,
         days_per_year=Float64(DAYS_PER_YEAR),
-        max_years=SPIN_UP_MAX_YEARS, tol=SPIN_UP_TOL)
+        max_years=SPIN_UP_MAX_YEARS, tol=SPIN_UP_TOL,
+        composition_tol=SPIN_UP_COMPOSITION_TOL, min_years=SPIN_UP_MIN_YEARS,
+        criterion=SPIN_UP_CRITERION)
     return s, reshape(s.state, n_sites, n_species)
 end
 
@@ -249,10 +268,14 @@ function experiment_daily_schedule(scenario, gcm)
         wide_forcing_matrix(df, data_base.sites; scenario=sc) :
         daily_forcing_matrix(df, data_base.sites; scenario=sc)
     fdates, ftemps = m(daily, scenario)
-    bdates, btemps = m(daily, "historical")
+    # C5/E1: reference the scenario anomaly to the SAME per-site baseline level
+    # used as `MetacommunityParams.temperatures` (the corrected
+    # `tw_baseline_mean`), exactly as `run_climate_scenarios.jl` does.  Using
+    # this file's own `historical` mean instead leaves a residual ~0.02 degC
+    # offset (the corrected level is not that file's historical mean).
     sched, _ = daily_temperature_schedule(ftemps; dates=fdates,
-        baseline_temps=btemps, baseline_dates=bdates,
-        baseline_start=BASELINE_START, baseline_end=BASELINE_END)
+        baseline_start=BASELINE_START, baseline_end=BASELINE_END,
+        baseline_means=data_base.params.temperatures)
     warming = annual_mean_deltas(sched; days_per_year=Float64(DAYS_PER_YEAR))
     return sched, warming, ftemps, fdates
 end
@@ -281,7 +304,16 @@ if "E0" in STAGES
     mkpath(joinpath(BASE_OUTPUT_DIR, "E0"))
     CSV.write(joinpath(BASE_OUTPUT_DIR, "E0", "spinup_summary.csv"), summary)
     spin_meta = Dict("years" => spin.years, "converged" => spin.converged,
-        "last_relative_change" => spin.last_relative_change)
+        "last_relative_change" => spin.last_relative_change,
+        "last_basin_change" => spin.last_basin_change,
+        "last_composition_change" => spin.last_composition_change,
+        "last_composition_change_all_cells" => spin.last_composition_change_all_cells,
+        "composition_active_cells" => spin.composition_active_cells,
+        "criteria" => String.(spin.criteria),
+        "criterion" => string(SPIN_UP_CRITERION),
+        "composition_tol" => SPIN_UP_COMPOSITION_TOL,
+        "composition_active_floor" => Guadex.SPIN_UP_COMPOSITION_ACTIVE_FLOOR,
+        "min_years" => SPIN_UP_MIN_YEARS)
     open(joinpath(BASE_OUTPUT_DIR, "E0", "spinup_metadata.json"), "w") do io
         print(io, spin_meta)
     end

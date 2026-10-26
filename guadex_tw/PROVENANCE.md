@@ -5,7 +5,7 @@ Rows are appended automatically by `scripts/common.record()` and de-duplicated b
 (source, path/url) with last-write-wins. Checksums are streamed (MD5 + SHA256).
 
 For download failures the `status` column is `FAILED` and `error` carries the exact
-message; `http_status` the HTTP code. Generated at 2026-09-15T14:24:21Z.
+message; `http_status` the HTTP code. Generated at 2026-09-30T10:29:40Z.
 
 | timestamp_utc | source | version | status | http_status | bytes | md5 | sha256 | license | doi | url | path | notes | error |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -211,3 +211,4 @@ message; `http_status` the HTTP code. Generated at 2026-09-15T14:24:21Z.
 | 2026-09-13T08:49:01Z | Generated figures and historical table |  | SUCCESS |  |  |  |  |  |  |  | E:/projects/GuadeX/guadex_tw/outputs/figures | 8 figures with captions.txt |  |
 | 2026-09-13T08:39:56Z | Leave-one-basin-out transfer test |  | SUCCESS |  |  |  |  |  |  |  | E:/projects/GuadeX/guadex_tw/outputs/tables/cv_metrics.csv | 97 rows; train non-GQ 39173, test GQ 771 |  |
 | 2026-09-15T14:24:20Z | Projected daily Tw at all GuadeX sites (WP1) | PNACC 2024 CMIP6 5km ESD-RegBA + Model 2 | SUCCESS |  | 525724850 | 827eb03853533c2c1833c22e752fdc37 | eb26e785f8ff2da69c1ee876a899cf25f8f69639b8e64ced64f6133ec91d769b | AEMET/PNACC 2024 - public (attribution) |  |  | E:/projects/GuadeX/guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv | 11 GCMs x 4 SSPs; 776 sites; ensemble median; baseline (1986, 2005); horizon (2026, 2045) |  |
+| 2026-09-30T10:29:40Z | E22 applied held-out-basin bias correction to Tw products |  | SUCCESS |  |  |  |  |  |  |  |  | 48 files, 0 missing, 0 errors; correction a9679aefe70b5af9 |  |

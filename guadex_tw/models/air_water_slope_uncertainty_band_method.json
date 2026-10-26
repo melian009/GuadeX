@@ -1,0 +1,155 @@
+{
+  "decision": "E21 - lagged air-temperature fits are an uncertainty band, not a new primary calibration",
+  "primary_model": {
+    "identity": "Stage-B all-Spain Model 2 (area-free), used for projection",
+    "formula": "tw_obs ~ ta + C(month) + z + ta_z",
+    "predictor": "NASA POWER ta_mean_corr (same-day, lapse-corrected)",
+    "slope_at_z0": 0.5097248376892677,
+    "source": "models/model_coefficients.json, models/model_summary.txt"
+  },
+  "same_day_slopes_from_saved_outputs": {
+    "Spain": {
+      "slope_at_z0": 0.5097248376892677,
+      "bse": 0.004739191035230255,
+      "n_obs": 39944,
+      "n_sites": 980
+    },
+    "Guadalquivir": {
+      "slope_at_z0": 0.4362403674668494,
+      "bse": 0.035963755733997946,
+      "n_obs": 771,
+      "n_sites": 46
+    }
+  },
+  "lagged_slopes_reestimated_from_saved_paired_table": {
+    "note": "08b_model3_lags.py did not persist coefficients, so lagged slopes were re-fitted from data/processed/paired_observations.csv with the exact primary specification, replacing ta with the lagged mean.  Reproduces the saved same-day slope 0.5097 exactly.",
+    "source": "data/processed/paired_observations.csv",
+    "spain": {
+      "same_day": {
+        "ta_column": "ta_mean_corr",
+        "slope": 0.5097248376892677,
+        "bse": 0.004739191035230255,
+        "pvalue": 0.0,
+        "slope_at_z": 0.5097248376892677,
+        "ta_z": -0.1629926745080157,
+        "n_obs": 39944,
+        "n_sites": 980
+      },
+      "d3": {
+        "ta_column": "ta_mean_d3",
+        "slope": 0.5708272187818341,
+        "bse": 0.004867834275403074,
+        "pvalue": 0.0,
+        "slope_at_z": 0.5708272187818341,
+        "ta_z": -0.16583694050973108,
+        "n_obs": 39944,
+        "n_sites": 980
+      },
+      "d7": {
+        "ta_column": "ta_mean_d7",
+        "slope": 0.6039007089277053,
+        "bse": 0.00535150045483421,
+        "pvalue": 0.0,
+        "slope_at_z": 0.6039007089277053,
+        "ta_z": -0.16913438546774207,
+        "n_obs": 39944,
+        "n_sites": 980
+      },
+      "d30": {
+        "ta_column": "ta_mean_d30",
+        "slope": 0.650646995247311,
+        "bse": 0.006663137723393005,
+        "pvalue": 0.0,
+        "slope_at_z": 0.650646995247311,
+        "ta_z": -0.17541405735774904,
+        "n_obs": 39875,
+        "n_sites": 980
+      }
+    },
+    "guadalquivir": {
+      "same_day": {
+        "ta_column": "ta_mean_corr",
+        "slope": 0.4362403674668494,
+        "bse": 0.035963755733997946,
+        "pvalue": 4.571275775023435e-31,
+        "slope_at_z": 0.4362403674668494,
+        "ta_z": -0.29876081851029046,
+        "n_obs": 771,
+        "n_sites": 46
+      },
+      "d3": {
+        "ta_column": "ta_mean_d3",
+        "slope": 0.43484534807630165,
+        "bse": 0.03863907297149793,
+        "pvalue": 2.840161272137384e-27,
+        "slope_at_z": 0.43484534807630165,
+        "ta_z": -0.31059684561969436,
+        "n_obs": 771,
+        "n_sites": 46
+      },
+      "d7": {
+        "ta_column": "ta_mean_d7",
+        "slope": 0.4273818345015872,
+        "bse": 0.04502231931260754,
+        "pvalue": 2.87038964860578e-20,
+        "slope_at_z": 0.4273818345015872,
+        "ta_z": -0.31773349366377424,
+        "n_obs": 771,
+        "n_sites": 46
+      },
+      "d30": {
+        "ta_column": "ta_mean_d30",
+        "slope": 0.3233747784972314,
+        "bse": 0.059617166909905345,
+        "pvalue": 7.841934879393592e-08,
+        "slope_at_z": 0.3233747784972314,
+        "ta_z": -0.31833800838279935,
+        "n_obs": 771,
+        "n_sites": 46
+      }
+    }
+  },
+  "lag_eligible_sites_in_sample": {
+    "site_ids": [
+      "ES020ESPF004300618",
+      "ES091R0571",
+      "ESCHC2621"
+    ],
+    "cadence_rule_obs_per_year": 24,
+    "per_site_n": {
+      "ES020ESPF004300618": 27,
+      "ES091R0571": 53,
+      "ESCHC2621": 24
+    },
+    "total_n_eligible": 104,
+    "source": "logs/lag_eligibility.json, logs/model3_summary.json, outputs/tables/cv_metrics.csv",
+    "note": "All three sites lie in a single calendar year (2024); time-blocked CV is impossible. Their pooled same-day slope is 0.0790 (bse 0.1843), i.e. unidentifiable, confirming lags cannot be a primary model."
+  },
+  "band": {
+    "slope_central_same_day": 0.5097248376892677,
+    "slope_low": 0.3233747784972314,
+    "slope_low_source": "lowest lagged slope across Spain & Guadalquivir (d30, Guadalquivir)",
+    "slope_high": 0.650646995247311,
+    "slope_high_source": "highest lagged slope across Spain & Guadalquivir (d30, Spain)",
+    "ratio_low": 0.6344104791188598,
+    "ratio_high": 1.276467119391091,
+    "formula": "low/high warming = central_warming x (slope_low/high / slope_same_day)"
+  },
+  "approximation": {
+    "valid": "documented approximation, NOT a re-run of the projection",
+    "description": "The projection pipeline cannot be re-run with lagged coefficients (no usable lagged calibration for the basin). We scale each projected water-warming anomaly by the ratio of the lagged to the same-day air-water slope. This assumes the air-temperature anomaly is unchanged and that the water response is linear in that anomaly.",
+    "caveats": [
+      "Lagged enhancement is a national-pooled result; within the Guadalquivir subset the lagged slopes are LOWER than same-day (0.32-0.44), so the direction of the correction is not guaranteed.",
+      "Lag-eligible sample is 3 single-year sites (n=104), so the lagged slopes are not validated by time-blocked CV."
+    ]
+  },
+  "sources": [
+    "models/model_coefficients.json",
+    "models/model_summary.txt",
+    "logs/model3_summary.json",
+    "logs/lag_eligibility.json",
+    "outputs/tables/cv_metrics.csv",
+    "outputs/tables/water_temp_future_2045.csv",
+    "outputs/tables/water_temp_daily_guadex_sites_wide.csv"
+  ]
+}

@@ -76,6 +76,68 @@ end
 end
 
 # =============================================================================
+# 2c. C7 — realised applied warming anomaly
+# =============================================================================
+@testset "realised warming anomaly (C7)" begin
+    # Site × year annual-mean anomalies: sites (1.0, 2.0) in 2026, (3.0, 4.0)
+    # in 2027.  The window means are the site-and-window means.
+    warming = [1.0 3.0; 2.0 4.0]
+    years = [2026, 2027]
+    @test Guadex.mean_warming_anomaly(warming, years;
+        first_year=2026, last_year=2027) ≈ mean([1.0, 2.0, 3.0, 4.0])
+    @test Guadex.mean_warming_anomaly(warming, years;
+        first_year=2027, last_year=2027) ≈ 3.5
+
+    # The schedule overload recovers the same window mean from a daily series.
+    dates = vcat(fill(Date(2026, 1, 1), 2), fill(Date(2027, 1, 1), 2))
+    deltas = [1.0 1.0 3.0 3.0; 2.0 2.0 4.0 4.0]
+    schedule = Guadex.TemperatureSchedule(deltas, 1.0)
+    summary = Guadex.realised_warming_anomaly(schedule, dates;
+        early_window=(2026, 2027), late_window=(2027, 2027))
+    @test summary.mean_2026_2045 ≈ 2.5
+    @test summary.mean_2036_2045 ≈ 3.5
+    @test summary.n_sites == 2
+    @test summary.n_years == 2
+end
+
+# =============================================================================
+# 2d. C7 — exposure restricted to baseline-established sites
+# =============================================================================
+@testset "established_exposure_summary (C7)" begin
+    sites = ["s1", "s2", "s3"]
+    species = ["ST"]
+    dates = [Date(2026, 1, 1), Date(2026, 1, 2), Date(2026, 1, 3)]
+    # s2 is the hottest site (3 days above 20 °C) but is NOT baseline
+    # established for ST; s1 has 1 day and s3 has 0.
+    temps = [21.0 19.0 19.0;
+             40.0 40.0 40.0;
+             19.0 19.0 19.0]
+    exposure = Guadex.exposure_table(sites, species, temps, dates; upper_limits=[20.0])
+    all_sites_max = maximum(exposure.exposure_days)
+
+    species_metrics = DataFrame(
+        year=fill(2026, 3), CODIGO=sites, species=fill("ST", 3),
+        baseline_established=[true, false, true])
+    summary = Guadex.established_exposure_summary(exposure, species_metrics)
+    row = summary[1, :]
+    @test row.site_set == "baseline_established"
+    @test row.n_sites_total == 3
+    @test row.n_sites_selected == 2
+    @test row.selected_sites == "s1;s3"
+    @test row.max_exposure_days == 1.0
+    @test row.mean_exposure_days ≈ 0.5
+    # The established-site value differs from the all-sites value by design.
+    @test row.max_exposure_days != all_sites_max
+    @test all_sites_max == 3.0
+
+    # No established information → explicit all-sites fallback.
+    fallback = Guadex.established_exposure_summary(exposure, nothing)
+    @test fallback[1, :site_set] == "all_sites"
+    @test fallback[1, :n_sites_selected] == 3
+    @test fallback[1, :max_exposure_days] == 3.0
+end
+
+# =============================================================================
 # 2b. Daily forcing file loaders (WP1)
 # =============================================================================
 @testset "daily forcing loaders" begin
@@ -164,6 +226,39 @@ end
     @test length(result.history) == result.years
 end
 
+@testset "C3 interim projection route" begin
+    # Route parsing: absent/empty keeps the full-burn-in default; a typo errors.
+    @test Guadex.projection_route(nothing) === :full_burnin
+    @test Guadex.projection_route("") === :full_burnin
+    @test Guadex.projection_route("full_burnin") === :full_burnin
+    @test Guadex.projection_route("FULL_BURNIN") === :full_burnin
+    @test Guadex.projection_route("interim_observed") === :interim_observed
+    @test_throws ErrorException Guadex.projection_route("bogus")
+
+    # Tiny 1-site/1-species model, K = 100.
+    params = Guadex.MetacommunityParams(
+        1, 1, [0.0;;], sparse([1], [1], [0.0], 1, 1),
+        [1.0], [0.05;;], [20.0], [1.0], [20.0], [5.0], [100.0])
+
+    # 0 years returns the observed state unchanged (no convergence machinery).
+    observed = [10.0]
+    zero = Guadex.interim_observed_spin_up(params; initial_state=observed, years=0)
+    @test zero.years == 0
+    @test zero.state == observed
+    @test zero.spin === nothing
+
+    # A short fixed relaxation integrates EXACTLY `years` blocks, bypassing the
+    # E4 convergence stop (tol = 0), and moves the state towards K.
+    short = Guadex.interim_observed_spin_up(params; initial_state=observed, years=3)
+    @test short.years == 3
+    @test short.spin !== nothing
+    @test short.spin.years == 3
+    @test short.state[1] > observed[1]
+
+    @test_throws ErrorException Guadex.interim_observed_spin_up(
+        params; initial_state=observed, years=-1)
+end
+
 @testset "scale_carrying_capacity / set_thermal_optima / set_heat_stress_rate" begin
     params = Guadex.MetacommunityParams(
         2, 2, [0.0 0.0; 0.0 0.0], sparse([1, 2], [1, 2], [0.0, 0.0], 2, 2),
@@ -180,6 +275,73 @@ end
     stressed = Guadex.set_heat_stress_rate(shifted, 0.02)
     @test stressed.heat_stress_rate == 0.02
     @test stressed.thermal_optima == [10.0, 20.0]
+end
+
+# =============================================================================
+# 4b. C5/E1: one corrected water-temperature series for the whole model
+# =============================================================================
+const WT_BASELINE_FILE = joinpath(@__DIR__, "..", "guadex_tw", "outputs", "tables",
+    "water_temp_baseline_guadex_sites.csv")
+const WT_WIDE_FILE = joinpath(@__DIR__, "..", "guadex_tw", "outputs", "tables",
+    "water_temp_daily_guadex_sites_wide.csv")
+
+@testset "corrected site water-temperature baseline (C5/E1)" begin
+    @test isfile(WT_BASELINE_FILE)
+    lookup = Guadex.load_site_water_temperature_baseline(WT_BASELINE_FILE)
+    @test length(lookup) == 776
+    @test haskey(lookup, "1.30.20")   # extra baseline row, excluded from the model
+
+    # Exact-column selection: a table without `tw_baseline_mean` must error, so a
+    # wrong column (e.g. TEMP_MEDIA_SC) can never be selected silently.
+    mktempdir() do tmp
+        wrong = joinpath(tmp, "wrong.csv")
+        CSV.write(wrong, DataFrame(site_id=["a"], TEMP_MEDIA_SC=[11.0]))
+        @test_throws Exception Guadex.load_site_water_temperature_baseline(wrong)
+    end
+
+    # Trout sites: sites with a non-zero baseline brown-trout density.  The
+    # corrected mean is now ≈12.83 °C (pre-E22 pre-correction value 11.7 °C).
+    dens = CSV.read(DENSITY_FILE, DataFrame)
+    trout = [string(r.CODIGO) for r in eachrow(dens)
+             if r.CODIGO in keys(lookup) && !ismissing(r.ST_DEN) && r.ST_DEN > 0.0]
+    @test length(trout) == 36
+    trout_mean = mean([lookup[s] for s in trout])
+    @test isapprox(trout_mean, 12.830498685857533; atol=0.01)
+end
+
+@testset "model temperature equals corrected daily series (C5/E1)" begin
+    lookup = Guadex.load_site_water_temperature_baseline(WT_BASELINE_FILE)
+    site_df = Guadex.load_site_data(CONNECTIVITY_FILE, ENVIRONMENTAL_FILE)
+    sites = String.(site_df.CODIGO)
+    sample = sites[[1, 100, 400]]
+    levels = [lookup[s] for s in sample]
+
+    cols = vcat([:date, :scenario], Symbol.(sample))
+    df = CSV.read(WT_WIDE_FILE, DataFrame; select=cols)
+    df.date = Date.(df.date)
+
+    fdates, ftemps = Guadex.wide_forcing_matrix(df, sample; scenario="ssp585")
+    bdates, btemps = Guadex.wide_forcing_matrix(df, sample; scenario="historical")
+
+    # The corrected baseline is exactly the 1986-2005 mean of the historical
+    # daily series (no double correction, no offset).
+    bmask = [1986 <= year(d) <= 2005 for d in bdates]
+    for i in eachindex(sample)
+        @test isapprox(mean(btemps[i, bmask]), levels[i]; atol=1e-6)
+    end
+
+    # Reference the anomaly to the SAME per-site mean used as the model level.
+    sched, bmeans = Guadex.daily_temperature_schedule(ftemps;
+        dates=fdates, baseline_start=1986, baseline_end=2005,
+        baseline_means=levels)
+    @test bmeans == levels
+
+    # level + anomaly reconstructs the corrected daily series at sample days.
+    for i in eachindex(sample), day in (1, 500, 3000, length(fdates))
+        t = Float64(day - 1)   # the schedule stores one node per day here
+        model_T = levels[i] + Guadex.temperature_delta(sched, i, t)
+        @test isapprox(model_T, ftemps[i, day]; atol=1e-9)
+    end
 end
 
 # =============================================================================

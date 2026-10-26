@@ -54,15 +54,21 @@ temperature_baseline = haskey(data, "temperature_baseline") ? data["temperature_
 years = haskey(data, "years") ? Int.(data["years"]) : nothing
 start_year = haskey(data, "start_year") ? Int(data["start_year"]) : nothing
 
-year_offsets = nothing
-year_labels = nothing
-if years !== nothing
-    year_labels = years
-    year_offsets = 0:(length(years) - 1)
+# E5: end-of-year reporting offsets are 1-based (offset k is the state at
+# k * days_per_year), matching the drivers.  Use the shared `_report_offsets`
+# helper rather than duplicating the grid: the old 0-based grid reported the
+# pre-forcing initial state as the first row and no longer matches a fresh run.
+year_offsets = Guadex._report_offsets(sol_t, DAYS_PER_YEAR)
+year_labels = if years !== nothing
+    # The file's own labels must cover exactly the end-of-year snapshots.
+    length(years) == length(year_offsets) ||
+        error("simulation file lists $(length(years)) years but the saved states " *
+              "span $(length(year_offsets)) end-of-year snapshots")
+    years
+elseif start_year !== nothing
+    collect(start_year:(start_year + length(year_offsets) - 1))
 else
-    last_year = floor(Int, sol_t[end] / DAYS_PER_YEAR)
-    year_offsets = collect(0:last_year)
-    year_labels = start_year === nothing ? year_offsets : collect(start_year:(start_year + last_year))
+    year_offsets
 end
 
 if warming !== nothing && temperature_baseline !== nothing

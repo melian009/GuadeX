@@ -36,7 +36,7 @@ Mean basin-level values (runs_index + `level_basin.csv`):
 | invasive richness / site (of 10) | 0.26 | 0.32 | +22% |
 | total richness / site (of 24) | 1.62 | 3.15 | +94% |
 | total biomass / site | 84.4 | 647.2 | +667% |
-| native extinction-risk metric | 0.0 | 0.0126 | flat after year 1 |
+| realised richness loss | 0.0 | 0.0126 | flat after year 1 |
 
 Per site (2026 -> 2045, representative run):
 
@@ -65,7 +65,7 @@ The top row (left to right) shows that the temperature forcing *is* separated by
 SSP while the richness and biomass responses are visually identical (the four
 scenario lines overlap). The bottom row shows the counterintuitive result: more
 warming is associated with slightly *higher* richness (Pearson r = 0.91) and
-biomass (r = 0.98), and the "extinction risk" metric stays near zero.
+biomass (r = 0.98), and the "realised richness loss" metric stays near zero.
 
 ---
 
@@ -144,9 +144,11 @@ r = 0.91 / 0.98 correlations.
 
 * Metrics are defined consistently in `src/outputs.jl:345-374`:
   `native_richness = count(density > 0.1)`, and
-  `native_extinction_risk = max(0, 1 - richness / richness(t=0))`.
-  The risk metric is a *loss relative to the initial observed state*, floored at
-  zero, so a basin that gains species can never register risk.
+  `realised_richness_loss = max(0, 1 - richness / richness(t=0))`.
+  The metric is a *loss relative to the initial observed state*, floored at
+  zero, so a basin that gains species can never register loss. It is a
+  deterministic contraction of realised richness, not an extinction probability
+  (the model has no replicates).
 * The scheduled temperature actually reaches the ODE: projected
   `temperature_c` in the outputs rises from 16.0 to 17.2 °C and matches the
   warming matrix; `test_ode.jl` also covers the zero-anomaly and warming cases.
@@ -246,13 +248,13 @@ Outputs: `runs_index.csv`, the four-level CSVs, `levels/species_timeseries.csv`,
 | E0 spin-up realism | median spun-up/observed biomass = 9.7 (matches the 10x K convention); 50-yr relative change still 0.15, so the state is not a true equilibrium |
 | E1 seasonality | switching annual-mean -> daily baseline lowers end basin biomass 759 -> 678 (-11 %); seasonality is first-order, not a refinement |
 | E2 heat stress | under **annual-mean** forcing heat stress is exactly inert (annual means never exceed the empirical limits); under **daily** forcing it lowers end biomass 674.8 -> 673.3 and flips ST from +13 % to -3 % relative biomass |
-| E3 K sensitivity | K x {1, 3, 10} scales absolute biomass (673/1832/5488) and raises richness (2.99 -> 3.27); extinction risk is stable (0.0122/0.0114/0.0120) |
+| E3 K sensitivity | K x {1, 3, 10} scales absolute biomass (673/1832/5488) and raises richness (2.99 -> 3.27); realised richness loss is stable (0.0122/0.0114/0.0120) |
 | E4 optimum sweep | moving the optimum across the empirical range dominates everything: end biomass 633 (cold edge) -> 673 (midpoint) -> 313 (warm edge); richness 3.00 -> 2.84. E5 is confirmed as the largest single uncertainty |
 
 **Ensemble response (warmest ssp585 run, +1.31 degC by 2045, vs control)**
 
 - The basin means move only slightly and not monotonically with warming:
-  richness 2.988 -> 2.990, extinction-risk metric 0.0122 -> 0.0122, biomass
+  richness 2.988 -> 2.990, realised richness loss 0.0122 -> 0.0122, biomass
   677 -> 673.
 - The **cold-water keystone ST** is the exception: relative biomass +13.4 % in
   the control vs -2.7 % in the warm run (a 16-point swing), and it is by far the

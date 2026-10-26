@@ -9,6 +9,15 @@ This script reads the GuadeX site table (`data/ConnectivityUTM.csv`, ETRS89/UTM
 zone 30N), extracts the PNACC daily `tmean` at each site, applies the calibrated
 spatial Tw model and writes the per-site daily ensemble-median series.
 
+E22 cold-bias correction
+------------------------
+Model 2 transfers to the Guadalquivir with a held-out cold bias of about
+-1.1 degC (leave-one-basin-out; `08c_leave_one_basin_out.py`).  Every projected
+value therefore gets the per-month mean held-out residual `obs - pred` from
+`models/lobo_predictions.csv` added (see `tw_bias_correction.py`).  The same
+term is added to the historical and scenario series, so anomalies are unchanged
+while the level and seasonal shape are corrected.
+
 Outputs (in `guadex_tw/outputs/tables/`):
 
 * `water_temp_daily_guadex_sites_wide.csv` - the product consumed by
@@ -48,6 +57,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as C  # noqa: E402
+import tw_bias_correction as BC  # noqa: E402
 
 REPO_ROOT = C.ROOT.parent
 GUADEX_SITES_CSV = REPO_ROOT / "data" / "ConnectivityUTM.csv"
@@ -203,10 +213,20 @@ def _fill_gaps(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def project_tw(mod, model, ta: np.ndarray, z: np.ndarray, months: np.ndarray) -> np.ndarray:
+def project_tw(mod, model, ta: np.ndarray, z: np.ndarray, months: np.ndarray,
+               resid: np.ndarray) -> np.ndarray:
+    """Model-2 Tw (site x day) plus the E22 per-month held-out-basin residual.
+
+    ``resid`` is a length-12 vector indexed by ``month - 1`` (see
+    :mod:`tw_bias_correction`); it corrects the cold bias in the level and the
+    seasonal shape.  The same per-month term is added to historical and scenario
+    series, so projected anomalies (future minus own baseline) are unchanged.
+    """
     tw = np.empty_like(ta, dtype=np.float64)
+    months = np.asarray(months, dtype=int)
     for k in range(ta.shape[0]):
         tw[k, :] = mod.predict_tw(model, ta[k, :].astype(float), float(z[k]), months)
+        tw[k, :] += resid[months - 1]
     return tw
 
 
@@ -257,6 +277,11 @@ def main() -> None:
 
     # --- project Tw and ensemble-median per experiment ---
     mod, model = _load_model()
+    correction = BC.load_correction()
+    resid = BC.correction_vector(correction)
+    print(f"E22 held-out-basin correction ({correction['variant']}, "
+          f"id={correction['correction_id']}): annual +{resid.mean():.3f} C, "
+          f"Feb {resid[1]:+.3f}, Mar {resid[2]:+.3f} C", flush=True)
     z = (sites.elevation_m.to_numpy(float) / 1000.0)
     site_cols = sites.CODIGO.astype(str).tolist()
 
@@ -268,7 +293,7 @@ def main() -> None:
         stack = []
         for gcm in gcms:
             ta = np.load(CACHE / f"{gcm}_{exp}_{len(sites)}_ta.npy")
-            stack.append(project_tw(mod, model, ta, z, months))
+            stack.append(project_tw(mod, model, ta, z, months, resid))
         tw_med = np.nanmedian(np.stack(stack), axis=0)  # (n_sites, n_days)
         frame = pd.DataFrame(tw_med.T, columns=site_cols)
         frame.insert(0, "date", dates.to_numpy())
@@ -284,10 +309,14 @@ def main() -> None:
     wide = pd.concat(per_exp.values(), ignore_index=True)
     wide = wide.sort_values(["scenario", "date"])
     wide.to_csv(WIDE, index=False)
+    BC.write_marker(WIDE, correction, n_rows=len(wide),
+                    note="wide daily Tw written corrected by script 13")
     print(f"wrote {WIDE} ({len(wide):,} rows x {wide.shape[1]} cols)")
 
     baseline = pd.concat(baseline_rows, ignore_index=True)
     baseline.to_csv(BASELINE_CSV, index=False)
+    BC.write_marker(BASELINE_CSV, correction, n_rows=len(baseline),
+                    note="baseline mean Tw written corrected by script 13")
     print(f"wrote {BASELINE_CSV} ({len(baseline)} sites)")
 
     if args.per_gcm:
@@ -299,8 +328,8 @@ def main() -> None:
             for gcm in gcms:
                 ta_h = np.load(CACHE / f"{gcm}_historical_{len(sites)}_ta.npy")
                 ta_f = np.load(CACHE / f"{gcm}_{scen}_{len(sites)}_ta.npy")
-                tw_h = project_tw(mod, model, ta_h, z, hist_months)
-                tw_f = project_tw(mod, model, ta_f, z, f_months)
+                tw_h = project_tw(mod, model, ta_h, z, hist_months, resid)
+                tw_f = project_tw(mod, model, ta_f, z, f_months, resid)
                 frame_h = pd.DataFrame(tw_h.T, columns=site_cols)
                 frame_h.insert(0, "date", hist_dates.to_numpy())
                 frame_h.insert(1, "scenario", "historical")
@@ -310,6 +339,8 @@ def main() -> None:
                 out = _fill_gaps(pd.concat([frame_h, frame_f], ignore_index=True))
                 path = C.TABLES / f"water_temp_daily_guadex_sites_wide_{scen}_{gcm}.csv"
                 out.to_csv(path, index=False)
+                BC.write_marker(path, correction, n_rows=len(out),
+                                note="per-GCM wide daily Tw written corrected by script 13")
             print(f"  per-GCM wide files written for {scen} ({len(gcms)} GCMs)", flush=True)
 
     if args.long:
@@ -321,10 +352,18 @@ def main() -> None:
     C.record("Projected daily Tw at all GuadeX sites (WP1)", path=str(WIDE),
              license=LICENSE, version="PNACC 2024 CMIP6 5km ESD-RegBA + Model 2",
              notes=f"{len(gcms)} GCMs x {len(SCENARIOS)} SSPs; {len(sites)} sites; "
-                   f"ensemble median; baseline {BASELINE}; horizon {FUTURE}")
+                   f"ensemble median; baseline {BASELINE}; horizon {FUTURE}; "
+                   f"E22 LOBO per-month correction {correction['correction_id']}")
     (C.LOGS / "projection_summary_guadex_sites.json").write_text(json.dumps({
         "n_sites": len(sites), "n_gcm": len(gcms), "scenarios": SCENARIOS,
         "baseline": BASELINE, "future": FUTURE,
+        "bias_correction": {
+            "variant": correction["variant"],
+            "correction_id": correction["correction_id"],
+            "monthly_c": {m: BC.month_value(correction, m) for m in BC.MONTHS},
+            "annual_mean_pooled_c": BC.pooled_mean(correction),
+            "annual_mean_month_balanced_c": BC.annual_mean(correction),
+        },
     }, indent=2), encoding="utf-8")
 
 

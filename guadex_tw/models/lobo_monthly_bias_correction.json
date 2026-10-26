@@ -1,0 +1,41 @@
+{
+  "variant": "LOBO_Model2_elevation",
+  "definition": "mean(tw_obs - pred) by calendar month over leave-one-basin-out (Spain non-Guadalquivir train -> Guadalquivir test) folds",
+  "sign": "add to model prediction (positive = model too cold)",
+  "source": "models/lobo_predictions.csv",
+  "months": {
+    "1": 1.3642599499,
+    "2": 2.223732546,
+    "3": 2.2867375659,
+    "4": 1.6307194615,
+    "5": 1.8265192749,
+    "6": 0.8361366477,
+    "7": -0.5141572289,
+    "8": 0.1367243202,
+    "9": -0.2608238752,
+    "10": 1.3922388214,
+    "11": 1.2061603052,
+    "12": 0.984041775
+  },
+  "n_by_month": {
+    "1": 62,
+    "2": 61,
+    "3": 65,
+    "4": 61,
+    "5": 64,
+    "6": 63,
+    "7": 59,
+    "8": 59,
+    "9": 67,
+    "10": 78,
+    "11": 72,
+    "12": 60
+  },
+  "n_obs": 771,
+  "annual_mean_pooled": 1.1059071450290452,
+  "annual_mean_month_balanced": 1.0926907969564248,
+  "jja_mean": 0.15290124633737273,
+  "djf_mean": 1.5240114236216875,
+  "generated_utc": "2026-09-30T10:15:50Z",
+  "correction_id": "a9679aefe70b5af9"
+}

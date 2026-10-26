@@ -118,6 +118,9 @@ function load_sensitivity_settings(GUADEX_PARAMS)
     stress = get(GUADEX_PARAMS, "temperature_stress", Dict{String,Any}())
     shared(key, default) = get(os, key, get(climate, key, default))
 
+    # E13-E16/E18: opt-in biological-assumption options (all legacy by default).
+    bio = SimulationParameters.biological_options(GUADEX_PARAMS)
+
     days_per_year = Int(GUADEX_PARAMS["general"]["days_per_year"])
     start_year = Int(shared("start_year", 2026))
     end_year = parse(Int, get(ENV, "GUADEX_SENSITIVITY_END_YEAR",
@@ -132,7 +135,7 @@ function load_sensitivity_settings(GUADEX_PARAMS)
         start_year = start_year,
         end_year = end_year,
         simulation_years = simulation_years,
-        year_offsets = collect(0:(simulation_years - 1)),
+        year_offsets = collect(1:simulation_years),
         year_labels = collect(start_year:end_year),
         save_interval_days = Float64(shared("save_interval_days", 30.4167)),
         presence_threshold = Float64(shared("presence_threshold", 0.1)),
@@ -154,8 +157,22 @@ function load_sensitivity_settings(GUADEX_PARAMS)
         spin_up_tol = parse(Float64, get(ENV, "GUADEX_SENSITIVITY_SPINUP_TOL",
             string(smoke ? 1.0 : shared("spin_up_tol", 5.0e-5)))),
         spin_up_criterion = Symbol(lowercase(get(ENV, "GUADEX_SENSITIVITY_SPINUP_CRITERION",
-            string(shared("spin_up_criterion", "basin"))))),
+            string(shared("spin_up_criterion", "both"))))),
+        spin_up_composition_tol = parse(Float64, get(ENV, "GUADEX_SENSITIVITY_SPINUP_COMPOSITION_TOL",
+            string(smoke ? 1.0 : shared("spin_up_composition_tol", 1.0e-2)))),
+        spin_up_min_years = parse(Int, get(ENV, "GUADEX_SENSITIVITY_SPINUP_MIN_YEARS",
+            string(smoke ? 1 : shared("spin_up_min_years", 10)))),
         spin_up_progress_every = Int(shared("spin_up_progress_every", 50)),
+        # C3: projection route, shared with `run_climate_scenarios.jl`.  The
+        # default (key absent) is "full_burnin", which integrates to the E4
+        # stop rule above; "interim_observed" starts from the OBSERVED community
+        # and integrates exactly `interim_spin_up_years` baseline years under the
+        # seasonal schedule, so the sweeps initialise from the SAME corrected
+        # state as the climate ensemble instead of a 600-year burn-in.
+        projection_route = projection_route(get(ENV, "GUADEX_SENSITIVITY_PROJECTION_ROUTE",
+            string(shared("projection_route", "")))),
+        interim_spin_up_years = parse(Int, get(ENV, "GUADEX_SENSITIVITY_INTERIM_SPIN_UP_YEARS",
+            string(shared("interim_spin_up_years", 3)))),
         heat_stress_enabled = _bool_setting(get(ENV, "GUADEX_SENSITIVITY_HEAT_STRESS",
             string(get(os, "heat_stress_enabled",
                 get(stress, "enabled", true))))),
@@ -171,6 +188,13 @@ function load_sensitivity_settings(GUADEX_PARAMS)
         output_dir = get(ENV, "GUADEX_SENSITIVITY_OUTPUT_DIR",
             string(shared("output_dir", "results/sensitivity_obstacles"))),
         smoke = smoke,
+        # E13-E16/E18 biological-assumption options.
+        absence_growth_fraction = bio.absence_growth_fraction,
+        pool_capacity_mode = bio.pool_capacity_mode,
+        fishless_dificil_capacity = bio.fishless_dificil_capacity,
+        nonreproducing_local_growth = bio.nonreproducing_local_growth,
+        exclude_fishfarm_eel_records = bio.exclude_fishfarm_eel_records,
+        salinity_envelope = bio.salinity_envelope,
     )
 end
 
@@ -230,15 +254,22 @@ end
 """
     load_climate_model_forcing(forcing_file, sites, scenario, gcm; kwargs...)
 
-Load the per-GCM daily series and build the daily [`TemperatureSchedule`](@ref)
-plus the annual-mean warming matrix and the exposure forcing.  The anomaly is
-taken against the same file's `historical` scenario (1986-2005 by default), so
-the run reproduces `run_climate_scenarios.jl` in per-GCM daily mode.
-"""
+    Load the per-GCM daily series and build the daily [`TemperatureSchedule`](@ref)
+    plus the annual-mean warming matrix and the exposure forcing.
+
+    The anomaly is referenced to `baseline_means` — pass the SAME per-site vector
+    used as `MetacommunityParams.temperatures` (the corrected `tw_baseline_mean`
+    level), exactly as `run_climate_scenarios.jl` and `run_climate_experiments.jl`
+    do, so `level + anomaly` reconstructs the corrected daily series with no
+    offset.  Only when `baseline_means === nothing` does it fall back to this
+    file's own `historical` window mean (the legacy behaviour, which leaves the
+    corrected level's residual offset).
+    """
 function load_climate_model_forcing(forcing_file::AbstractString, sites,
         scenario::AbstractString, gcm::AbstractString;
         baseline_start::Int=SENSITIVITY_BASELINE_START,
         baseline_end::Int=SENSITIVITY_BASELINE_END,
+        baseline_means::Union{Nothing,AbstractVector}=nothing,
         days_per_year::Real=365.0,
         year_labels::AbstractVector=Int[])
     path = per_gcm_forcing_path(forcing_file, scenario, gcm)
@@ -248,10 +279,16 @@ function load_climate_model_forcing(forcing_file::AbstractString, sites,
     pivot(df, sc) = wide ? wide_forcing_matrix(df, sites; scenario=sc) :
         daily_forcing_matrix(df, sites; scenario=sc)
     fdates, ftemps = pivot(src, scenario)
-    bdates, btemps = pivot(src, "historical")
-    schedule, _ = daily_temperature_schedule(ftemps; dates=fdates,
-        baseline_temps=btemps, baseline_dates=bdates,
-        baseline_start=baseline_start, baseline_end=baseline_end)
+    schedule, resolved_means = if baseline_means === nothing
+        bdates, btemps = pivot(src, "historical")
+        daily_temperature_schedule(ftemps; dates=fdates,
+            baseline_temps=btemps, baseline_dates=bdates,
+            baseline_start=baseline_start, baseline_end=baseline_end)
+    else
+        daily_temperature_schedule(ftemps; dates=fdates,
+            baseline_start=baseline_start, baseline_end=baseline_end,
+            baseline_means=baseline_means)
+    end
     years_out, warming_out = annual_mean_deltas_by_year(schedule, fdates)
     columns = [findfirst(==(y), years_out) for y in year_labels]
     any(isnothing, columns) &&
@@ -263,7 +300,7 @@ function load_climate_model_forcing(forcing_file::AbstractString, sites,
         warming = warming,
         forcing_temps = ftemps,
         forcing_dates = fdates,
-        baseline_means = [mean(@view btemps[i, :]) for i in 1:size(btemps, 1)],
+        baseline_means = resolved_means,
     )
 end
 
@@ -301,19 +338,58 @@ end
     _stable_digest(s)
 
 Deterministic 16-hex-character FNV-1a digest, used to keep cache filenames short
-enough for Windows path limits.  Unlike `Base.hash`, it is stable across
-sessions and Julia versions.
+enough for Windows path limits.  Thin alias for `Guadex.stable_digest` so there
+is a single FNV-1a implementation.
 """
 function _stable_digest(s::AbstractString)
-    h = 0xcbf29ce484222325
-    for b in codeunits(s)
-        h = (h ⊻ UInt64(b)) * 0x00000100000001b3
-    end
-    return string(h, base=16, pad=16)
+    return stable_digest(s)
+end
+
+"""
+    _burnin_digest_options(settings, extra)
+
+Resolved burn-in options folded into the parameter digest: forcing mode and
+baseline window, burn-in years/tolerance/criterion, carrying-capacity scaling,
+the effective upstream cost and the caller-supplied `extra` fingerprint
+(obstacle configuration, interaction matrix, thermal sigma).  The model arrays
+themselves (including the heat-stress slope and thermal sigmas) are covered by
+the model-state half of `parameter_digest`.
+"""
+function _burnin_digest_options(settings, extra::AbstractString)
+    return Dict{String,Any}(
+        "forcing_mode" => "daily",
+        "daily_forcing_file" => basename(String(settings.daily_forcing_file)),
+        "daily_forcing_fingerprint" => file_fingerprint(String(settings.daily_forcing_file)),
+        "baseline_period_start" => settings.baseline_period_start,
+        "baseline_period_end" => settings.baseline_period_end,
+        "spin_up" => settings.spin_up,
+        "spin_up_max_years" => settings.spin_up_max_years,
+        "spin_up_tol" => settings.spin_up_tol,
+        "spin_up_composition_tol" => settings.spin_up_composition_tol,
+        "spin_up_min_years" => settings.spin_up_min_years,
+        "spin_up_criterion" => string(settings.spin_up_criterion),
+        "spin_up_composition_active_floor" => Float64(Guadex.SPIN_UP_COMPOSITION_ACTIVE_FLOOR),
+        # C3: route is science-affecting (it picks the initial state), so it must
+        # participate in the digest, the cache key and the run fingerprint.
+        "projection_route" => string(get(settings, :projection_route, :full_burnin)),
+        "interim_spin_up_years" => Int(get(settings, :interim_spin_up_years, 0)),
+        "carrying_capacity_base_scaling" => settings.carrying_capacity_base_scaling,
+        "carrying_capacity_scaling" => settings.carrying_capacity_scaling,
+        "upstream_cost" => settings.upstream_cost_default,
+        # E13-E16/E18: resolved biological-assumption options participate in the
+        # digest so changing one invalidates the burn-in cache.
+        "absence_growth_fraction" => get(settings, :absence_growth_fraction, 0.1),
+        "pool_capacity_mode" => string(get(settings, :pool_capacity_mode, :legacy)),
+        "fishless_dificil_capacity" => string(get(settings, :fishless_dificil_capacity, :legacy)),
+        "nonreproducing_local_growth" => string(get(settings, :nonreproducing_local_growth, :legacy)),
+        "exclude_fishfarm_eel_records" => get(settings, :exclude_fishfarm_eel_records, false),
+        "salinity_envelope" => get(settings, :salinity_envelope, false),
+        "extra" => extra,
+    )
 end
 
 function _spinup_cache_key(settings; tag="default", extra::AbstractString="",
-        initial_state=nothing, baseline_temps=nothing)
+        initial_state=nothing, baseline_temps=nothing, param_digest::AbstractString="")
     initial_fp = initial_state === nothing ? "na" :
         "n$(length(initial_state))_s$(round(sum(initial_state), digits=6))"
     baseline_fp = baseline_temps === nothing ? "na" :
@@ -332,11 +408,17 @@ function _spinup_cache_key(settings; tag="default", extra::AbstractString="",
         "maxloss=$(settings.heat_stress_max_loss)",
         "years=$(settings.spin_up_max_years)",
         "tol=$(settings.spin_up_tol)",
+        "comptol=$(settings.spin_up_composition_tol)",
+        "compfloor=$(Guadex.SPIN_UP_COMPOSITION_ACTIVE_FLOOR)",
+        "minyr=$(settings.spin_up_min_years)",
         "crit=$(settings.spin_up_criterion)",
+        "route=$(get(settings, :projection_route, :full_burnin))",
+        "interim=$(get(settings, :interim_spin_up_years, 0))",
         "base=$(settings.baseline_period_start)-$(settings.baseline_period_end)",
         "file=$(basename(forcing_path))",
         "forc=$forcing_fp",
         "uc=$(settings.upstream_cost_default)",
+        "pdigest=$param_digest",
         "extra=$extra",
         "init=$initial_fp",
         "baseline=$baseline_fp",
@@ -354,9 +436,11 @@ Integrate to the baseline equilibrium once and cache the state under
 `results/sensitivity_spinup_cache/` so repeated scripts (and a resumed sweep)
 reuse it.  The cache key covers the burn-in controls, the effective upstream
 cost, the caller-supplied `extra` fingerprint (obstacle configuration and, for
-the alt sweep, the interaction matrix + sigma), the forcing file size/mtime and
-the initial state, so a changed run configuration cannot silently reuse a stale
-equilibrium.  Disable reuse with `GUADEX_SPINUP_REUSE=0`, or clear the cache with
+the alt sweep, the interaction matrix + sigma), the forcing file size/mtime, the
+initial state **and the full parameter digest** (interaction/growth/temperature/
+carrying-capacity/thermal arrays, heat-stress slope, dispersal scaling, run
+options and the code version), so a changed model parameter or code version
+cannot silently reuse a stale equilibrium.  Disable reuse with `GUADEX_SPINUP_REUSE=0`, or clear the cache with
 `GUADEX_SPINUP_FORCE=1`.
 """
 function get_or_compute_spinup(settings, params::MetacommunityParams, initial_state,
@@ -365,8 +449,9 @@ function get_or_compute_spinup(settings, params::MetacommunityParams, initial_st
     cache_dir = get(ENV, "GUADEX_SPINUP_CACHE_DIR", joinpath("results", "sensitivity_spinup_cache"))
     reuse = _bool_setting(get(ENV, "GUADEX_SPINUP_REUSE", "1"))
     force = _bool_setting(get(ENV, "GUADEX_SPINUP_FORCE", "0"))
+    param_digest = parameter_digest(params; options=_burnin_digest_options(settings, extra))
     path = joinpath(cache_dir, "spinup_" *
-        _spinup_cache_key(settings; tag=tag, extra=extra,
+        _spinup_cache_key(settings; tag=tag, extra=extra, param_digest=param_digest,
             initial_state=initial_state, baseline_temps=baseline_temps) * ".jld2")
 
     if reuse && !force && isfile(path)
@@ -374,7 +459,16 @@ function get_or_compute_spinup(settings, params::MetacommunityParams, initial_st
             (state=collect(Float64, f["state"]), converged=Bool(f["converged"]),
              years=Int(f["years"]), last_basin_change=Float64(f["last_basin_change"]),
              last_q95_change=Float64(f["last_q95_change"]),
-             last_relative_change=Float64(f["last_relative_change"]))
+             last_relative_change=Float64(f["last_relative_change"]),
+             last_composition_change = haskey(f, "last_composition_change") ?
+                 Float64(f["last_composition_change"]) : NaN,
+             last_composition_change_all_cells =
+                 haskey(f, "last_composition_change_all_cells") ?
+                     Float64(f["last_composition_change_all_cells"]) : NaN,
+             composition_active_cells = haskey(f, "composition_active_cells") ?
+                 Int(f["composition_active_cells"]) : 0,
+             criteria = haskey(f, "criteria") ?
+                 Symbol.(f["criteria"]) : spin_up_criteria(settings.spin_up_criterion))
         end
         println("  burn-in: reusing cached state ($(cached.years) yr, " *
                 "converged=$(cached.converged)) from $path")
@@ -384,21 +478,45 @@ function get_or_compute_spinup(settings, params::MetacommunityParams, initial_st
     schedule = baseline_temps === nothing ? nothing :
         baseline_climatology_schedule(baseline_temps, baseline_dates, 1;
             days_per_year=Float64(settings.days_per_year))
-    println("  burn-in: integrating under $(baseline_temps === nothing ? "static" : "seasonal") " *
-            "baseline (max $(settings.spin_up_max_years) yr, tol=$(settings.spin_up_tol), " *
-            "criterion=:$(settings.spin_up_criterion))...")
-    spin = spin_up(params; initial_state=initial_state, schedule=schedule,
-        days_per_year=Float64(settings.days_per_year),
-        max_years=settings.spin_up_max_years, tol=settings.spin_up_tol,
-        criterion=settings.spin_up_criterion,
-        progress_every=settings.spin_up_progress_every)
+    route = get(settings, :projection_route, :full_burnin)
+    spin = if route === :interim_observed
+        # C3 interim route (matches `run_climate_scenarios.jl`): observed start
+        # plus EXACTLY `interim_spin_up_years` baseline years; the E4 convergence
+        # stop rule is deliberately bypassed on this route only.
+        interim_years = Int(get(settings, :interim_spin_up_years, 3))
+        println("  burn-in (C3 interim route): observed start + $(interim_years) fixed " *
+                "baseline year(s) under $(baseline_temps === nothing ? "static" : "seasonal") " *
+                "forcing (E4 stop rule bypassed)")
+        interim = interim_observed_spin_up(params; initial_state=initial_state,
+            schedule=schedule, years=interim_years,
+            days_per_year=Float64(settings.days_per_year),
+            progress_every=settings.spin_up_progress_every)
+        interim.spin === nothing ? observed_initial_state(initial_state) : interim.spin
+    else
+        println("  burn-in: integrating under $(baseline_temps === nothing ? "static" : "seasonal") " *
+                "baseline (max $(settings.spin_up_max_years) yr, tol=$(settings.spin_up_tol), " *
+                "composition_tol=$(settings.spin_up_composition_tol), min_years=$(settings.spin_up_min_years), " *
+                "criterion=:$(settings.spin_up_criterion))...")
+        spin_up(params; initial_state=initial_state, schedule=schedule,
+            days_per_year=Float64(settings.days_per_year),
+            max_years=settings.spin_up_max_years, tol=settings.spin_up_tol,
+            composition_tol=settings.spin_up_composition_tol, min_years=settings.spin_up_min_years,
+            criterion=settings.spin_up_criterion,
+            progress_every=settings.spin_up_progress_every)
+    end
     mkpath(cache_dir)
     jldsave(path; state=spin.state, converged=spin.converged, years=spin.years,
         last_basin_change=spin.last_basin_change, last_q95_change=spin.last_q95_change,
-        last_relative_change=spin.last_relative_change)
+        last_relative_change=spin.last_relative_change,
+        last_composition_change=spin.last_composition_change,
+        last_composition_change_all_cells=spin.last_composition_change_all_cells,
+        composition_active_cells=spin.composition_active_cells,
+        criteria=spin.criteria)
     println("  burn-in: years=$(spin.years), converged=$(spin.converged), " *
             "basin change=$(spin.last_basin_change), q95=$(spin.last_q95_change), " *
-            "max=$(spin.last_relative_change)")
+            "comp_q95=$(spin.last_composition_change) " *
+            "(all_cells=$(spin.last_composition_change_all_cells), " *
+            "active=$(spin.composition_active_cells)), max=$(spin.last_relative_change)")
     return spin
 end
 
@@ -497,15 +615,22 @@ const SENSITIVITY_REQUIRED_EXPORTS = [
 
 """
     sensitivity_run_fingerprint(settings, model; upstream_cost, passability_scenario,
-                                interaction_matrix=nothing, sigma=nothing)
+                                interaction_matrix=nothing, sigma=nothing, params=nothing,
+                                digest_options=Dict())
 
 Science-affecting identity of one run.  Written with the completion marker and
 compared against both the marker and, for legacy runs, the stored JLD2, so a run
-produced under different settings is never reused or relabelled.
+produced under different settings is never reused or relabelled.  When the
+resolved `params` are supplied the fingerprint also carries the full
+`"parameter_digest"` (model arrays + run options + code version), so changing any
+model parameter or the code version invalidates the run even if the named
+settings are unchanged.
 """
 function sensitivity_run_fingerprint(settings, model; upstream_cost, passability_scenario,
         interaction_matrix::Union{Nothing,AbstractString}=nothing,
-        sigma::Union{Nothing,Real}=nothing)
+        sigma::Union{Nothing,Real}=nothing,
+        params::Union{Nothing,MetacommunityParams}=nothing,
+        digest_options::AbstractDict=Dict{String,Any}())
     fingerprint = Dict{String,Any}(
         "start_year" => settings.start_year, "end_year" => settings.end_year,
         "climate_scenario" => String(model.scenario), "gcm" => String(model.gcm),
@@ -516,11 +641,23 @@ function sensitivity_run_fingerprint(settings, model; upstream_cost, passability
         "thermal_optima_fraction" => settings.thermal_optima_fraction,
         "spin_up_max_years" => settings.spin_up_max_years,
         "spin_up_tol" => settings.spin_up_tol,
+        "spin_up_composition_tol" => settings.spin_up_composition_tol,
+        "spin_up_min_years" => settings.spin_up_min_years,
         "spin_up_criterion" => String(settings.spin_up_criterion),
+        "spin_up_composition_active_floor" => Float64(Guadex.SPIN_UP_COMPOSITION_ACTIVE_FLOOR),
+        # C3: which projection route produced the initial state (science-affecting).
+        "projection_route" => string(get(settings, :projection_route, :full_burnin)),
+        "interim_spin_up_years" => Int(get(settings, :interim_spin_up_years, 0)),
         "daily_forcing_file" => basename(String(settings.daily_forcing_file)),
     )
     interaction_matrix === nothing || (fingerprint["interaction_matrix"] = String(interaction_matrix))
     sigma === nothing || (fingerprint["thermal_sigma_multiplier"] = Float64(sigma))
+    if params !== nothing
+        options = merge(_burnin_digest_options(settings, ""), Dict{String,Any}(digest_options))
+        options["upstream_cost"] = Float64(upstream_cost)
+        options["passability_scenario"] = String(passability_scenario)
+        fingerprint["parameter_digest"] = parameter_digest(params; options=options)
+    end
     return fingerprint
 end
 
@@ -590,7 +727,12 @@ script-specific keys (interaction matrix, thermal sigma).
 function sensitivity_run_metadata(settings, model; script::AbstractString,
         upstream_cost::Real, passability_scenario::AbstractString, warming_end::Real,
         heat_stress_k::Real, spin_years::Integer, spin_converged::Bool,
-        obstacle_mode, extras::AbstractDict=Dict{String,Any}())
+        spin_basin_change::Real=NaN, spin_composition_change::Real=NaN,
+        spin_composition_change_all_cells::Real=NaN,
+        spin_composition_active_cells::Integer=0,
+        spin_criteria::Union{Nothing,AbstractVector}=nothing,
+        obstacle_mode, extras::AbstractDict=Dict{String,Any}(),
+        realised::Union{Nothing,NamedTuple}=nothing)
     metadata = Dict{String,Any}(
         "script" => String(script),
         "climate_scenario" => String(model.scenario), "gcm" => String(model.gcm),
@@ -598,13 +740,42 @@ function sensitivity_run_metadata(settings, model; script::AbstractString,
         "upstream_cost" => Float64(upstream_cost),
         "passability_scenario" => String(passability_scenario),
         "warming_end_degc" => Float64(warming_end),
+        "warming_end_degc_source" => "realised_max_over_sites",
+        # C7: site-and-window mean of the applied anomaly, the dose-response
+        # regressor (the max-over-sites `warming_end_degc` is kept for continuity).
+        "realised_warming_2026_2045_mean_degc" =>
+            realised === nothing ? NaN : Float64(realised.mean_2026_2045),
+        "realised_warming_2036_2045_mean_degc" =>
+            realised === nothing ? NaN : Float64(realised.mean_2036_2045),
+        "realised_warming_n_sites" => realised === nothing ? 0 : Int(realised.n_sites),
         "heat_stress_k" => Float64(heat_stress_k),
         "spin_up" => settings.spin_up,
         "spin_up_years" => Int(spin_years), "spin_up_converged" => Bool(spin_converged),
+        # E4: both convergence diagnostics and the criteria that were required.
+        # `spin_up_composition_q95_change` is the robust active-cell statistic
+        # used by the stop rule; `..._all_cells` is the raw diagnostic.
+        "spin_up_total_biomass_change" => Float64(spin_basin_change),
+        "spin_up_composition_q95_change" => Float64(spin_composition_change),
+        "spin_up_composition_q95_change_all_cells" => Float64(spin_composition_change_all_cells),
+        "spin_up_composition_active_cells" => Int(spin_composition_active_cells),
+        "spin_up_criteria" => spin_criteria === nothing ? String[] : String.(spin_criteria),
+        "spin_up_composition_tol" => Float64(settings.spin_up_composition_tol),
+        "spin_up_composition_active_floor" => Float64(Guadex.SPIN_UP_COMPOSITION_ACTIVE_FLOOR),
+        "spin_up_min_years" => Int(settings.spin_up_min_years),
+        # C3: record which projection route produced the initial state.
+        "projection_route" => string(get(settings, :projection_route, :full_burnin)),
+        "interim_spin_up_years" => Int(get(settings, :interim_spin_up_years, 0)),
         "carrying_capacity_base_scaling" => settings.carrying_capacity_base_scaling,
         "carrying_capacity_scaling" => settings.carrying_capacity_scaling,
         "thermal_optima_fraction" => settings.thermal_optima_fraction,
         "obstacle_mode" => string(obstacle_mode),
+        # E13-E16/E18: resolved biological-assumption options.
+        "absence_growth_fraction" => get(settings, :absence_growth_fraction, 0.1),
+        "pool_capacity_mode" => string(get(settings, :pool_capacity_mode, :legacy)),
+        "fishless_dificil_capacity" => string(get(settings, :fishless_dificil_capacity, :legacy)),
+        "nonreproducing_local_growth" => string(get(settings, :nonreproducing_local_growth, :legacy)),
+        "exclude_fishfarm_eel_records" => get(settings, :exclude_fishfarm_eel_records, false),
+        "salinity_envelope" => get(settings, :salinity_envelope, false),
     )
     merge!(metadata, extras)
     return metadata
@@ -617,7 +788,10 @@ Fallback state used when the burn-in is disabled (`spin_up = false`).
 """
 function observed_initial_state(u0_obs)
     return (state=vec(u0_obs), converged=false, years=0,
-        last_basin_change=NaN, last_q95_change=NaN, last_relative_change=NaN)
+        criteria=Symbol[],
+        last_basin_change=NaN, last_q95_change=NaN, last_relative_change=NaN,
+        last_composition_change=NaN, last_composition_change_all_cells=NaN,
+        composition_active_cells=0)
 end
 
 # ---------------------------------------------------------------------------
@@ -672,11 +846,25 @@ function empty_sensitivity_index(; with_matrix::Bool=false)
     base = (
         climate_scenario=String[], gcm=String[], upstream_cost=Float64[],
         passability_scenario=String[], end_year=Int[], warming_end_degc=Float64[],
-        basin_native_richness=Float64[], basin_native_extinction_risk=Float64[],
+        realised_warming_2026_2045_mean_degc=Union{Missing,Float64}[],
+        realised_warming_2036_2045_mean_degc=Union{Missing,Float64}[],
+        realised_warming_n_sites=Union{Missing,Int}[],
+        basin_native_richness=Float64[], basin_realised_richness_loss=Float64[],
         basin_total_biomass=Float64[], basin_native_biomass=Float64[],
         basin_invasive_biomass=Float64[], basin_mean_temperature_c=Float64[],
         st_final_biomass=Float64[], st_relative_biomass_change=Float64[],
-        st_quasi_extinct_fraction=Float64[], run_dir=String[])
+        st_quasi_extinct_fraction=Float64[],
+        # E4: actual burn-in years and the convergence diagnostics, so the report
+        # can cite the real (matrix-specific) values instead of a hard-coded one.
+        spin_up_years=Union{Missing,Int}[],
+        spin_up_total_biomass_change=Union{Missing,Float64}[],
+        spin_up_composition_q95_change=Union{Missing,Float64}[],
+        spin_up_composition_q95_change_all_cells=Union{Missing,Float64}[],
+        spin_up_composition_active_cells=Union{Missing,Int}[],
+        spin_up_composition_active_floor=Union{Missing,Float64}[],
+        spin_up_composition_tol=Union{Missing,Float64}[],
+        spin_up_criteria=String[],
+        run_dir=String[])
     if with_matrix
         return DataFrame(; interaction_matrix=String[], thermal_sigma_multiplier=Float64[],
             base...)
@@ -693,7 +881,9 @@ Assemble one summary-index row as a `Dict{String,Any}`.
 function index_row_values(run_dir::AbstractString, settings, model;
         upstream_cost::Real, passability_scenario::AbstractString, warming_end::Real,
         matrix::Union{Nothing,AbstractString}=nothing,
-        sigma::Union{Nothing,Real}=nothing)
+        sigma::Union{Nothing,Real}=nothing,
+        spin::Union{Nothing,NamedTuple}=nothing,
+        realised::Union{Nothing,NamedTuple}=nothing)
     basin = final_basin_metrics(run_dir, settings.end_year)
     st_final, st_rel, st_qe = final_species_metrics(run_dir, "ST")
     row = Dict{String,Any}(
@@ -703,8 +893,13 @@ function index_row_values(run_dir::AbstractString, settings, model;
         "passability_scenario" => String(passability_scenario),
         "end_year" => settings.end_year,
         "warming_end_degc" => Float64(warming_end),
+        "realised_warming_2026_2045_mean_degc" =>
+            realised === nothing ? NaN : Float64(realised.mean_2026_2045),
+        "realised_warming_2036_2045_mean_degc" =>
+            realised === nothing ? NaN : Float64(realised.mean_2036_2045),
+        "realised_warming_n_sites" => realised === nothing ? 0 : Int(realised.n_sites),
         "basin_native_richness" => get(basin, "mean_native_richness", NaN),
-        "basin_native_extinction_risk" => get(basin, "mean_native_extinction_risk", NaN),
+        "basin_realised_richness_loss" => get(basin, "mean_realised_richness_loss", NaN),
         "basin_total_biomass" => get(basin, "mean_total_biomass", NaN),
         "basin_native_biomass" => get(basin, "mean_native_biomass", NaN),
         "basin_invasive_biomass" => get(basin, "mean_invasive_biomass", NaN),
@@ -714,6 +909,21 @@ function index_row_values(run_dir::AbstractString, settings, model;
         "st_quasi_extinct_fraction" => st_qe,
         "run_dir" => String(run_dir),
     )
+    if spin !== nothing
+        row["spin_up_years"] = Int(spin.years)
+        row["spin_up_total_biomass_change"] = Float64(spin.last_basin_change)
+        row["spin_up_composition_q95_change"] = Float64(spin.last_composition_change)
+        row["spin_up_composition_q95_change_all_cells"] =
+            hasproperty(spin, :last_composition_change_all_cells) ?
+                Float64(spin.last_composition_change_all_cells) : NaN
+        row["spin_up_composition_active_cells"] =
+            hasproperty(spin, :composition_active_cells) ?
+                Int(spin.composition_active_cells) : 0
+        row["spin_up_composition_active_floor"] =
+            Float64(Guadex.SPIN_UP_COMPOSITION_ACTIVE_FLOOR)
+        row["spin_up_composition_tol"] = Float64(settings.spin_up_composition_tol)
+        row["spin_up_criteria"] = join(String.(spin.criteria), ";")
+    end
     if matrix !== nothing
         row["interaction_matrix"] = String(matrix)
         row["thermal_sigma_multiplier"] = Float64(sigma)

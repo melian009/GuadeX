@@ -56,6 +56,19 @@ upstream_passability = 0.1
 downstream_passability = 0.5
 
 # ---------------------------------------------------------------------------
+# Dispersal-graph construction (issue C4).
+#
+# "legacy" keeps the original within-sub-catchment chaining plus elevation
+# outlet chain (the default, so existing results are reproduced unchanged).
+# "on_path" rebuilds a dendritic tree from the network-distance matrix with the
+# on-path parent rule and an MST join of the roots.
+# ---------------------------------------------------------------------------
+# "on_path" uses the code defaults rtol = 0.02, atol = 200 m for the on-path
+# test |D(i,k) - (d(i) - d(k))| <= rtol*D(i,k) + atol (see prepare_ode_data).
+[connectivity]
+method = "legacy"
+
+# ---------------------------------------------------------------------------
 # Species groups used to classify simulation outputs.
 #
 # `native` includes ST (Salmo trutta), the cold-water keystone whose empirical
@@ -70,6 +83,55 @@ downstream_passability = 0.5
 native = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO", "ST"]
 invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
 migratory = ["AA", "AAL", "LR", "MC"]
+
+# ---------------------------------------------------------------------------
+# Explicit, opt-in biological-assumption options (E13-E16, E18).
+#
+# EVERY option defaults to the behaviour the model had before the option existed,
+# so the shipped configuration and the test suite reproduce the historical
+# results exactly.  These are decision options for the team, not calibrated
+# values; see docs/climate_scenarios.md for the trade-offs.  Changing any value
+# changes the parameter digest, so cached burn-ins and completed runs are
+# invalidated rather than silently reused.
+# ---------------------------------------------------------------------------
+
+[biological_options]
+# E13 — fraction of the local growth rate given to a species observed ABSENT at
+# a site (build_intrinsic_growth_rates).  0.1 is the historical default.  1.0
+# removes the presence penalty so temperature/habitat decide establishment (the
+# review's recommendation); 0.0 forbids local growth at absent sites.  Note the
+# interaction with E15/E16 below.
+absence_growth_fraction = 0.1
+
+# E14 — carrying capacity at isolated pools (EN_POZAS = Si; 84 sites holding
+# ~56% of total density).  "legacy" uses their raw observed density; "cap" clips
+# a pool site's K at the non-pool median; "exclude" replaces it with that median
+# so a single-visit pool sample cannot set the capacity.  The choice strongly
+# affects the reported high-K tail.
+pool_capacity_mode = "legacy"
+
+# E15 — carrying capacity at sites the field team judged unable to hold fish
+# (SIN_PECES = DIFICIL; 56 sites).  "legacy" keeps their observed capacity;
+# "near_zero" sets K = 1e-6 (the ODE's own floor), making them transit-only.
+fishless_dificil_capacity = "legacy"
+
+# E16 — local growth of species documented as not reproducing within the basin
+# (AA, LR, MC with REPRODU_WITHIN_THE_BASIN = no).  "legacy" keeps their
+# literature r; "zero" sets local r = 0, with recruitment to be represented
+# later as estuarine immigration.
+nonreproducing_local_growth = "legacy"
+
+# E16 — drop the four documented Guadiato fish-farm eel records (subcatchment
+# 14.0) before any builder reads the density table.  Default false keeps them.
+exclude_fishfarm_eel_records = false
+
+# E18 — apply a brackish/freshwater envelope for strictly brackish species
+# (AB, LR, MC) using the site CONDUCTIVIDAD as a salinity proxy: their local
+# growth is zeroed below 1000 uS/cm.  Euryhaline brackish/freshwater species
+# (AA, GH, CC, CG) are left unchanged because the observed data place them
+# across the conductivity range.  No elevation envelope is provided on purpose:
+# a static elevation envelope would block upslope range shifts under warming.
+salinity_envelope = false
 
 # ---------------------------------------------------------------------------
 # Modelled subcatchments.  Exploitation and passability scenarios apply one
@@ -156,7 +218,18 @@ thermal_optima_fraction = 0.5
 spin_up = true
 spin_up_max_years = 600
 spin_up_tol = 5.0e-5
-spin_up_criterion = "basin"
+# E4 stop rule: require BOTH the basin-total change (below `spin_up_tol`) and the
+# robust composition change (95th percentile of |Δ log N| over the site × species
+# cells whose density exceeds the 0.1-unit presence floor in at least one of the
+# two compared years, below `spin_up_composition_tol`) for at least
+# `spin_up_min_years` years.  The raw all-cells statistic is recorded as a
+# diagnostic but is not used by the stop rule.
+spin_up_criterion = "both"
+# 1e-2: measured robust statistic on real baseline data crosses this at ~yr 423
+# (<600 cap); the raw all-cells statistic plateaus near 1.4e-2 and never reaches
+# 1e-3, so it cannot be used as the stop tolerance.
+spin_up_composition_tol = 1.0e-2
+spin_up_min_years = 10
 spin_up_progress_every = 50
 heat_stress_enabled = true
 heat_stress_calibrate = true
@@ -169,6 +242,11 @@ output_dir = "results/sensitivity_obstacles"
 # The two temperature extremes of the 44-run climate ensemble, used as the
 # background climate for every obstacle/passability combination.  Each entry is
 # a scenario x GCM pair; the per-GCM daily files are read directly.
+#
+# C7: these are the fallback pair.  Re-derive them from the realised forcing on
+# the next re-run with `Guadex.select_climate_endpoints(runs_index)` (see
+# docs/climate_scenarios.md) and update this list; the function falls back to
+# this pair only when the realised columns are absent.
 climate_models = [
     { scenario = "ssp126", gcm = "IITM-ESM" },     # coolest run (0.28 degC by 2045)
     { scenario = "ssp245", gcm = "UKESM1-0-LL" },  # warmest run (1.37 degC by 2045)
@@ -197,6 +275,105 @@ passability_scenarios = ["baseline", "improved_passability", "reduced_passabilit
 thermal_sigma_multiplier = 0.3
 upstream_costs = [0.01, 0.5]
 passability_scenarios = ["baseline", "improved_passability", "reduced_passability", "blocked"]
+
+# ---------------------------------------------------------------------------
+# E7 — Global sensitivity (Latin hypercube + Sobol indices).
+#
+# Complements the within-design factor ranking in
+# `scripts/plot_sensitivity_effects.jl` (which is valid only inside one balanced
+# full-factorial sweep).  This block defines the *global* design over documented
+# parameter ranges; the within-design ranking is kept unchanged alongside it.
+#
+# The ranges below are the DEFAULT PROPOSAL assembled from the correction plan
+# and the source data's own uncertainty.  The team must confirm them before the
+# production index is quoted: they are an interpretation of the literature /
+# data uncertainty, not calibrated posteriors.  See
+# docs/global_sensitivity_methods_note.md for the rationale, the estimator
+# validation against Ishigami, and the production compute estimate
+# (N*(2D+2) model runs with D = 8).
+#
+# This section is read only by scripts/global_sensitivity_sobol.jl; every
+# existing entry script ignores it, so no existing default changes.
+# ---------------------------------------------------------------------------
+
+[global_sensitivity]
+# Production defaults (labelled PILOT when overridden smaller by the runner).
+# The number of base samples N; the Saltelli design needs N*(2D+2) evaluations.
+# N = 512 with D = 8 is 9216 model runs — plan compute accordingly.
+n_samples = 512
+bootstrap = 1000
+seed = 20261001
+threshold = 0.1
+# Base heat-stress slope k used by the global-sensitivity runner (the sampled
+# `heat_stress_k_multiplier` scales it).  This is the WP3-calibrated value
+# recorded by the corrected obstacle-sensitivity runs
+# (results/sensitivity_obstacles_corrected/.../run_metadata.json:
+# heat_stress_k = 3.81183578844573e-05).  Override with GUADEX_GS_HEAT_K, or
+# recompute from the daily forcing with GUADEX_GS_CALIBRATE_HEAT=1.
+heat_stress_k_base = 3.81183578844573e-05
+metric_names = [
+    "basin_native_biomass",
+    "basin_native_richness",
+    "basin_realised_richness_loss",
+]
+# Reduced configuration used by `GUADEX_GS_MODE=pilot` (a few minutes, clearly
+# not the production index): fewer sites, one year, a small N.
+pilot_n_samples = 128
+pilot_bootstrap = 200
+pilot_max_sites = 80
+pilot_sim_years = 1
+
+# --- Agreed-range proposal (team to confirm) -------------------------------
+# Each entry: name, lower, upper, default, rationale.  The `name` selects the
+# transform applied by the driver (see scripts/global_sensitivity_sobol.jl).
+[[global_sensitivity.parameters]]
+name = "growth_multiplier"
+lower = 0.75
+upper = 1.25
+default = 1.0
+rationale = "Global multiplier on every local intrinsic growth rate r. The literature r-values (Fish Growth and Dispersal Data Request) span roughly +/-25% across source populations; a symmetric multiplier braces that uncertainty without re-fitting each species."
+[[global_sensitivity.parameters]]
+name = "carrying_capacity_scaling"
+lower = 0.5
+upper = 2.0
+default = 1.0
+rationale = "Multiplier on the observed-density carrying capacity K. The E14 isolated-pool distortion (84 pools, ~56% of basin density, max K ~95,333) means the capacity level is the least certain state variable; 0.5x-2x brackets the realistic range around the k1x baseline."
+[[global_sensitivity.parameters]]
+name = "interaction_strength_multiplier"
+lower = 0.5
+upper = 1.5
+default = 1.0
+rationale = "Multiplier on every pairwise interaction coefficient alpha. The interaction matrix is qualitative (displaces=-0.8, predation=-0.5, competition=-0.3); a 0.5x-1.5x factor propagates that coding uncertainty without changing any sign."
+[[global_sensitivity.parameters]]
+name = "thermal_optimum_shift_c"
+lower = -2.0
+upper = 2.0
+default = 0.0
+rationale = "Uniform shift (degC) added to every species' thermal optimum. Trait-table optima are range midpoints; C6 notes the baseline sites are all <= 18.37 degC, so a +/-2 degC shift covers the physiological-niche uncertainty under warming."
+[[global_sensitivity.parameters]]
+name = "thermal_breadth_multiplier"
+lower = 0.6
+upper = 1.4
+default = 1.0
+rationale = "Multiplier on every thermal sigma. Sigma is approximated as range/6 from the trait table (C6); 0.6x-1.4x brackets the curvature/width uncertainty of the Gaussian thermal filter."
+[[global_sensitivity.parameters]]
+name = "dispersal_multiplier"
+lower = 0.5
+upper = 2.0
+default = 1.0
+rationale = "Multiplier on the precomputed dispersal matrix (all species together). Species dispersal rates carry order-of-magnitude literature ranges (E17); the base matrix uses the median species rate, so this factor spans the credible turnover-speed range."
+[[global_sensitivity.parameters]]
+name = "upstream_cost"
+lower = 0.01
+upper = 0.5
+default = 0.05
+rationale = "Upstream movement cost c in the dispersal kernel 1/(1 + c*delevation). The existing obstacle sweep uses exactly the grid {0.01, 0.05, 0.1, 0.5}; the global design treats it continuously over that same agreed interval."
+[[global_sensitivity.parameters]]
+name = "heat_stress_k_multiplier"
+lower = 0.0
+upper = 2.0
+default = 1.0
+rationale = "Multiplier on the calibrated heat-stress slope k (0 disables the term). k is calibrated to a max_annual_loss = 0.05 assumption (WP3); 0x-2x propagates that calibration choice, including the disable case."
 
 # ---------------------------------------------------------------------------
 # Climate-driven runs (run_climate_scenarios.jl).
@@ -247,10 +424,18 @@ control_run = false
 spin_up = false
 spin_up_max_years = 50
 spin_up_tol = 1.0e-6
-# Stop rule for the burn-in: "basin" = basin-total relative annual change
-# (robust, default), "q95" = 95th percentile of the per-site change, "max" = the
-# strict legacy max-over-sites rule.
-spin_up_criterion = "basin"
+# Stop rule for the burn-in (E4): "both" (default, strictest) requires the
+# basin-total change below `spin_up_tol` AND the robust composition change below
+# `spin_up_composition_tol`; "basin" reproduces the legacy basin-only rule;
+# "q95"/"max" are the legacy per-site total-change rules.
+spin_up_criterion = "both"
+# Composition tolerance: robust 95th percentile of |Δ log N| over the ACTIVE
+# site × species cells (density above the 0.1-unit presence floor in at least one
+# of the two compared years).  The floor excludes near-extinct/flickering cells
+# that otherwise dominate the percentile; see src/spin_up.jl.
+spin_up_composition_tol = 1.0e-2
+# Minimum number of one-year blocks before convergence may be declared.
+spin_up_min_years = 10
 # Print a burn-in progress line every N year-blocks (0 disables).
 spin_up_progress_every = 50
 # Multiplier linking observed total density to the base carrying capacity
@@ -312,6 +497,11 @@ k_scaling_grid = [1.0, 3.0, 10.0]
 optimum_fractions = [0.0, 0.25, 0.5, 0.75, 1.0]
 spin_up_max_years = 50
 spin_up_tol = 1.0e-6
+# E4 stop rule for the staged driver: "both" (basin + robust composition) is the
+# stricter default; set "basin" to reproduce the pre-E4 single-criterion rule.
+spin_up_criterion = "both"
+spin_up_composition_tol = 1.0e-2
+spin_up_min_years = 10
 output_dir = "results/climate_experiments"
 temperature_projections_file = "guadex_tw/outputs/tables/water_temp_future_2045.csv"
 daily_forcing_file = "guadex_tw/outputs/tables/water_temp_daily_guadex_sites_wide.csv"

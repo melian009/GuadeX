@@ -36,9 +36,11 @@ export class SceneManager {
     this.controls.maxPolarAngle = Math.PI * 0.495
     this.controls.minDistance = 6
     this.controls.maxDistance = 2400
+    this.controls.zoomToCursor = true
 
     this._addEnvironment()
     this._bindPointer()
+    this._bindKeys()
     this._bindResize()
 
     this._clock = new THREE.Clock()
@@ -156,6 +158,27 @@ export class SceneManager {
     })
   }
 
+  /** Arrow keys pan the viewport; ignored while typing in a form control. */
+  _bindKeys() {
+    this._onKeyDown = (e) => {
+      const t = e.target
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const s = this.controls.keyPanSpeed
+      let dx = 0
+      let dy = 0
+      switch (e.key) {
+        case 'ArrowUp': dy = s; break
+        case 'ArrowDown': dy = -s; break
+        case 'ArrowLeft': dx = s; break
+        case 'ArrowRight': dx = -s; break
+        default: return
+      }
+      e.preventDefault()
+      this.controls.pan(dx, dy)
+    }
+    window.addEventListener('keydown', this._onKeyDown)
+  }
+
   registerPickable(object, handlers) {
     this.pickables.set(object, handlers)
   }
@@ -176,15 +199,42 @@ export class SceneManager {
     this.frameCallbacks.add(cb)
   }
 
-  fitBounds(bounds, { padding = 1.25 } = {}) {
+  fitBounds(bounds, { padding = 1.06, insetRight = 0 } = {}) {
     const [cx, cz] = sceneCentre(bounds)
     const { width, depth } = sceneExtent(bounds)
-    const radius = Math.max(width, depth) / 2
     const fov = THREE.MathUtils.degToRad(this.camera.fov)
-    const dist = (radius / Math.tan(fov / 2)) * padding
+    const w = this.canvas.clientWidth || window.innerWidth
+    const h = this.canvas.clientHeight || window.innerHeight || 1
+    const aspect = this.camera.aspect || w / h
+    const inset = Math.max(0, Math.min(insetRight, w * 0.45))
+    const visible = (w - inset) / w
+
+    // The camera looks down at the fixed direction (0, 0.85, 0.95), so the
+    // north–south depth is foreshortened on screen by this factor.
+    const tilt = 0.85 / Math.hypot(0.85, 0.95)
+    const tanHalf = Math.tan(fov / 2)
+    const fitH = width / 2 / (tanHalf * aspect)
+    const fitV = (depth * tilt) / 2 / tanHalf
+    let dist = Math.max(fitH, fitV) * padding
+    // Keep the basin inside the strip left of the control panel.
+    if (visible < 1) dist = Math.max(dist, (width / 2 / (tanHalf * aspect * visible)) * padding)
+
     this.controls.target.set(cx, 0, cz)
     this.camera.position.set(cx, dist * 0.85, cz + dist * 0.95)
     this.controls.update()
+
+    if (inset > 0) {
+      // Shift camera + target right so the basin centres in the visible strip.
+      const camDist = this.camera.position.distanceTo(this.controls.target)
+      const halfWidth = camDist * tanHalf * aspect
+      const shift = (inset / w) * halfWidth
+      const forward = this.controls.target.clone().sub(this.camera.position).normalize()
+      const right = new THREE.Vector3().crossVectors(forward, this.camera.up).normalize()
+      this.camera.position.addScaledVector(right, shift)
+      this.controls.target.addScaledVector(right, shift)
+      this.controls.update()
+    }
+
     this._home = {
       pos: this.camera.position.clone(),
       target: this.controls.target.clone(),
@@ -226,6 +276,7 @@ export class SceneManager {
   dispose() {
     this.renderer.setAnimationLoop(null)
     window.removeEventListener('resize', this._onResize)
+    if (this._onKeyDown) window.removeEventListener('keydown', this._onKeyDown)
     this._ro?.disconnect()
     this.controls.dispose()
     this.renderer.dispose()

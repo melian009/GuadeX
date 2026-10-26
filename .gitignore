@@ -84,3 +84,9 @@ _minted-*/
 *.cb2
 *.dvi
 *.ps
+
+
+todo.md
+
+# Viewer feedback bundle (kept out of version control)
+report/202609_feedback/

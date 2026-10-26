@@ -14,6 +14,11 @@ ICC ~0.44 nationally), Model 2 standard errors and p-values are reported
 cluster-robust by site, alongside a MixedLM likelihood-ratio test. The naive
 OLS LRT is retained only for audit.
 
+The MixedLM LRT for the `ta:z` interaction compares models with different fixed
+effects, so the REML log-likelihood is not a valid comparison; both the REML
+value (audit only) and the valid ML (`reml=False`) value are written to the
+summary and to `model_coefficients.json` (minor #9).
+
 Validation: both the unweighted mean of per-station NSE (`MEAN_STATION_NSE`) and
 the true pooled NSE over concatenated held-out predictions (`POOLED_HELDOUT`)
 are written. The pooled value is the primary number quoted in REPORT.md.
@@ -371,16 +376,43 @@ def main() -> None:
             summary_lines.append(f"\n-- Model4 MixedLM converged={mf.converged} "
                                  f"ICC={icc:.3f} resid_var={resid_var:.3f}")
             summary_lines.append(str(mf.summary()))
-            # MixedLM LRT for ta_z (reduced model without the interaction)
+            # MixedLM LRT for ta_z (reduced model without the interaction).
+            # NOTE: `mf` was fitted with reml=True (the default), and REML
+            # log-likelihoods are NOT comparable across models with different
+            # fixed effects (minor #9).  The REML comparison is kept only for
+            # audit; the ML (reml=False) LRT below is the valid one.
             lr_mixed = None
             try:
                 mf0 = smf.mixedlm("tw_obs ~ ta + z + C(month)", sdf,
                                   groups=sdf["site_id"], re_formula="~ta").fit(
                     method="lbfgs", maxiter=300)
                 stat = 2 * (mf.llf - mf0.llf)
-                lr_mixed = {"stat": float(stat), "p": float(stats.chi2.sf(max(stat, 0.0), 1))}
+                lr_mixed = {"stat": float(stat), "p": float(stats.chi2.sf(max(stat, 0.0), 1)),
+                            "reml": True}
             except Exception as exc:  # noqa: BLE001
-                lr_mixed = {"error": repr(exc)}
+                lr_mixed = {"error": repr(exc), "reml": True}
+            # Valid fixed-effects LRT: refit both models by maximum likelihood.
+            lr_mixed_ml = None
+            try:
+                mf_ml = smf.mixedlm("tw_obs ~ ta + z + ta_z + C(month)", sdf,
+                                    groups=sdf["site_id"], re_formula="~ta").fit(
+                    method="lbfgs", maxiter=300, reml=False)
+                mf0_ml = smf.mixedlm("tw_obs ~ ta + z + C(month)", sdf,
+                                     groups=sdf["site_id"], re_formula="~ta").fit(
+                    method="lbfgs", maxiter=300, reml=False)
+                stat_ml = 2 * (mf_ml.llf - mf0_ml.llf)
+                lr_mixed_ml = {"stat": float(stat_ml),
+                               "p": float(stats.chi2.sf(max(stat_ml, 0.0), 1)),
+                               "reml": False,
+                               "llf_full": float(mf_ml.llf),
+                               "llf_reduced": float(mf0_ml.llf)}
+            except Exception as exc:  # noqa: BLE001
+                lr_mixed_ml = {"error": repr(exc), "reml": False}
+            summary_lines.append(
+                "  MixedLM LRT ta_z: REML stat={:.4g} p={:.4g} (invalid, different "
+                "fixed effects); ML stat={:.4g} p={:.4g} (valid)".format(
+                    lr_mixed.get("stat", np.nan), lr_mixed.get("p", np.nan),
+                    lr_mixed_ml.get("stat", np.nan), lr_mixed_ml.get("p", np.nan)))
             t_mixed = float(mf.params.get("ta_z", np.nan) / mf.bse.get("ta_z", np.nan))
             coefs[scope]["mixedlm"] = {
                 "converged": bool(mf.converged), "icc": icc,
@@ -388,6 +420,8 @@ def main() -> None:
                 "ta_z": {"coef": float(mf.params.get("ta_z", np.nan)),
                          "bse": float(mf.bse.get("ta_z", np.nan)), "t": t_mixed},
                 "lr_ta_z": lr_mixed,
+                "lr_ta_z_reml": lr_mixed,
+                "lr_ta_z_ml": lr_mixed_ml,
                 "fixed_effects": {k: float(v) for k, v in mf.params.items()},
                 "fixed_bse": {k: float(v) for k, v in mf.bse.items()},
             }

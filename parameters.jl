@@ -14,6 +14,7 @@ module SimulationParameters
 using TOML
 
 export load, float_vector, scenario_dict, scenario_library, require_sections
+export connectivity_method, biological_options, biological_options_dict
 
 """
     default_file()
@@ -58,6 +59,88 @@ Return `values` as a `Vector{Float64}`.
 """
 function float_vector(values)
     return Float64.(values)
+end
+
+"""
+    connectivity_method(raw; default="legacy") -> Symbol
+
+Return the dispersal-graph construction method from the `[connectivity]`
+section of a parsed parameter file.  Accepted values are `"legacy"` (the
+original sub-catchment chaining) and `"on_path"` (the C4 river-network tree);
+an absent section or key falls back to `default`.
+"""
+function connectivity_method(raw::AbstractDict; default::AbstractString="legacy")
+    section = get(raw, "connectivity", Dict{String,Any}())
+    value = get(section, "method", default)
+    method = Symbol(value)
+    method in (:legacy, :on_path) ||
+        error("connectivity.method must be 'legacy' or 'on_path' (got '$value')")
+    return method
+end
+
+# Accept a TOML boolean or a string override (`"1"`/`"true"`/`"yes"`/`"on"`).
+function _as_bool(value)
+    value isa Bool && return value
+    return lowercase(string(value)) in ("1", "true", "yes", "on")
+end
+
+"""
+    biological_options(raw) -> NamedTuple
+
+Resolve the opt-in biological-assumption options (E13-E16, E18) from the
+`[biological_options]` section of a parsed parameter file.  Every option defaults
+to the legacy behaviour, so an absent section reproduces the historical run
+exactly.  Invalid values raise an error rather than silently changing the model.
+
+Returned fields: `absence_growth_fraction`, `pool_capacity_mode`,
+`fishless_dificil_capacity`, `nonreproducing_local_growth`,
+`exclude_fishfarm_eel_records`, `salinity_envelope`.
+"""
+function biological_options(raw::AbstractDict)
+    section = get(raw, "biological_options", Dict{String,Any}())
+
+    absence = Float64(get(section, "absence_growth_fraction", 0.1))
+    absence >= 0 ||
+        error("biological_options.absence_growth_fraction must be non-negative (got $absence)")
+
+    pool = Symbol(lowercase(string(get(section, "pool_capacity_mode", "legacy"))))
+    pool in (:legacy, :exclude, :cap) ||
+        error("biological_options.pool_capacity_mode must be 'legacy', 'exclude' or 'cap' (got '$(pool)')")
+
+    dificil = Symbol(lowercase(string(get(section, "fishless_dificil_capacity", "legacy"))))
+    dificil in (:legacy, :near_zero) ||
+        error("biological_options.fishless_dificil_capacity must be 'legacy' or 'near_zero' (got '$(dificil)')")
+
+    nonrep = Symbol(lowercase(string(get(section, "nonreproducing_local_growth", "legacy"))))
+    nonrep in (:legacy, :zero) ||
+        error("biological_options.nonreproducing_local_growth must be 'legacy' or 'zero' (got '$(nonrep)')")
+
+    return (
+        absence_growth_fraction = absence,
+        pool_capacity_mode = pool,
+        fishless_dificil_capacity = dificil,
+        nonreproducing_local_growth = nonrep,
+        exclude_fishfarm_eel_records = _as_bool(get(section, "exclude_fishfarm_eel_records", false)),
+        salinity_envelope = _as_bool(get(section, "salinity_envelope", false)),
+    )
+end
+
+"""
+    biological_options_dict(raw) -> Dict{String,Any}
+
+String-keyed form of [`biological_options`](@ref) for JSON metadata and the
+parameter digest (mode symbols become their names).
+"""
+function biological_options_dict(raw::AbstractDict)
+    options = biological_options(raw)
+    return Dict{String,Any}(
+        "absence_growth_fraction" => options.absence_growth_fraction,
+        "pool_capacity_mode" => string(options.pool_capacity_mode),
+        "fishless_dificil_capacity" => string(options.fishless_dificil_capacity),
+        "nonreproducing_local_growth" => string(options.nonreproducing_local_growth),
+        "exclude_fishfarm_eel_records" => options.exclude_fishfarm_eel_records,
+        "salinity_envelope" => options.salinity_envelope,
+    )
 end
 
 """

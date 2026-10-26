@@ -1,0 +1,9 @@
+{
+  "file": "water_temp_daily_guadex_sites_wide_ssp245_MPI-ESM1-2-HR.csv",
+  "correction_id": "a9679aefe70b5af9",
+  "variant": "LOBO_Model2_elevation",
+  "applied_utc": "2026-09-30T10:22:20Z",
+  "n_rows": 14610,
+  "before_mean": 14.94219859778648,
+  "after_mean": 16.028998103415226
+}

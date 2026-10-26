@@ -1,5 +1,19 @@
 # GuadeX: Assessing Extinction Dynamics in Changing Metacommunities of the Guadalquivir River Basin
 
+## Table of Contents
+
+- [Project Summary](#project-summary)
+- [Research Gaps and Objectives (Aims)](#research-gaps-and-objectives-aims)
+- [Methodology](#methodology)
+  - [1. Extinction Probability Curve Analysis](#1-extinction-probability-curve-analysis)
+  - [2. Dynamic Simulations of Threats on extinction probabilities](#2-dynamic-simulations-of-threats-on-extinction-probabilities)
+- [Data Sources and Files](#data-sources-and-files)
+- [Platform for Knowledge Transfer and Reproducibility](#platform-for-knowledge-transfer-and-reproducibility)
+  - [Simulation entry points, four-level outputs and viewer](#simulation-entry-points-four-level-outputs-and-viewer)
+  - [Using the viewer](#using-the-viewer)
+  - [Core Team:](#core-team)
+  - [Key Activities (Timeline):](#key-activities-timeline)
+- [Original sources](#original-sources)
 
 ## Project Summary
 
@@ -54,7 +68,7 @@ Beyond which specific simulation framework we choose, there are elements that wi
 
 ## Data Sources and Files
 
-The research relies on a comprehensive dataset from 1,037 sampled sites in the Guadalquivir basin.
+The research relies on a comprehensive GIS dataset of 1,037 sampled sites in the Guadalquivir basin. Of these, the dynamic simulation model uses the **775** sites that have complete network and forcing data; the remaining sites appear in the GIS data and the viewer but are not part of the simulated metacommunity.
 
 | File Name | Description and Key Variables | Data Context |
 | :--- | :--- | :--- |
@@ -92,6 +106,34 @@ Every run writes four reporting levels — sampling point (`CODIGO`), sub-basin
 `viz/` 3-D viewer format. See **[docs/climate_scenarios.md](docs/climate_scenarios.md)**
 for the level definitions, temperature-scenario construction, output layout and
 limitations. `scripts/export_run_outputs.jl` re-exports an existing JLD2 result.
+
+### Using the viewer
+
+The published viewer lives at <https://melian009.github.io/GuadeX/> and works with two kinds of data.
+
+**Site attributes (static).** The 1,037 sampling sites already carry the full field-survey
+attribute set from the GIS archive — native, exotic and total species richness, species
+presence and densities, the ZIC/BCC/VA indices, altitude, and habitat and water-quality
+fields. These are static (they describe the sampled communities) and need no upload. In the
+**Data** tab, leave **Source = Site attributes** and pick a **Variable**; the 3-D columns and
+the catchment choropleth then encode it, and clicking a site opens its full attribute card.
+
+**Simulation results (upload).** Any per-site model output can be mapped onto the same sites.
+In the **Data** tab under **Simulation results**, choose or drag-and-drop a JSON or CSV file
+keyed by site code (`CODIGO`, e.g. `"1.1.2"`). Two shapes are detected automatically:
+
+* **Time series** — a JSON object with `steps` plus one array of values per site, or a long
+  CSV (`CODIGO,step,value`). A **time / scenario slider** appears, and moving it re-colours
+  and re-scales the basin so change over time is visible.
+* **Per-site metrics** — a JSON object of key/value metrics per site, or a wide CSV
+  (`CODIGO,metricA,metricB`). Each key becomes a selectable variable; non-numeric keys are
+  treated as categories.
+
+Uploads are processed entirely in the browser and last for the session only (nothing is sent
+to a server; refreshing clears them). Two clearly labelled synthetic demo files are built in
+(**Load demo (time series)** and **Load demo (metrics)**) for trying the pipeline. See
+**[viz/README.md](viz/README.md)** for the exact file formats, deep links and the
+`window.GuadeX` programmatic API.
 
 ### Core Team:
 *   Dr. Carlos Fernandez Delgado (Universidad de Córdoba, Spain)

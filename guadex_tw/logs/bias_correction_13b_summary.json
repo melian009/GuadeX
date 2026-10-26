@@ -1,0 +1,366 @@
+{
+  "correction_id": "a9679aefe70b5af9",
+  "variant": "LOBO_Model2_elevation",
+  "monthly_c": {
+    "1": 1.3642599499,
+    "2": 2.223732546,
+    "3": 2.2867375659,
+    "4": 1.6307194615,
+    "5": 1.8265192749,
+    "6": 0.8361366477,
+    "7": -0.5141572289,
+    "8": 0.1367243202,
+    "9": -0.2608238752,
+    "10": 1.3922388214,
+    "11": 1.2061603052,
+    "12": 0.984041775
+  },
+  "annual_mean_pooled_c": 1.1059071450290452,
+  "annual_mean_month_balanced_c": 1.0926907969564248,
+  "elapsed_s": 0.017525911331176758,
+  "disk_free_gb": 237.291347968,
+  "n_processed": 48,
+  "n_skipped": 48,
+  "n_errors": 0,
+  "n_missing": 0,
+  "missing": [],
+  "results": [
+    {
+      "file": "water_temp_daily_guadex_sites_wide.csv",
+      "kind": "already_corrected",
+      "n_rows": 36525,
+      "before_mean": 15.254352137573079,
+      "after_mean": 16.341151643201826
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_ACCESS-CM2.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.127821068509347,
+      "after_mean": 16.214620574138095
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_CMCC-CM2-SR5.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.925452264871328,
+      "after_mean": 16.012251770500075
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_CNRM-ESM2-1.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.978998064103656,
+      "after_mean": 16.065797569732403
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_EC-Earth3-Veg.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.013686039972503,
+      "after_mean": 16.100485545601252
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_IITM-ESM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.836309386387889,
+      "after_mean": 15.923108892016636
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_KACE-1-0-G.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.1273486005224,
+      "after_mean": 16.214148106151146
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_MIROC6.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.918841471391481,
+      "after_mean": 16.005640977020228
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_MPI-ESM1-2-HR.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.936308099970724,
+      "after_mean": 16.02310760559947
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_MRI-ESM2-0.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.014015364788587,
+      "after_mean": 16.100814870417334
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_NorESM2-MM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.957098299505395,
+      "after_mean": 16.043897805134144
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp126_UKESM1-0-LL.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.066053107064247,
+      "after_mean": 16.152852612692996
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_ACCESS-CM2.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.174738809326179,
+      "after_mean": 16.261538314954926
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_CMCC-CM2-SR5.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.961731038374213,
+      "after_mean": 16.04853054400296
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_CNRM-ESM2-1.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.988008556377649,
+      "after_mean": 16.074808062006397
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_EC-Earth3-Veg.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.992932888107449,
+      "after_mean": 16.079732393736197
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_IITM-ESM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.941980986511423,
+      "after_mean": 16.02878049214017
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_KACE-1-0-G.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.168534001246286,
+      "after_mean": 16.255333506875033
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_MIROC6.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.99312294854336,
+      "after_mean": 16.07992245417211
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_MPI-ESM1-2-HR.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.94219859778648,
+      "after_mean": 16.028998103415226
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_MRI-ESM2-0.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.014362765651928,
+      "after_mean": 16.101162271280675
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_NorESM2-MM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.013446849330592,
+      "after_mean": 16.10024635495934
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp245_UKESM1-0-LL.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.262265240098479,
+      "after_mean": 16.349064745727226
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_ACCESS-CM2.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.111387066661855,
+      "after_mean": 16.198186572290602
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_CMCC-CM2-SR5.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.92147325854241,
+      "after_mean": 16.008272764171156
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_CNRM-ESM2-1.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.045036116174947,
+      "after_mean": 16.131835621803695
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_EC-Earth3-Veg.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.978024567320135,
+      "after_mean": 16.064824072948884
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_IITM-ESM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.98611156832549,
+      "after_mean": 16.072911073954238
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_KACE-1-0-G.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.169639736559947,
+      "after_mean": 16.256439242188694
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_MIROC6.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.971261411037382,
+      "after_mean": 16.05806091666613
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_MPI-ESM1-2-HR.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.007357094060753,
+      "after_mean": 16.0941565996895
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_MRI-ESM2-0.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.052497699671344,
+      "after_mean": 16.139297205300092
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_NorESM2-MM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.925074838852947,
+      "after_mean": 16.011874344481694
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp370_UKESM1-0-LL.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.157759970119356,
+      "after_mean": 16.244559475748105
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_ACCESS-CM2.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.188884441639022,
+      "after_mean": 16.27568394726777
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_CMCC-CM2-SR5.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.010335613178858,
+      "after_mean": 16.097135118807607
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_CNRM-ESM2-1.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.0267404879932,
+      "after_mean": 16.11353999362195
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_EC-Earth3-Veg.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.056367684656351,
+      "after_mean": 16.143167190285098
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_IITM-ESM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.974820502016522,
+      "after_mean": 16.06162000764527
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_KACE-1-0-G.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.180891984323605,
+      "after_mean": 16.26769148995235
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_MIROC6.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.019687688465982,
+      "after_mean": 16.10648719409473
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_MPI-ESM1-2-HR.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.957814756904005,
+      "after_mean": 16.044614262532754
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_MRI-ESM2-0.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.194060539799436,
+      "after_mean": 16.280860045428184
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_NorESM2-MM.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 14.997911037601927,
+      "after_mean": 16.084710543230674
+    },
+    {
+      "file": "water_temp_daily_guadex_sites_wide_ssp585_UKESM1-0-LL.csv",
+      "kind": "already_corrected",
+      "n_rows": 14610,
+      "before_mean": 15.168687878846914,
+      "after_mean": 16.25548738447566
+    },
+    {
+      "file": "water_temp_baseline_guadex_sites.csv",
+      "kind": "already_corrected",
+      "n_rows": 776,
+      "before_mean": 14.733074518299697,
+      "after_mean": 15.819874023928444
+    },
+    {
+      "file": "water_temp_future_2045.csv",
+      "kind": "already_corrected",
+      "n_rows": 792,
+      "before_mean": 16.875699240873946,
+      "after_mean": 17.96248145264123
+    },
+    {
+      "file": "water_temp_historical_sites.csv",
+      "kind": "already_corrected",
+      "n_rows": 39944,
+      "before_mean": 14.044223037938213,
+      "after_mean": 15.162799800440066
+    }
+  ],
+  "errors": []
+}

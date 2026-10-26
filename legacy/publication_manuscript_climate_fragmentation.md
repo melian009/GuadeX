@@ -64,7 +64,7 @@ flowchart TB
     M6["Numerical integration<br/>1 day per time unit"]
   end
 
-  B["4. Seasonal baseline burn-in<br/>373 years for primary runs<br/>21 years per alternative matrix"]
+  B["4. Seasonal baseline burn-in<br/>373 years for primary runs<br/>matrix-specific (21–532 yr) for the alternative matrices"]
 
   subgraph EXP["5. Experiments, 2026-2045"]
     E1["Climate ensemble<br/>44 scenarios + no-warming control"]
@@ -200,7 +200,7 @@ Climate simulations used daily site-level water-temperature series for 11 genera
 
 Two warming quantities were kept distinct. The climate ensemble used the imposed basin-mean warming curve at 2045 for dose--response analysis and scenario comparison. The obstacle experiments used the maximum across sites of the final-year annual-mean anomaly to select two endpoint runs: the coolest endpoint (SSP1-2.6 with IITM-ESM) and the warmest endpoint (SSP2-4.5 with UKESM1-0-LL). These site-maximum endpoint anomalies are not interchangeable with the basin-mean climate-ensemble axis because the scenario products retain different pre-2026 offsets.
 
-Each simulation began from a seasonal baseline burn-in rather than directly from the observed snapshot. The climate ensemble and obstacle experiment used a converged 373-year burn-in. The alternative-interaction experiment used a 21-year burn-in for each interaction matrix; this difference is an important source of confounding and limits the interpretation of that experiment.
+Each simulation began from a seasonal baseline burn-in rather than directly from the observed snapshot. The climate ensemble and obstacle experiment used a converged 373-year burn-in. The alternative-interaction experiment used one burn-in per interaction matrix, and the actual lengths are matrix-specific (21 years for the original matrix, 532 for the random matrix and 494 for the invasive-favouring matrix, as recorded in each run's metadata); this difference is an important source of confounding and limits the interpretation of that experiment.
 
 ### 2.5 Experimental design
 
@@ -222,7 +222,7 @@ For the original matrix, qualitative interaction categories were mapped to coeff
 | Interaction experiment | 3 interaction matrices × 2 climate endpoints × 2 upstream costs × 4 passability states = 48 runs |
 | Upstream costs | 0.01, 0.05, 0.10, and 0.50 in the obstacle experiment; 0.01 and 0.50 in the interaction experiment |
 | Passability states | Baseline, improved, reduced, and blocked |
-| Baseline equilibration | 373-year seasonal burn-in for the climate and obstacle experiments; 21 years per matrix in the interaction experiment |
+| Baseline equilibration | 373-year seasonal burn-in for the climate and obstacle experiments; one matrix-specific burn-in in the interaction experiment (21, 532 and 494 years for the original, random and invasive-favouring matrices) |
 | Carrying capacity | 1× observed total density, with a minimum-capacity floor; mean modelled \(K\) ≈ 86.6 versus observed mean ≈ 84.4 |
 | Heat stress | Shared quadratic exceedance mortality coefficient calibrated to a maximum 5% baseline annual loss |
 
@@ -234,7 +234,7 @@ $$
 \max\left(0,1-\frac{R(t)}{R_0}\right),
 $$
 
-where \(R_0\) is richness in the spun-up baseline. This is a realised loss metric, not an extinction probability. Thermal exposure was quantified as days above each species' upper thermal limit and annual squared exceedance energy.
+where \(R_0\) is richness in the spun-up baseline. This is a deterministic realised loss metric, not an extinction probability (the model has no replicates). Thermal exposure was quantified as days above each species' upper thermal limit and annual squared exceedance energy.
 
 The quasi-extinction diagnostic flagged a site when a species remained below \(\max(0.1, 0.1\times\text{baseline density})\) for three consecutive annual observations. It was not used as a primary climate outcome because the fraction was already near saturation for brown trout at baseline and therefore primarily reflected the threshold's treatment of a rare but persistent species. Species-level trout climate responses were reconstructed from per-run species outputs because the aggregate climate index did not contain trout-specific metrics.
 
@@ -297,7 +297,7 @@ The reversal was also spatially heterogeneous. At high upstream cost, the positi
 
 The alternative-interaction experiment produced the largest contrast among tested factors. The invasive-favouring matrix reduced pooled native biomass from approximately 50.2 to 5.1 model units, native richness from 2.42 to 0.15 species per site, and trout biomass from approximately 548 to 313 units. In the matched cool-end, low-cost, baseline-passability contrast, native biomass changed from approximately 51.0 to 5.2 units and trout biomass from approximately 575 to 314 units. Invasive biomass increased from approximately 6.0 to 58.7 units, while total biomass changed comparatively little, from approximately 56.2 to 64.2 units. This pattern indicates redistribution of biomass among community compartments rather than uniform loss of the total resource base. The confounded thermal-breadth contrast itself shifted native biomass downward by approximately 36.9--38.8% and trout biomass by approximately 27.0--30.3%, but these changes cannot be attributed to thermal breadth alone.
 
-The interaction matrix accounted for SS = 0.998 of native biomass and SS = 0.982 of trout biomass within the alternative sweep. Passability spans were also interaction-dependent: trout showed the largest passability span under the invasive-favouring matrix, whereas native-biomass spans were smallest after native biomass had already collapsed. The passability sign reversal observed in the primary obstacle sweep was not recovered consistently in the alternative sweep. However, these comparisons are not empirical estimates of uncertainty. The invasive-favouring matrix was deliberately extreme, the random matrix was a placebo with near-zero burn-in baselines for some species, and the alternative sweep used a 0.3 thermal-breadth multiplier and a 21-year burn-in rather than the 373-year burn-in used elsewhere. The defensible interpretation is that interaction structure could dominate outcomes under strong structural changes, not that the precise 90% loss or passability span is a forecast.
+The interaction matrix accounted for SS = 0.998 of native biomass and SS = 0.982 of trout biomass within the alternative sweep. Passability spans were also interaction-dependent: trout showed the largest passability span under the invasive-favouring matrix, whereas native-biomass spans were smallest after native biomass had already collapsed. The passability sign reversal observed in the primary obstacle sweep was not recovered consistently in the alternative sweep. However, these comparisons are not empirical estimates of uncertainty. The invasive-favouring matrix was deliberately extreme, the random matrix was a placebo with near-zero burn-in baselines for some species, and the alternative sweep used a 0.3 thermal-breadth multiplier and matrix-specific burn-ins (21, 532 and 494 years) rather than the 373-year burn-in used elsewhere. The defensible interpretation is that interaction structure could dominate outcomes under strong structural changes, not that the precise 90% loss or passability span is a forecast.
 
 ### 3.5 Other species and community-level indicators
 
@@ -350,7 +350,7 @@ The model also identifies processes requiring explicit inclusion before manageme
 7. The model assumes fixed, symmetric thermal niches and excludes evolution, acclimation, plasticity, and alternative selection modes.
 8. All sites received the same basin-scale warming anomaly. Spatial differences in warming among elevation zones and reaches were not resolved.
 9. The model did not dynamically represent discharge, drought, water abstraction, land-use change, or flow-dependent habitat quality.
-10. The richness-loss indicator is a realised threshold-based loss and not an extinction probability. The trout quasi-extinction fraction was near saturation (approximately 0.956--0.959 in the obstacle sweep and 0.935--0.972 in the alternative sweep) and was not used as a primary climate result. No warming-driven species extinction was demonstrated.
+10. The richness-loss indicator is a deterministic realised threshold-based loss and not an extinction probability (the model has no replicates). The trout quasi-extinction fraction was near saturation (approximately 0.956--0.959 in the obstacle sweep and 0.935--0.972 in the alternative sweep) and was not used as a primary climate result. No warming-driven species extinction was demonstrated.
 11. The 2026--2045 horizon cannot robustly rank emission pathways because climate-model spread overlapped pathway differences. Absolute temperature changes relative to 1986--2005 are also not directly comparable across scenario products because they retain different 2026 offsets; the imposed basin-mean warming curve is the appropriate comparison axis.
 12. The 685 inventoried obstacles that were not matched to a modelled segment did not affect the simulated dispersal field.
 13. The thermal optimum was fixed at the midpoint of each empirical range and was not varied. The sign of the response is determined by the optimum's position relative to ambient temperature, but the magnitude, and potentially the aggregate balance if optima are re-positioned, requires an optimum-position sensitivity analysis.
@@ -379,7 +379,7 @@ The strongest structural contrast arose from the invasive-favouring interaction 
 
 ![Figure 3. Basin trajectories across emission pathways.](../results/climate_scenarios_k1x_burnin/figures/comparison/across_scenarios_basin.png)
 
-**Figure 4. Climate forcing and aggregate response.** The six panels pair warming trajectories with native richness and total biomass trajectories, final-year relationships between realised temperature change and aggregate indicators, and the realised richness-loss trajectory. The imposed forcing is clearly separated among SSPs while aggregate biological responses overlap, demonstrating that the weak signal is not a failure to transmit climate forcing through the model. The lower panels use realised final-year temperature change, which differs from the imposed basin-mean warming axis used for the ordinary least-squares dose--response slopes; the richness-loss metric is a thresholded realised loss, not an extinction probability.
+**Figure 4. Climate forcing and aggregate response.** The six panels pair warming trajectories with native richness and total biomass trajectories, final-year relationships between realised temperature change and aggregate indicators, and the realised richness-loss trajectory. The imposed forcing is clearly separated among SSPs while aggregate biological responses overlap, demonstrating that the weak signal is not a failure to transmit climate forcing through the model. The lower panels use realised final-year temperature change, which differs from the imposed basin-mean warming axis used for the ordinary least-squares dose--response slopes; the richness-loss metric is a deterministic thresholded realised loss, not an extinction probability.
 
 ![Figure 4. Climate forcing and aggregate response.](../results/climate_scenarios_k1x_burnin/figures/diagnostics/forcing_and_response.png)
 
