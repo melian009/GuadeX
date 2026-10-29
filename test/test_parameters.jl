@@ -22,15 +22,17 @@ using .SimulationParameters
     @test length(subcatchments) == 77
     @test all(isfinite, subcatchments)
 
-    # WP0: ST (cold-water keystone) is native; AA/AAL/LR/MC are migratory and
-    # deliberately excluded from both native and invasive richness.
+    # WP0: ST (cold-water keystone) is native; AAL is exotic (EX), not
+    # migratory, and is included in invasive richness and biomass; AA/LR/MC are
+    # migratory and deliberately excluded from both native and invasive richness.
     native = String.(params["species"]["native"])
     invasive = String.(params["species"]["invasive"])
     migratory = String.(get(params["species"], "migratory", String[]))
     @test length(native) == 10
     @test "ST" in native
-    @test length(invasive) == 10
-    @test sort(migratory) == ["AA", "AAL", "LR", "MC"]
+    @test length(invasive) == 11
+    @test "AAL" in invasive
+    @test sort(migratory) == ["AA", "LR", "MC"]
     @test isempty(intersect(native, invasive))
     @test isempty(intersect(native, migratory))
     @test isempty(intersect(invasive, migratory))

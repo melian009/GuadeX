@@ -121,15 +121,18 @@ method = "on_path"
 # `native` includes ST (Salmo trutta), the cold-water keystone whose empirical
 # thermal optimum (12 C, range 4-20 C) lies *below* current basin temperatures:
 # it is the native species through which warming can appear as a decline.
-# `migratory` holds the diadromous / estuarine species (AA, AAL, LR, MC) that are
+# `migratory` holds the diadromous / estuarine species (AA, LR, MC) that are
 # neither native-resident nor invasive; they are reported separately and are not
-# part of the native richness metric.
+# part of the native richness metric.  AAL (Alburnus alburnus, bleak) is an
+# exotic (EX) species and is grouped with the invasive/exotic taxa; its limited
+# upstream spawning movements are weaker than those of the native barbel (LS),
+# so it is not treated as a migratory taxon.
 # ---------------------------------------------------------------------------
 
 [species]
 native = ["AB", "AH", "SP", "PW", "LS", "SA", "IL", "CP", "IO", "ST"]
-invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT"]
-migratory = ["AA", "AAL", "LR", "MC"]
+invasive = ["GH", "MS", "LG", "CC", "CG", "AM", "OM", "EL", "GL", "TT", "AAL"]
+migratory = ["AA", "LR", "MC"]
 
 # ---------------------------------------------------------------------------
 # Biological-assumption options (E13-E16, E18) -- TEAM DECISIONS.

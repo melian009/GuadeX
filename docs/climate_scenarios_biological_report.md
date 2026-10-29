@@ -126,7 +126,7 @@ abundance change, because it makes the assumed selection strength explicit.
 | item | setting |
 | :--- | :--- |
 | System | Guadalquivir basin: 775 sites, 774 water bodies, one basin (`ES050`) |
-| Species | 24 modelled: 10 native residents, 10 invasive, 4 migratory (reported separately) |
+| Species | 24 modelled: 10 native residents, 11 exotic/invasive, 3 migratory (reported separately) |
 | Horizon | 2026–2045, daily integration, yearly reported values |
 | Climate forcing | per-site **daily** water temperature, 11 GCMs × 4 SSPs, anomalies against 1986–2005 |
 | Runs | 44 scenario runs (11 × 4) + 1 no-warming control = **45** |
@@ -344,10 +344,12 @@ site-to-site variability.
 10. **The trout decline includes pre-existing stress.** The baseline already puts trout
     above 20 °C on up to 131 days/yr; warming worsens an already marginal position,
     it is not a pristine-baseline climate effect.
-11. **One classification issue to verify.** `parameters.toml` lists `AAL` as
-    "migratory", but the source trait tables identify it as *Alburnus alburnus*
-    (Alburno), an exotic/invasive cyprinid. If that is an error, the invasive metrics
-    currently omit one invasive species. It does not affect the trout result.
+11. **AAL classification corrected.** *Alburnus alburnus* (bleak) is now classified
+    as exotic (EX) and is grouped with the invasive/exotic taxa rather than the
+    migratory group. Its upstream spawning movements are more limited than those of
+    the native barbel (`LS`). Legacy outputs quoted in this report predate the
+    correction and therefore omit AAL from invasive richness and biomass; the
+    corrected report values include it. The change does not affect the trout result.
 12. **A residual control drift remains** (total biomass +0.65 % over 20 years). The
     burn-in converged to 5 × 10⁻⁵ yr⁻¹ but a slow internal cycle persists, so
     differences smaller than ~1 % are not interpretable as climate effects.
@@ -394,8 +396,8 @@ in `<run>/export/run_metadata.json`; `runs_index.csv` summarises all 45 runs.
    regime and drought, water abstraction, and a real habitat-degradation input.
 6. **Revise or retire the quasi-extinction threshold** so rare-but-stable species are
    not flagged at baseline.
-7. **Verify the `AAL` species classification** before publishing invasive-species
-   metrics.
+7. **Use the corrected `AAL` classification** when publishing invasive-species
+   metrics: bleak is exotic (EX), not migratory.
 
 ---
 

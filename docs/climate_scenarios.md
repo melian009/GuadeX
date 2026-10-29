@@ -597,12 +597,15 @@ reproduce the previous behaviour, so old runs remain reproducible.
 
 ### WP0 — species classification
 
-`parameters.toml` classifies `ST` (Salmo trutta) as **native** and adds a third
-`migratory` group (`AA`, `AAL`, `LR`, `MC`). ST is the cold-water keystone whose
+`parameters.toml` classifies `ST` (Salmo trutta) as **native** and defines a
+third `migratory` group (`AA`, `LR`, `MC`). ST is the cold-water keystone whose
 empirical optimum (12 °C, range 4-20 °C) is below current basin temperatures, so
 it is the native species through which warming can appear as a decline. The
 native richness metric therefore counts 10 species; migratory species are neither
-native nor invasive and are reported separately.
+native nor invasive and are reported separately. `AAL` (*Alburnus alburnus*,
+bleak) is an exotic (EX) species and is grouped with the invasive/exotic taxa,
+not with the migratory taxa: its upstream spawning movements are more limited
+than those of the native barbel (`LS`), which is retained as a native resident.
 
 ### WP1 — per-site daily water temperature
 

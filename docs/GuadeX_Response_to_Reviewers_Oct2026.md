@@ -357,10 +357,11 @@ channel-catfish study (for its dispersal); sedentary species receive 6–25 km/y
 missing from both dictionaries.
 *Assessment:* **Partly accepted.** The source-quality and *Alburnus* concerns are valid; the main
 rate-table rebuild is not implemented in this version.
-*Action and evidence:* The corrected 24-species matrix now includes `AAL`, and the report states
-plainly that *Alburnus alburnus* (code `AAL`) is an exotic species still **misclassified as
-migratory**, with missing interaction and dispersal trait data and a placeholder dispersal scalar,
-so invasive richness and biomass are reported as **lower bounds** (report §2.1). A single
+*Action and evidence:* The corrected 24-species matrix now includes `AAL`, and *Alburnus alburnus*
+(code `AAL`) is now classified as exotic (EX), not migratory, and is included in the
+invasive/exotic metrics; its limited upstream spawning movements are weaker than those of the
+native barbel (`LS`). Its interaction and dispersal trait data remain missing and its dispersal
+scalar is a placeholder, so its absolute density remains provisional (report §2.1). A single
 source-annotated `data/species_parameters.csv` rebuilding all growth and dispersal rates is
 deferred (§4).
 
@@ -506,7 +507,7 @@ All rows of the review's statements table were reviewed and, where they were cor
 | Statement (reviewer) | Assessment | Action / corrected reading |
 |---|---|---|
 | 775 sites grouped into 774 water bodies | Accepted | Report now reports **289** water-body reporting units (288 assigned + 1 unassigned) and **774 network edges**, explicitly not a water-body count (§1.2/§2.1). |
-| *Alburnus* coded "Aa" and classed migratory | Partly accepted | The report uses full species names and contains no "Aa"; the real, acknowledged defect is the **misclassification as migratory** (`AAL`), now stated as a lower-bound caveat (§2.1). |
+| *Alburnus* coded "Aa" and classed migratory | Partly accepted | The report uses full species names and contains no "Aa"; the former **misclassification as migratory** (`AAL`) has been corrected, and bleak is now classified as exotic (EX) and included in the invasive/exotic metrics (§2.1). |
 | Daily absolute water temperature = sub-catchment climatology | Accepted | Report describes the corrected `guadex_tw` water-temperature series (`tw_baseline_mean` + anomaly) (§3.4). |
 | All sites receive the same basin-scale anomaly | Accepted | Text corrected to **per-site daily anomalies**; realised per-run warming is tabulated (§3.4/§4.1). |
 | Habitat index from the trophic-state index | Accepted | *IET* is now the **bank-stability** index (§2.2). |
