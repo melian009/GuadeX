@@ -25,12 +25,21 @@ Structure to hold parameters for the fish metacommunity ODE model.
   enters the RHS (issue C2). `true` (the default) uses the competitive
   Lotka–Volterra form, with interactions inside the intrinsic-growth bracket:
   `dN_is/dt = N_is [r_eff (1 - Σ_j N_j/K_i + Σ_j α_sj N_j/K_i) - heat]`.
-  This is equivalent to competition coefficients `c_sj = 1 - α_sj`
-  (with `c_ss = 1`), not `c = -α`. `false` reproduces the legacy form, where
-  interactions sit *outside* growth and dominate the equilibrium:
+  With `competition_structure = :shared_k` this is equivalent to competition
+  coefficients `c_sj = 1 - α_sj` (with `c_ss = 1`), not `c = -α`.
+  `false` reproduces the legacy form, where interactions sit *outside* growth
+  and dominate the equilibrium:
   `dN_is/dt = N_is [r_eff (1 - Σ_j N_j/K_i) + Σ_j α_sj N_j/K_i - heat]`.
   The legacy form is retained for comparison only and must be opted into
   explicitly (see the 14-argument constructor).
+- `competition_structure::Symbol`: The second-review (4.5) structural sensitivity.
+  `:shared_k` (default) is the primary specification, with a shared per-site
+  carrying capacity and `c_sj = 1 - α_sj` for `j ≠ s`. `:species_specific` is the
+  reviewer's alternative, with species-specific self-limitation and no shared
+  capacity: `c_ss = 1`, `c_sj = -α_sj` for `j ≠ s`, i.e.
+  `dN_is/dt = N_is [r_eff (1 - N_is/K_i + Σ_{j≠s} α_sj N_j/K_i) - heat]`.
+  The alternative is only defined for `interaction_inside_growth = true`; both
+  forms are documented in `docs/GuadeX_Limitations_and_Scope_Oct2026.md`.
 
 The 11-argument constructor (without the thermal limits, `k` and the
 interaction-form flag) is retained for backwards compatibility and fills
@@ -53,6 +62,29 @@ struct MetacommunityParams{T<:Real, M<:AbstractMatrix{T}, V<:AbstractVector{T}, 
     thermal_upper_limits::V
     heat_stress_rate::T
     interaction_inside_growth::Bool
+    competition_structure::Symbol
+end
+
+"""
+    MetacommunityParams(n_sites, n_species, interaction_matrix, dispersal_matrix,
+                        dispersal_scaling, intrinsic_growth_rates, temperatures,
+                        habitat_suitability, thermal_optima, thermal_sigmas,
+                        carrying_capacity, thermal_lower_limits, thermal_upper_limits,
+                        heat_stress_rate, interaction_inside_growth)
+
+15-argument constructor (pre-4.5 field list).  The competition structure defaults
+to `:shared_k`, the primary corrected specification (`c = 1 - α`); pass a 16th
+argument to select `:species_specific` (`c = -α`).
+"""
+function MetacommunityParams(n_sites::Int, n_species::Int, interaction_matrix,
+        dispersal_matrix, dispersal_scaling, intrinsic_growth_rates, temperatures,
+        habitat_suitability, thermal_optima, thermal_sigmas, carrying_capacity,
+        thermal_lower_limits, thermal_upper_limits, heat_stress_rate,
+        interaction_inside_growth::Bool)
+    return MetacommunityParams(n_sites, n_species, interaction_matrix, dispersal_matrix,
+        dispersal_scaling, intrinsic_growth_rates, temperatures, habitat_suitability,
+        thermal_optima, thermal_sigmas, carrying_capacity, thermal_lower_limits,
+        thermal_upper_limits, heat_stress_rate, interaction_inside_growth, :shared_k)
 end
 
 """
@@ -98,6 +130,15 @@ function MetacommunityParams(n_sites::Int, n_species::Int, interaction_matrix,
         vecT(habitat_suitability), vecT(thermal_optima), vecT(thermal_sigmas),
         vecT(carrying_capacity), fill(T(-Inf), n_species), fill(T(Inf), n_species), zero(T))
 end
+
+"""
+    COMPETITION_STRUCTURES
+
+Accepted values of `MetacommunityParams.competition_structure`: `:shared_k`
+(primary, `c = 1 - α`) and `:species_specific` (second-review alternative,
+`c = -α`).
+"""
+const COMPETITION_STRUCTURES = (:shared_k, :species_specific)
 
 const ANNUAL_DISPERSAL_RATES = Dict{String, Float64}(
     "AB" => 0.3, "AH" => 0.2, "SP" => 3.0, "PW" => 27.5, "LS" => 20.0,
@@ -149,7 +190,13 @@ function _metacommunity_ode!(du, u, p::MetacommunityParams, delta_at, t)
             r_eff = p.intrinsic_growth_rates[i, s] * env_filter
 
             interaction_term = 0.0
+            # 4.5 structural sensitivity: `:species_specific` uses c_ss = 1 and
+            # c_sj = -alpha_sj for j != s, so the self term is not part of the
+            # heterospecific interaction sum.  `:shared_k` keeps the full sum
+            # (the empirical matrix has a zero diagonal).
+            include_self = p.competition_structure !== :species_specific
             for j in 1:p.n_species
+                include_self || j != s || continue
                 interaction_term += p.interaction_matrix[s, j] * max(U[i, j], 0.0)
             end
             interaction_term /= k_i
@@ -168,11 +215,17 @@ function _metacommunity_ode!(du, u, p::MetacommunityParams, delta_at, t)
             if p.interaction_inside_growth
                 # Corrected competitive Lotka-Volterra form (issue C2): the
                 # interaction term sits INSIDE the intrinsic-growth bracket, so
-                # growth and competition jointly set the equilibrium.  With
-                # c_sj = 1 - alpha_sj this is
-                #   N * (r_eff * (1 - total/K + sum_j alpha_sj N_j/K) - heat).
-                dU[i, s] = N_is * (r_eff * clamp(1.0 - total_biomass_i / k_i +
-                                                interaction_term, -1.0, 2.0) - heat_stress)
+                # growth and competition jointly set the equilibrium.
+                #   :shared_k        -> N*(r_eff*(1 - total/K + sum alpha N/K) - heat)
+                #                       (c_sj = 1 - alpha_sj)
+                #   :species_specific-> N*(r_eff*(1 - N_s/K + sum_{j!=s} alpha N/K) - heat)
+                #                       (c_ss = 1, c_sj = -alpha_sj; item 4.5)
+                growth_bracket = if p.competition_structure === :species_specific
+                    1.0 - N_is / k_i + interaction_term
+                else
+                    1.0 - total_biomass_i / k_i + interaction_term
+                end
+                dU[i, s] = N_is * (r_eff * clamp(growth_bracket, -1.0, 2.0) - heat_stress)
             else
                 # Legacy form, retained for comparison only: the interaction
                 # term is added OUTSIDE the logistic bracket, so interactions
@@ -330,7 +383,9 @@ The daily dispersal coefficient D_daily defaults to 10/365 km/day (the median of
 literature-derived annual dispersal rates). Callers that know the exact species codes
 should pass the dynamically computed median.
 """
-function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, D_daily::Float64=10.0/365.0)
+function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams,
+        D_daily::Float64=10.0/365.0; passability_floor::Float64=0.0)
+    passability_floor >= 0 || error("passability_floor must be non-negative (got $passability_floor)")
     I = Int[]
     J = Int[]
     V = Float64[]
@@ -352,7 +407,16 @@ function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, D_
 
             d_km = d_ij / 1000.0
 
-            rate = D_daily * x * dams[i, j] / max(d_km, 0.001)
+            # 4.7/P2.4: optional compounded-passability floor.  A restricted link
+            # whose obstruction product falls below the floor is treated as
+            # minimally passable rather than numerically impassable; unrestricted
+            # links (passability 1.0) are untouched.
+            link_passability = dams[i, j]
+            if passability_floor > 0 && 0.0 < link_passability < passability_floor
+                link_passability = passability_floor
+            end
+
+            rate = D_daily * x * link_passability / max(d_km, 0.001)
 
             push!(I, i)
             push!(J, j)
@@ -363,8 +427,10 @@ function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, D_
     return sparse(I, J, V, n_sites, n_sites)
 end
 
-function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, species_codes)
+function precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, species_codes;
+        passability_floor::Float64=0.0)
     rates_for_median = Float64[get(ANNUAL_DISPERSAL_RATES, sp, 5.0) for sp in species_codes]
     D_daily = median(rates_for_median) / 365.0
-    return precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, D_daily)
+    return precompute_dispersal_matrix(n_sites, distances, elevations, c, dams, D_daily;
+        passability_floor=passability_floor)
 end

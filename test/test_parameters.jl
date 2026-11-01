@@ -267,3 +267,23 @@ end
     @test flat_chosen["exclude_fishfarm_eel_records"] == true
     @test flat_chosen["salinity_envelope"] == true
 end
+
+@testset "competition-structure option loader (4.5)" begin
+    @test SimulationParameters.competition_structure(Dict()) === :shared_k
+    @test SimulationParameters.competition_structure(Dict(
+        "run_climate_scenarios" => Dict("competition_structure" => "species_specific"))) ===
+        :species_specific
+    @test SimulationParameters.competition_structure(Dict(
+        "run_climate_scenarios" => Dict("competition_structure" => "SHARED_K"))) ===
+        :shared_k
+    @test_throws ErrorException SimulationParameters.competition_structure(Dict(
+        "run_climate_scenarios" => Dict("competition_structure" => "bogus")))
+
+    # The corrected re-run config keeps the primary shared-K specification and
+    # documents the passability-floor / on-path-only switches at their defaults.
+    corrected = SimulationParameters.load(
+        joinpath(@__DIR__, "..", "parameters_climate_scenarios_corrected.toml"))
+    @test SimulationParameters.competition_structure(corrected) === :shared_k
+    @test Float64(get(corrected["obstacles"], "passability_floor", 0.0)) == 0.0
+    @test get(corrected["obstacles"], "on_path_only", false) == false
+end

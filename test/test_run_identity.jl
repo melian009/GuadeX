@@ -46,6 +46,12 @@ end
         Guadex.parameter_digest(params)
     @test Guadex.parameter_digest(Guadex.set_thermal_sigma_multiplier(params, 0.3)) !=
         Guadex.parameter_digest(params)
+    # 4.5: the competition structure is part of the resolved model state.
+    @test Guadex.set_competition_structure(params, :species_specific).competition_structure ===
+        :species_specific
+    @test Guadex.parameter_digest(
+        Guadex.set_competition_structure(params, :species_specific)) !=
+        Guadex.parameter_digest(params)
 end
 
 @testset "burn-in cache key includes the parameter digest" begin

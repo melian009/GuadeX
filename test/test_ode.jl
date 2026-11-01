@@ -558,6 +558,81 @@ end
             @test !isapprox(du_corrected[1, s], du_legacy[1, s])
         end
     end
+
+    # --- 4.5 structural sensitivity: c = -alpha ---------------------------
+    @testset "species-specific competition structure (c = -alpha)" begin
+        alpha = [0.0 -0.3; -0.5 0.0]
+        growth = [0.1 0.1]
+        K = 100.0
+        make(structure) = Guadex.set_competition_structure(Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], growth, [20.0], [1.0], [20.0, 20.0], [5.0, 5.0], [K]),
+            structure)
+
+        shared = make(:shared_k)
+        specific = make(:species_specific)
+        @test shared.competition_structure === :shared_k
+        @test specific.competition_structure === :species_specific
+
+        # For c_sj = -alpha_sj, c_12 = 0.3 and c_21 = 0.5, so c_12 c_21 < 1 and
+        # the interior equilibrium is K(1-c_sj)/(1-c_12 c_21).
+        c12, c21 = -alpha[1, 2], -alpha[2, 1]
+        n1 = K * (1 - c12) / (1 - c12 * c21)
+        n2 = K * (1 - c21) / (1 - c12 * c21)
+        u_eq = [n1 n2]
+        du_eq = zeros(1, 2)
+        Guadex.metacommunity_ode!(du_eq, u_eq, specific, 0.0)
+        @test maximum(abs.(du_eq)) < 1e-9
+
+        # The defining per-capita identity: 1 - N_s/K + sum_{j!=s} alpha N_j/K.
+        u = [30.0 20.0]
+        du = zeros(1, 2)
+        Guadex.metacommunity_ode!(du, u, specific, 0.0)
+        for s in 1:2
+            hetero = sum(alpha[s, j] * u[j] / K for j in 1:2 if j != s)
+            expected = growth[1, s] * clamp(1.0 - u[s] / K + hetero, -1.0, 2.0)
+            @test du[1, s] / u[s] ≈ expected rtol=1e-10
+        end
+
+        # The two structures are genuinely different (alpha != 0) and the
+        # shared-K form is the default.
+        du_shared = zeros(1, 2)
+        Guadex.metacommunity_ode!(du_shared, u, shared, 0.0)
+        @test !isapprox(du_shared, du)
+
+        # The structure survives the parameter-rebuild helpers used by the
+        # runners (heat stress, K scaling, interaction replacement).
+        @test Guadex.set_heat_stress_rate(specific, 1e-5).competition_structure ===
+              :species_specific
+        @test Guadex.scale_carrying_capacity(specific, 2.0).competition_structure ===
+              :species_specific
+        @test Guadex.set_interaction_matrix(specific, alpha).competition_structure ===
+              :species_specific
+
+        @test_throws ErrorException Guadex.set_competition_structure(specific, :bogus)
+        @test_throws ErrorException Guadex.set_competition_structure(
+            MetacommunityParams(1, 1, [0.0;;], sparse([1], [1], [0.0], 1, 1),
+                [1.0], [0.1;;], [20.0], [1.0], [20.0], [5.0], [100.0],
+                [-Inf], [Inf], 0.0, false), :species_specific)
+    end
+
+    # --- P2.4 passability floor -------------------------------------------
+    @testset "compounded passability floor" begin
+        distances = [0.0 1000.0; 1000.0 0.0]
+        elevations = [100.0, 100.0]
+        dams = [1.0 1e-33; 1e-33 1.0]
+        no_floor = Guadex.precompute_dispersal_matrix(2, distances, elevations, 0.0,
+            dams, 10.0 / 365.0)
+        floor = Guadex.precompute_dispersal_matrix(2, distances, elevations, 0.0,
+            dams, 10.0 / 365.0; passability_floor=1e-3)
+        # Unrestricted entries are untouched; restricted entries are raised.
+        @test no_floor[1, 1] == 0.0
+        @test floor[1, 1] == 0.0
+        @test floor[1, 2] / no_floor[1, 2] ≈ 1e30 rtol=1e-9
+        @test floor[1, 2] ≈ 10.0 / 365.0 * 1e-3 / 1.0 rtol=1e-12
+        @test_throws ErrorException Guadex.precompute_dispersal_matrix(2, distances,
+            elevations, 0.0, dams, 10.0 / 365.0; passability_floor=-1.0)
+    end
 end
 
 # =============================================================================

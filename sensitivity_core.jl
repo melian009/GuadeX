@@ -130,6 +130,19 @@ function load_sensitivity_settings(GUADEX_PARAMS)
 
     smoke = _bool_setting(get(ENV, "GUADEX_SENSITIVITY_SMOKE", "0"))
 
+    # 4.5: environment override takes precedence over the config key; validate
+    # here so a typo cannot silently run the wrong structure.
+    competition_override = strip(get(ENV, "GUADEX_COMPETITION_STRUCTURE", ""))
+    competition_setting = if isempty(competition_override)
+        SimulationParameters.competition_structure(GUADEX_PARAMS)
+    else
+        structure = Symbol(lowercase(competition_override))
+        structure in (:shared_k, :species_specific) ||
+            error("GUADEX_COMPETITION_STRUCTURE must be 'shared_k' or 'species_specific' " *
+                  "(got '$competition_override')")
+        structure
+    end
+
     return (
         days_per_year = days_per_year,
         start_year = start_year,
@@ -188,6 +201,15 @@ function load_sensitivity_settings(GUADEX_PARAMS)
         output_dir = get(ENV, "GUADEX_SENSITIVITY_OUTPUT_DIR",
             string(shared("output_dir", "results/sensitivity_obstacles"))),
         smoke = smoke,
+        # 4.5 / 4.7 structural options (same resolver as the climate runner, so a
+        # sweep and the climate ensemble can be run under the same structure).
+        competition_structure = competition_setting,
+        passability_floor = parse(Float64, get(ENV, "GUADEX_OBSTACLE_FLOOR",
+            string(get(get(GUADEX_PARAMS, "obstacles", Dict{String,Any}()),
+                "passability_floor", 0.0)))),
+        obstacles_on_path_only = _bool_setting(get(ENV, "GUADEX_OBSTACLES_PARENT_ONLY",
+            string(get(get(GUADEX_PARAMS, "obstacles", Dict{String,Any}()),
+                "on_path_only", false)))),
         # E13-E16/E18 biological-assumption options.
         absence_growth_fraction = bio.absence_growth_fraction,
         pool_capacity_mode = bio.pool_capacity_mode,
@@ -384,6 +406,9 @@ function _burnin_digest_options(settings, extra::AbstractString)
         "nonreproducing_local_growth" => string(get(settings, :nonreproducing_local_growth, :legacy)),
         "exclude_fishfarm_eel_records" => get(settings, :exclude_fishfarm_eel_records, false),
         "salinity_envelope" => get(settings, :salinity_envelope, false),
+        "competition_structure" => string(get(settings, :competition_structure, :shared_k)),
+        "passability_floor" => get(settings, :passability_floor, 0.0),
+        "obstacles_on_path_only" => get(settings, :obstacles_on_path_only, false),
         "extra" => extra,
     )
 end
@@ -541,7 +566,8 @@ function run_sensitivity_scenario(data_base, params::MetacommunityParams,
         data_base.elevations,
         Float64(upstream_cost),
         modified_dams,
-        data_base.species)
+        data_base.species;
+        passability_floor=Float64(get(data_base, :passability_floor, 0.0)))
     scenario_params = set_dispersal_matrix(params, new_dispersal_matrix)
     t_end = Float64(settings.simulation_years * settings.days_per_year)
     prob = ODEProblem(metacommunity_ode_scheduled!, u0_flat, (0.0, t_end),
@@ -648,6 +674,9 @@ function sensitivity_run_fingerprint(settings, model; upstream_cost, passability
         # C3: which projection route produced the initial state (science-affecting).
         "projection_route" => string(get(settings, :projection_route, :full_burnin)),
         "interim_spin_up_years" => Int(get(settings, :interim_spin_up_years, 0)),
+        "competition_structure" => string(get(settings, :competition_structure, :shared_k)),
+        "passability_floor" => get(settings, :passability_floor, 0.0),
+        "obstacles_on_path_only" => get(settings, :obstacles_on_path_only, false),
         "daily_forcing_file" => basename(String(settings.daily_forcing_file)),
     )
     interaction_matrix === nothing || (fingerprint["interaction_matrix"] = String(interaction_matrix))
@@ -776,6 +805,9 @@ function sensitivity_run_metadata(settings, model; script::AbstractString,
         "nonreproducing_local_growth" => string(get(settings, :nonreproducing_local_growth, :legacy)),
         "exclude_fishfarm_eel_records" => get(settings, :exclude_fishfarm_eel_records, false),
         "salinity_envelope" => get(settings, :salinity_envelope, false),
+        "competition_structure" => string(get(settings, :competition_structure, :shared_k)),
+        "passability_floor" => get(settings, :passability_floor, 0.0),
+        "obstacles_on_path_only" => get(settings, :obstacles_on_path_only, false),
     )
     merge!(metadata, extras)
     return metadata

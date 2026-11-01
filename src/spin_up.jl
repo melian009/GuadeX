@@ -422,7 +422,8 @@ function scale_carrying_capacity(params::MetacommunityParams, factor::Real)
         params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
         params.temperatures, params.habitat_suitability, params.thermal_optima,
         params.thermal_sigmas, params.carrying_capacity .* factor,
-        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate, params.interaction_inside_growth,
+        params.competition_structure)
 end
 
 """
@@ -439,7 +440,8 @@ function set_thermal_optima(params::MetacommunityParams, optima::AbstractVector)
         params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
         params.temperatures, params.habitat_suitability, Float64.(optima),
         params.thermal_sigmas, params.carrying_capacity,
-        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate, params.interaction_inside_growth,
+        params.competition_structure)
 end
 
 """
@@ -454,7 +456,29 @@ function set_heat_stress_rate(params::MetacommunityParams, k::Real)
         params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
         params.temperatures, params.habitat_suitability, params.thermal_optima,
         params.thermal_sigmas, params.carrying_capacity,
-        params.thermal_lower_limits, params.thermal_upper_limits, Float64(k))
+        params.thermal_lower_limits, params.thermal_upper_limits, Float64(k), params.interaction_inside_growth,
+        params.competition_structure)
+end
+
+"""
+    set_competition_structure(params, structure)
+
+Return a copy of `params` with the competition structure set to `:shared_k`
+(primary, `c = 1 - α`) or `:species_specific` (second-review alternative,
+`c = -α`).  Invalid values error rather than silently falling back.
+"""
+function set_competition_structure(params::MetacommunityParams, structure::Symbol)
+    structure in COMPETITION_STRUCTURES ||
+        error("competition_structure must be one of $(COMPETITION_STRUCTURES) (got :$(structure))")
+    params.interaction_inside_growth ||
+        error("competition_structure = :$(structure) requires interaction_inside_growth = true")
+    return MetacommunityParams(
+        params.n_sites, params.n_species, params.interaction_matrix,
+        params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
+        params.temperatures, params.habitat_suitability, params.thermal_optima,
+        params.thermal_sigmas, params.carrying_capacity,
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate,
+        params.interaction_inside_growth, structure)
 end
 
 """
@@ -471,7 +495,8 @@ function set_dispersal_matrix(params::MetacommunityParams, matrix)
         matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
         params.temperatures, params.habitat_suitability, params.thermal_optima,
         params.thermal_sigmas, params.carrying_capacity,
-        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate, params.interaction_inside_growth,
+        params.competition_structure)
 end
 
 """
@@ -486,7 +511,8 @@ function set_interaction_matrix(params::MetacommunityParams, matrix)
         params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
         params.temperatures, params.habitat_suitability, params.thermal_optima,
         params.thermal_sigmas, params.carrying_capacity,
-        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate, params.interaction_inside_growth,
+        params.competition_structure)
 end
 
 """
@@ -502,7 +528,8 @@ function set_thermal_sigma_multiplier(params::MetacommunityParams, factor::Real)
         params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
         params.temperatures, params.habitat_suitability, params.thermal_optima,
         params.thermal_sigmas .* Float64(factor), params.carrying_capacity,
-        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate, params.interaction_inside_growth,
+        params.competition_structure)
 end
 
 """
@@ -520,5 +547,6 @@ function with_temperature_baseline(params::MetacommunityParams, temperatures::Ab
         params.dispersal_matrix, params.dispersal_scaling, params.intrinsic_growth_rates,
         Float64.(temperatures), params.habitat_suitability, params.thermal_optima,
         params.thermal_sigmas, params.carrying_capacity,
-        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate)
+        params.thermal_lower_limits, params.thermal_upper_limits, params.heat_stress_rate, params.interaction_inside_growth,
+        params.competition_structure)
 end

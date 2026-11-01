@@ -41,6 +41,10 @@ const OBSTACLE_MODE = Symbol(get(ENV, "GUADEX_OBSTACLE_MODE", GUADEX_PARAMS["obs
 const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOLERANCE_M", string(GUADEX_PARAMS["obstacles"]["matching_tolerance_m"])))
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
+const OBSTACLE_PASSABILITY_FLOOR = parse(Float64, get(ENV, "GUADEX_OBSTACLE_FLOOR",
+    string(get(GUADEX_PARAMS["obstacles"], "passability_floor", 0.0))))
+const OBSTACLES_ON_PATH_ONLY = lowercase(get(ENV, "GUADEX_OBSTACLES_PARENT_ONLY",
+    string(get(GUADEX_PARAMS["obstacles"], "on_path_only", false)))) in ("1", "true", "yes")
 
 # C4: dispersal-graph construction method from the [connectivity] section.
 const CONNECTIVITY_METHOD = SimulationParameters.connectivity_method(GUADEX_PARAMS)
@@ -75,6 +79,8 @@ if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
             (SETTINGS.projection_route === :interim_observed ?
                 " ($(SETTINGS.interim_spin_up_years) baseline yr, E4 bypassed)" : " (E4 stop rule)"))
     println("  connectivity:    :$(CONNECTIVITY_METHOD)")
+    println("  competition:     :$(SETTINGS.competition_structure)")
+    println("  passability:     floor=$(OBSTACLE_PASSABILITY_FLOOR), on_path_only=$(OBSTACLES_ON_PATH_ONLY)")
     println("  biology:         absence_growth_fraction=$(SETTINGS.absence_growth_fraction), " *
             "pool=$(SETTINGS.pool_capacity_mode), dificil=$(SETTINGS.fishless_dificil_capacity), " *
             "nonrep=$(SETTINGS.nonreproducing_local_growth), eel=$(SETTINGS.exclude_fishfarm_eel_records), " *
@@ -117,7 +123,10 @@ data_base = prepare_ode_data(
     fishless_dificil_capacity = SETTINGS.fishless_dificil_capacity,
     nonreproducing_local_growth = SETTINGS.nonreproducing_local_growth,
     exclude_fishfarm_eel_records = SETTINGS.exclude_fishfarm_eel_records,
-    salinity_envelope = SETTINGS.salinity_envelope
+    salinity_envelope = SETTINGS.salinity_envelope,
+    competition_structure = SETTINGS.competition_structure,
+    passability_floor = OBSTACLE_PASSABILITY_FLOOR,
+    obstacles_on_path_only = OBSTACLES_ON_PATH_ONLY
 )
 
 n_sites = data_base.params.n_sites
@@ -221,7 +230,10 @@ for model in CLIMATE_MODELS
                     "obstacle_matching_tolerance_m" => OBSTACLE_MATCHING_TOLERANCE,
                     "obstacle_passability" => OBSTACLE_PASSABILITY,
                     "obstacle_downstream_passability" => OBSTACLE_DOWNSTREAM_PASSABILITY,
-                    "obstacles_file" => basename(OBSTACLES_FILE)))
+                    "obstacle_passability_floor" => OBSTACLE_PASSABILITY_FLOOR,
+                    "obstacles_on_path_only" => OBSTACLES_ON_PATH_ONLY,
+                    "obstacles_file" => basename(OBSTACLES_FILE),
+                    "competition_structure" => string(SETTINGS.competition_structure)))
 
             if !FORCE_RERUN && sensitivity_run_status(run_dir, fingerprint)
                 println("  skipped (complete and fingerprint matches; " *

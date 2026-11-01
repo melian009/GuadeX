@@ -104,6 +104,15 @@ downstream_passability = 0.5
 # assumption (0.1 upstream, 0.5 downstream) pending full standardisation of the
 # regional obstacle inventory's qualitative passability index (IF).
 
+# P2.4 structural sensitivities (both default off, so the primary run is
+# unchanged):
+#   passability_floor: raise the compounded per-link passability to this floor
+#     (a link with many obstacles can otherwise reach ~1e-33).  Try 1e-3.
+#   on_path_only: snap obstacles only to the on-path parent edges, so the
+#     reconstructed MST root-join edges carry no obstacles.
+passability_floor = 0.0
+on_path_only = false
+
 # ---------------------------------------------------------------------------
 # C4: dispersal-graph construction.  The corrected re-run selects the
 # river-network tree rebuilt from the network-distance matrix (on-path parent
@@ -376,6 +385,16 @@ projection_route = "interim_observed"
 # fastest local/compositional transients relax while the state stays anchored to
 # the observations; the residual common transient cancels in scenario-control.
 interim_spin_up_years = 3
+
+# --- 4.5: competition structure (Phase 2 structural sensitivity) ------------
+#   "shared_k"         (default) shared per-site carrying capacity, c = 1 - alpha.
+#                      Heterospecific competition exceeds self-limitation
+#                      (c in [1.3, 1.8] for the observed alpha), so two-species
+#                      coexistence is not stable and priority effects can occur.
+#   "species_specific" the reviewer's alternative: c_ss = 1, c_sj = -alpha_sj,
+#                      i.e. dN/dt = r N (1 - N_s/K + sum_{j!=s} alpha_sj N_j/K).
+#                      Run as a sensitivity with GUADEX_COMPETITION_STRUCTURE.
+competition_structure = "shared_k"
 
 # --- WP4: spun-up initial conditions / carrying-capacity sensitivity --------
 # Corrected re-run: stop only when BOTH the basin-total relative change (below

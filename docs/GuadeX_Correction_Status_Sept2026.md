@@ -5,9 +5,11 @@
 current HEAD `c340398`). The **viewer-annex round** (Part A of
 `report/202609_feedback/GuadeX_Viewer_Issues_Sept2026.pdf`, items A1–A8, plus the
 October-report availability sentences) is committed as well. The second-review edits (the 4.4
-parser fix, the 4.5 stability tests, the 4.6/4.7 diagnostics and the documentation updates) are
-**uncommitted working-tree changes**. The reviewer's second document,
-`docs/GuadeX_Reply_to_Response_Oct2026.md`, is an input rather than a deliverable.
+parser fix, the 4.5 stability tests, the 4.6/4.7 diagnostics and the documentation updates) and
+the **Phase 2 record and evidence documents** are **uncommitted working-tree changes**; the
+Phase 2 re-runs are executed and their outputs are under the gitignored `results/` tree. The
+reviewer's second document, `docs/GuadeX_Reply_to_Response_Oct2026.md`, is an input rather than a
+deliverable.
 
 ## 1. Purpose and how to read
 
@@ -16,8 +18,9 @@ answers three questions:
 
 1. **What is actually done** — which review items (C1–C7, E1–E22, minor issues) are
    implemented and verified in the repository, and what evidence supports each claim.
-2. **What to run next** — the exact runbook for the corrected climate re-run, including the
-   endpoint re-selection step and the legacy-configuration trap.
+2. **What to run next** — the exact runbook for the corrected climate re-run and the Phase 2
+   re-runs, including the endpoint re-selection step, the legacy-configuration trap and the
+   Phase 2 output roots (`docs/GuadeX_Phase2_Run_Record.md`).
 3. **What is still open** — every decision that needs the team and every known residual.
 
 The companion documents are the **assessment** (`docs/GuadeX_Review_Assessment_Sept2026.md`,
@@ -39,21 +42,23 @@ not be re-derived it is explicitly marked
 Sections 2.1 (model corrections) and 2.2 (viewer annex) are committed on `master`; the latest
 model-side commit is the AAL reclassification `099a87d`. The **second-review additions** within
 2.1 — the 4.4 parser fix and regenerated long table, the 4.5 stability tests, and the 4.6/4.7
-diagnostics — are **uncommitted working-tree changes**.
+diagnostics — and the **Phase 2 evidence documents** are **uncommitted working-tree changes**.
+The Phase 2 re-runs themselves were executed on 2026-11-01 and written under `results/`, which is
+gitignored; their command/digest record is `docs/GuadeX_Phase2_Run_Record.md`.
 
 ### 2.1 Model corrections (committed through `099a87d`; second-review additions uncommitted)
 
 | ID | What changed | Evidence / verification | Status |
 |----|--------------|-------------------------|--------|
-| **C2** | Interaction term moved **inside** the intrinsic-growth bracket (competitive Lotka–Volterra, `c = 1 − α`); the legacy outside-growth form is opt-in via `interaction_inside_growth = false`. | `src/ode_model.jl` (`interaction_inside_growth`, `clamp(1 − total/K + interaction, −1, 2)` at ~L144); default `true` in the constructor and docs. `test/test_ode.jl` testset *interaction form: competitive Lotka–Volterra (C2)* (35 tests) checks the two-species equilibrium `K(1−c₁₂)/(1−c₁₂c₂₁)` and per-capita growth scaling. The two-species stability tests were **added after the second review** (item 4.5), which correctly noted that the first response claimed a test that was not present; they now pin both the coexistence regime and the saddle/priority-effect regime of the observed coefficients. | Implemented |
-| **C1** | Interaction direction parsed from the cell text (named target, so `α[target, source]`); undirected competition made symmetric; `No coexist` → no interaction; Spanish `depreda`/`interfiere` handled; mixed-mechanism cells flagged ambiguous; the missing *Lepomis* (`LG`) row/column is now present. New long table `data/BIOTIC/interaction_matrix_long.csv`. | `src/data_preparation.jl` (`parse_interaction_cell`, `build_interaction_long_table`, long-table loader); `scripts/build_interaction_long_table.jl`. Verified: the long table has **227 data rows** and, after the 4.4 parser fix, **31 ambiguous source cells** (62 ambiguous rows; 22/44 before the fix); the loaded matrix is 24×24 including `LG` and `AAL`. `test/test_data_preparation.jl` (parsing helpers, data-loading testsets). | Implemented |
+| **C2** | Interaction term moved **inside** the intrinsic-growth bracket (competitive Lotka–Volterra, `c = 1 − α`); the legacy outside-growth form is opt-in via `interaction_inside_growth = false`. | `src/ode_model.jl` (`interaction_inside_growth`, `clamp(1 − total/K + interaction, −1, 2)` at ~L144); default `true` in the constructor and docs. `test/test_ode.jl` testset *interaction form: competitive Lotka–Volterra (C2)* (35 tests) checks the two-species equilibrium `K(1−c₁₂)/(1−c₁₂c₂₁)` and per-capita growth scaling. The two-species stability tests were **added after the second review** (item 4.5), which correctly noted that the first response claimed a test that was not present; they now pin both the coexistence regime and the saddle/priority-effect regime of the observed coefficients. The `c = −α` alternative was run as a Phase 2 sensitivity over all 44 scenarios (`results/climate_scenarios_competition_alt`; `docs/GuadeX_Phase2_Competition_Sensitivity.md`); the primary remains `c = 1 − α`. | Implemented |
+| **C1** | Interaction direction parsed from the cell text (named target, so `α[target, source]`); undirected competition made symmetric; `No coexist` → no interaction; Spanish `depreda`/`interfiere` handled; mixed-mechanism cells flagged ambiguous; the missing *Lepomis* (`LG`) row/column is now present. New long table `data/BIOTIC/interaction_matrix_long.csv`. | `src/data_preparation.jl` (`parse_interaction_cell`, `build_interaction_long_table`, long-table loader); `scripts/build_interaction_long_table.jl`. Verified: the long table has **227 data rows** and, after the 4.4 parser fix, **31 ambiguous source cells** (62 ambiguous rows; 22/44 before the fix); the loaded matrix is 24×24 including `LG` and `AAL`. `test/test_data_preparation.jl` (parsing helpers, data-loading testsets). Phase 2 re-ran the climate, obstacle and interaction experiments against the regenerated table; the effect is quantified as immaterial in `docs/GuadeX_Phase2_ParserFix_Effect.md`, `docs/GuadeX_Phase2_ObstacleSweep_Update.md` and `docs/GuadeX_Phase2_InteractionSweep_Update.md`. | Implemented |
 | **E5** | Reporting offsets are `1:20`, so label `2045` is the **end** of year 2045 (`t = 7300`), not 1 Jan 2045. | `run_climate_scenarios.jl` (`YEAR_OFFSETS = collect(1:SIMULATION_YEARS)`, `SIMULATION_YEARS = END_YEAR − START_YEAR + 1 = 20`). `test/test_outputs.jl` *annual snapshot alignment* (30 tests). | Implemented |
 | **E6** | Quasi-extinction is evaluated only over sites where the species was **baseline-established**; a species absent everywhere in the baseline yields fraction `0.0`; the established denominator is exposed. | `src/outputs.jl` (`baseline_established`, `established` argument, `n_sites_established`); tests *quasi_extinction_flags never flags non-established sites (E6)*, *quasi-extinction fraction over established sites (E6)*, *species absent everywhere in the baseline → fraction 0 (E6)*, *trout-style fraction is not 1 − occupancy (E6)*. | Implemented |
 | **E9 / E10** | Parameter **and code digest** folded into burn-in cache keys and completed-run fingerprints; an existing run is skipped **only when its stored digest matches**; corrected scenario config and legacy reproduction config written and distinguished. | `sensitivity_core.jl`, `src/run_identity.jl`, `run_climate_scenarios.jl`; `run_metadata.json`/`run_digest.txt` sidecars. Tests *parameter digest*, *burn-in cache key includes the parameter digest*, *run fingerprint includes the parameter digest*, *committed k1x burn-in configuration*, *corrected climate re-run configuration*. | Implemented |
 | **E22** | Per-month held-out-basin (LOBO) bias correction applied in the `guadex_tw` temperature pipeline; the 48 model-facing temperature products were rewritten. | `guadex_tw/scripts/13b_apply_bias_correction.py`, `guadex_tw/models/lobo_monthly_bias_correction.json`, `guadex_tw/logs/bias_correction_13b_run.log`. Verified: pooled annual **+1.1059 °C**, Feb **+2.2237**, Mar **+2.2867**; log reports **48 files processed in 699.4 s** (44 per-GCM wide files 8.63 GB + ensemble-median wide + baseline + future-stats + historical ≈ 9 GB). Anomalies unchanged, as designed. `scripts/13_project_guadex_sites.py` also fixed/plumbed (the correction itself lives in `13b`). | Implemented |
 | **C5 / E1** | Model site temperature level = corrected `tw_baseline_mean` (1986–2005) selected by **exact column name**, joined by site code, with a loud fallback; `level + anomaly` reconstructs the corrected daily series; k-calibration and exposure use the same array. | `src/data_preparation.jl` (`WATER_TEMPERATURE_COLUMN = "tw_baseline_mean"`, `extract_site_temperatures`), `src/temperature_forcing.jl`. Tests *corrected site water-temperature baseline (C5/E1)*, *model temperature equals corrected daily series (C5/E1)* (16 tests), *driver daily schedules reconstruct the corrected series (ITEM 1)* (18 tests). Corrected **trout-site mean = 12.8305 °C** (`test/test_temperature_forcing.jl`, `isapprox(..., 12.8304986; atol=0.01)`); corrected basin range 9.785–18.064 °C. | Implemented |
 | **C7** | Realised applied warming persisted per run (2026–2045 and 2036–2045 means over the sites) and used as the dose–response regressor; exposure restricted to baseline-established sites; GCM-aware dose–response (fixed-effect GCM, no new dependency); endpoint re-selection function `select_climate_endpoints`. | `src/temperature_forcing.jl` (`realised_warming_anomaly`), `src/climate_diagnostics.jl`, `run_climate_scenarios.jl`, `docs/climate_scenarios.md`. Tests *realised warming anomaly (C7)*, *established_exposure_summary (C7)*, *dose_response handles GCM structure (C7)*, *select_climate_endpoints / realised_forcing_axis (C7)*. | Implemented |
-| **E4** | Robust composition stop rule: 95th percentile of `\|Δ log N\|` over **active** site×species cells (density floor 0.1) in at least one compared year, combined with the basin-total rule (`spin_up_criterion = "both"`, `spin_up_composition_tol = 1e-2`, `spin_up_min_years = 10`); the raw all-cells statistic is recorded as a diagnostic; **actual matrix-specific burn-in years** are recorded in metadata. | `src/spin_up.jl` (`SPIN_UP_COMPOSITION_ACTIVE_FLOOR = 0.1`, `composition_q95_change`, `composition_q95_change_all_cells`, `composition_diagnostics`); tests *spin_up convergence rule (E4)* (29 tests) and *burn-in diagnostics flow into run metadata and index*. On real data the robust statistic crosses 1e-2 at ≈ year 423 (< 600 cap) per the config comment; the raw all-cells statistic plateaus near 1.4e-2. **The corrected runs do not exercise this rule**: both the climate runs and the sweeps select the interim route, so the recorded burn-in is 3 years for every matrix (`results/alt_interactions_corrected/burnin_summary.csv`: `years=3`, `criteria=basin`, `converged=false`). The 21/494/532-year figures belong to the September full-burn-in runs. | Implemented |
+| **E4** | Robust composition stop rule: 95th percentile of `\|Δ log N\|` over **active** site×species cells (density floor 0.1) in at least one compared year, combined with the basin-total rule (`spin_up_criterion = "both"`, `spin_up_composition_tol = 1e-2`, `spin_up_min_years = 10`); the raw all-cells statistic is recorded as a diagnostic; **actual matrix-specific burn-in years** are recorded in metadata. | `src/spin_up.jl` (`SPIN_UP_COMPOSITION_ACTIVE_FLOOR = 0.1`, `composition_q95_change`, `composition_q95_change_all_cells`, `composition_diagnostics`); tests *spin_up convergence rule (E4)* (29 tests) and *burn-in diagnostics flow into run metadata and index*. On real data the robust statistic crosses 1e-2 at ≈ year 423 (< 600 cap) per the config comment; the raw all-cells statistic plateaus near 1.4e-2. **The corrected and Phase 2 runs do not exercise this rule**: both the climate runs and the sweeps select the interim route, so the recorded burn-in is 3 years for every matrix (`results/alt_interactions_corrected/burnin_summary.csv` and `results/alt_interactions_phase2/burnin_summary.csv`: `years=3`, `criteria=basin`, `converged=false`). The 21/494/532-year figures belong to the September full-burn-in runs. | Implemented |
 | **C3** | **Interim projection route**: `projection_route = "interim_observed"` starts from the observed community and integrates exactly `interim_spin_up_years = 3` baseline years (`interim_observed_spin_up`), reporting every scenario as per-metric `scenario − control` deltas (`scenario_minus_control` / `scenario_minus_control_table`, written by the figures path). The route is an explicit opt-in; `"full_burnin"` remains the default so the E4 machinery is untouched elsewhere, and the route mandates `control_run = true`. Route and years are recorded in `export/run_metadata.json`. | `src/spin_up.jl` (`projection_route`, `interim_observed_spin_up`), `run_climate_scenarios.jl`, `src/climate_diagnostics.jl`; tests *C3 interim projection route* (spin-up) and *scenario_minus_control (C3 interim route)*, plus corrected-config route assertions. | Implemented (provisional pending calibration) |
 | **Consistency** | All three drivers reconstruct the corrected daily series; the standalone exporter uses 1-based offsets; the serializer uses the shared (corrected) extractor; corrected config vs legacy reproduction config are explicitly separated. | `run_climate_scenarios.jl`, `run_climate_experiments.jl`, `run_alt_interactions.jl`, `scripts/export_run_outputs.jl`, `scripts/serialize_data.jl` (imports `Guadex` and calls the shared extractor). Tests *driver daily schedules…*, *export_run_outputs*. | Implemented |
 | **Housekeeping** | Initial state aligned by site code; seasonal rate option; vacuous tests replaced and mass-conservation/topology tests added; viewer species-level export + aggregate rendering; ML (`reml=False`) LRT refit in the air–water model. | `run_climate_scenarios.jl`, `src/spin_up.jl`, `test/test_graph_construction.jl`, `test/test_ode.jl` (*dispersal operator: mass conservation and structure*), `test/test_data_preparation.jl`, viewer export under `results/.../export/viewer/species_<sp>_*_timeseries.json`, `guadex_tw/scripts/08_models.py`. | Implemented |
@@ -61,7 +66,7 @@ diagnostics — are **uncommitted working-tree changes**.
 | **C4** | New **on-path river-network graph** (fallback, because `SW_Line_4C_.shp` carries no flow-direction attribute or elevation): on-path parent rule plus explicit MST root-join; deterministic tie-breaking. | `src/data_preparation.jl` (`build_on_path_distance_matrix`, defaults `rtol=0.02`, `atol=200 m`); `test/test_on_path_graph.jl` (testset **2647 tests**). Verified on real data: **774 = n−1 edges**, 267 roots joined by 266 MST edges, **total 13,871.5 km** (vs legacy 31,206.3 km), **4** parent elevation inversions vs **238** in the legacy graph, acyclic and deterministic. Default stays `legacy`; the corrected config selects `connectivity.method = "on_path"`. | Implemented (fallback) |
 | **E12** | Obstacles snapped to the selected (corrected) tree; passabilities **multiply** along a link (0.1·0.1 = 0.01) instead of `min()`; non-operational/ambiguous structures classified and excluded/annotated; legacy de-duplication; deterministic. `IF` index deliberately **not** used as passability. | `src/data_preparation.jl` (`build_obstacle_passability_matrix`, status classification); tests *param digest* + `test/test_data_preparation.jl` (`n_status_active = 1274`, `n_status_nonoperational = 185`, `n_status_ambiguous = 199`) and `test/test_on_path_graph.jl` overlay counts. Verified overlay line: matched 973/1658 (legacy) or 1036/1658 (on-path), applied 727/796, excluded 387. `IF` non-numeric rows confirmed at **547/1658** in `src/data_preparation.jl` comments — this differs from the review's 445 and is stated as such. | Implemented |
 | **E13–E16 / E18** | Six explicit, opt-in biological options added with **defaults unchanged** (byte-identical default regression): `absence_growth_fraction`, `pool_capacity_mode`, `fishless_dificil_capacity`, `nonreproducing_local_growth`, `exclude_fishfarm_eel_records`, `salinity_envelope`. Metadata + digest wired; documented. | `parameters.toml [biological_options]`, `SimulationParameters.biological_options`, `prepare_ode_data`; `test/test_data_preparation.jl` *Explicit biological options (E13-E16, E18)* (46 tests); `test/test_parameters.jl` *biological-assumption option loader*. Documented in `docs/climate_scenarios.md`. | Implemented; the corrected config now selects the team's six values (E13 `1.0`, E14 `"cap"`, E15 `"near_zero"`, E16 `"zero"` + fish-farm drop, E18 `true`), while `parameters.toml` keeps the legacy defaults. |
-| **Validation** | Full Julia suite and a real corrected smoke run. | Full suite: **3,913 / 3,913 pass, 70 testsets, 0 failures** (re-run 2026-11-01; see §6). Smoke run present at `results/_smoke_corrected/` covering **4 SSPs + control** (ACCESS-CM2) and exercising the corrected pipeline. Digest-skip behaviour tested (see E9/E10). | Implemented |
+| **Validation** | Full Julia suite, a real corrected smoke run, and the Phase 2 re-runs. | Full suite: **3,941 / 3,941 pass, 72 testsets, 0 failures/errors/broken** (Phase 2 re-run 2026-11-01; see §6; 28 more assertions than the previous 3,913 / 3,913, 70 testsets). Smoke run present at `results/_smoke_corrected/` covering **4 SSPs + control** (ACCESS-CM2) and exercising the corrected pipeline. Phase 2 primary post-fix outputs: `results/climate_scenarios_phase2` (45), `results/sensitivity_obstacles_phase2` (32), `results/alt_interactions_phase2` (48); sensitivities: `results/climate_scenarios_competition_alt` (45), `results/sensitivity_obstacles_floor1e3` (32), `results/sensitivity_obstacles_parentonly` (32). Digest-skip behaviour tested (see E9/E10). | Implemented |
 
 ### 2.2 Viewer annex (committed)
 
@@ -88,8 +93,12 @@ pipeline; Part B introduces no new technical issue.
 ## 3. Corrected re-run runbook
 
 The corrected re-run **has been executed**: **45 climate runs** (44 GCM x SSP scenarios + one
-shared no-warming control), **32 obstacle runs** and **48 interaction runs**. Everything below
-is the exact procedure that was followed and is retained as the run record.
+shared no-warming control), **32 obstacle runs** and **48 interaction runs**. The Phase 2
+post-parser-fix re-runs have also been executed (2026-11-01): **45** climate, **32** obstacle and
+**48** interaction runs under the `*_phase2` roots, plus the **45-run** competition-alternative
+ensemble and the two **32-run** passability variants. Everything below is the exact procedure that
+was followed and is retained as the run record; the Phase 2 command/digest record is
+`docs/GuadeX_Phase2_Run_Record.md`.
 
 ### 3.0 The one rule that matters most
 
@@ -141,19 +150,33 @@ julia --project=. run_sensitivity_report.jl
 `$env:GUADEX_SENSITIVITY_OUTPUT_DIR = 'results/sensitivity_obstacles_corrected'`, otherwise
 `results/sensitivity_obstacles` is overwritten.
 
+**Phase 2 post-parser-fix runs.** The same commands were repeated at `c340398` with the output
+roots and environment overrides in `docs/GuadeX_Phase2_Run_Record.md`: `GUADEX_CLIMATE_OUTPUT_DIR`
+for the climate ensemble, `GUADEX_SENSITIVITY_OUTPUT_DIR` for both 32-run sweeps,
+`GUADEX_ALT_OUTPUT_DIR` for the 48-run interaction sweep,
+`GUADEX_COMPETITION_STRUCTURE='species_specific'` for the competition alternative,
+`GUADEX_OBSTACLE_FLOOR='0.001'` for the floor variant and
+`GUADEX_OBSTACLES_PARENT_ONLY='1'` for the parent-only variant.
+
 ### 3.3 Outputs, time and directory
 
-- **Output root:** `results/climate_scenarios_corrected` (a **new** directory, deliberately
-  distinct from `results/climate_scenarios` and `results/climate_scenarios_k1x_burnin`, so
-  the pre-correction September artifacts are preserved for comparison).
+- **Output root:** the pre-fix audit baseline is `results/climate_scenarios_corrected` (a
+  directory deliberately distinct from `results/climate_scenarios` and
+  `results/climate_scenarios_k1x_burnin`, so the pre-correction September artifacts are preserved
+  for comparison). The **primary post-fix root is `results/climate_scenarios_phase2`**; the Phase 2
+  obstacle and interaction roots are `results/sensitivity_obstacles_phase2` and
+  `results/alt_interactions_phase2`.
 - **Contents:** 11 GCMs × 4 SSPs + a no-warming control (44 runs + control). Each run writes
   `simulation_output.jld2`, `run_digest.txt`, `export/run_metadata.json` and the four-level
   + viewer exports; `runs_index.csv` is rewritten after every run, so an interrupted ensemble
   resumes without losing finished runs.
 - **Expected time:** **~35–45 min** for the 44-run ensemble + control on this machine — this
   is an estimate from the brief, not a measured figure (the real measured smoke run is much
-  shorter; see §6). Budget extra for the objective/level figure generation
-  (`make_figures = true` by default; disable with `GUADEX_CLIMATE_PLOT=0`).
+  shorter; see §6). The measured Phase 2 climate run was **≈23.1 min** (1,386.7 s log span) with
+  `GUADEX_CLIMATE_PLOT=0`; the obstacle, interaction, competition and passability runs are
+  **831.8 s, 1,234.3 s, 30 min 08 s, 789.3 s and 806.2 s** respectively. Budget extra for the
+  objective/level figure generation (`make_figures = true` by default; disable with
+  `GUADEX_CLIMATE_PLOT=0`).
 
 ### 3.4 Digest behaviour
 
@@ -168,17 +191,20 @@ digest and are re-run once. Use `$env:GUADEX_CLIMATE_FORCE = '1'` to recompute r
 ### 3.5 Endpoint re-selection (do this **after** the run)
 
 The two climate endpoints used as the background climate for the obstacle/upstream-cost
-sweeps must be re-selected from the **realised** forcing of the corrected ensemble, not
-hard-coded:
+sweeps must be re-selected from the **realised** forcing of the post-parser-fix ensemble, not
+hard-coded. Use the primary Phase 2 index:
 
 ```julia
 using DataFrames, CSV, Guadex
-idx = CSV.read(joinpath("results", "climate_scenarios_corrected", "runs_index.csv"), DataFrame)
+idx = CSV.read(joinpath("results", "climate_scenarios_phase2", "runs_index.csv"), DataFrame)
 endpoints = Guadex.select_climate_endpoints(idx)
 println(endpoints.source)              # "realised" once the columns are populated
 println(endpoints.cool.scenario, "/", endpoints.cool.gcm)
 println(endpoints.warm.scenario, "/", endpoints.warm.gcm)
 ```
+
+The same call on `results/climate_scenarios_corrected/runs_index.csv` reproduces the pre-fix
+audit-baseline endpoints (cool `ssp126/IITM-ESM`, warm `ssp245/UKESM1-0-LL`).
 
 Then place those `scenario`/`gcm` pairs into `[obstacle_sensitivity].climate_models` (or the
 `GUADEX_SENSITIVITY_CLIMATE_MODELS` override; use `scenario_col = :climate_scenario` for a
@@ -190,9 +216,18 @@ sensitivity index). Run the sweeps only after this step.
 
 The review items that needed a team choice are listed below. The decisions taken for the
 **corrected re-run** (2026-09-30) are marked **DECIDED** and implemented in
-`parameters_climate_scenarios_corrected.toml`; the remaining items are still open. The
-corrected results under the interim route and the chosen biological options remain
-**provisional pending full calibration**.
+`parameters_climate_scenarios_corrected.toml`; the Phase 2 choices are recorded in
+`docs/GuadeX_Phase2_Decisions.md` (2026-11-01). The corrected results under the interim route
+and the chosen biological options remain **provisional pending full calibration**.
+
+### Phase 2 decisions (2026-11-01)
+
+| decision | chosen value | where |
+| :--- | :--- | :--- |
+| **Competition structure** | keep **`c = 1 − α`** primary; run **`c = −α`** as a sensitivity over all 44 scenarios | `docs/GuadeX_Phase2_Decisions.md`, decision 1; `results/climate_scenarios_competition_alt` |
+| **Per-GCM controls** | keep the **shared no-warming control** as interim; **defer** the 11 matched controls (P2.2) | decision record, decision 2; Limitations 2 |
+| **Coded-value refit** | keep the **national all-Spain air–water model**; **defer** the coded-value refit and forcing regeneration (P2.5) | decision record, decision 3; Limitations 3 |
+| **Validation acceptance criteria** | **per-species TSS ≥ 0.40 where ≥ 10 sites are occupied**; **\|modelled − observed occupancy\| ≤ 0.10 for LS, SA, SP, PW, CP** — targets for the future calibration, not gates for this release | decision record, decision 4; `results/climate_scenarios_phase2/validation/initial_state_validation.csv` |
 
 ### Decision record for the corrected re-run (2026-09-30)
 
@@ -307,14 +342,18 @@ configuration that does not select it.
    classified active (1274) / non-operational (185) / ambiguous (199) from the codes that are
    present; unknown/blank codes are reported as ambiguous rather than dropped.
 3. **E14 pool cap rule uses the non-pool median** — a defensible but arbitrary choice.
-4. **The corrected re-run has been executed** (see §6): the corrected outputs are in
-   `results/climate_scenarios_corrected` (45 rows: 44 GCM x SSP scenarios + control),
-   `results/sensitivity_obstacles_corrected` (32 obstacle rows) and
-   `results/alt_interactions_corrected` (48 interaction rows). **Endpoints must be re-selected
-   on the realised forcing after the run** (§3.5). Under the C3 interim route the run starts
-   from the observed community with a 3-year baseline spin-up, so the results are
-   **provisional and uncalibrated**; they are reported as `scenario − control` deltas and must
-   not be read as a calibrated forecast.
+4. **The corrected and Phase 2 re-runs have been executed** (see §6). The pre-fix audit baseline
+   is `results/climate_scenarios_corrected` (45 rows), `results/sensitivity_obstacles_corrected`
+   (32) and `results/alt_interactions_corrected` (48). The **primary post-fix outputs** are
+   `results/climate_scenarios_phase2` (45), `results/sensitivity_obstacles_phase2` (32) and
+   `results/alt_interactions_phase2` (48); the sensitivities are
+   `results/climate_scenarios_competition_alt` (45),
+   `results/sensitivity_obstacles_floor1e3` (32) and
+   `results/sensitivity_obstacles_parentonly` (32). **Endpoints must be re-selected on the
+   realised forcing after the run** (§3.5). Under the C3 interim route the run starts from the
+   observed community with a 3-year baseline spin-up, so the results are **provisional and
+   uncalibrated**; they are reported as `scenario − control` deltas and must not be read as a
+   calibrated forecast.
 5. **Pre-correction documents moved to `legacy/`:** the stale-statement documents
    `legacy/integrated_climate_obstacle_report.md`,
    `legacy/publication_manuscript_climate_fragmentation.md` and
@@ -332,9 +371,11 @@ configuration that does not select it.
    and no `"AAL"` (L31–34). The corrected species list is resolved elsewhere; this dead
    constant should be deleted or fixed.
 8. **The seasonal rate option is not exposed via `parameters.toml`** (code-only).
-9. **The ranking of what the corrected run changed remains provisional.** The report records
-   the corrected values, but the Phase 2 re-runs may still move the qualitative directions
-   (warming effect, trout decline, invasive-richness value).
+9. **The Phase 2 re-runs have been executed and the qualitative directions are unchanged.** The
+   parser fix is immaterial (≤ 0.0026 native species, 0.0013 richness loss, 0.0063 biomass in the
+   worst experiment), the factor and matrix orderings are unchanged (Spearman ρ = 1.00), and the
+   weak-warming conclusion stands. The remaining movement is the competition-structure sensitivity
+   (residual 14), which changes the interpretation but not the primary specification.
 10. **A4 — viewer JSON `name` fields on disk predate the re-export.** The corrected viewer files
     already written under `results/*_corrected/` carry the earlier generic `name` text; they will
     show the new descriptive label only after a run is re-exported. Machine filenames are
@@ -349,31 +390,56 @@ configuration that does not select it.
     qualifies the basin mean as a net redistribution, but there is still no per-site Δ
     distribution/map or explicit gain/loss site counts. Related: the unused `warming_end_degc`
     proxy column should be dropped or renamed in `runs_index.csv` (B2).
-13. **Second review 4.4 — parser fixed, affected runs not re-integrated.** The undirected clause
-    is now cut at the next named clause, so the 16 reverse-direction cells are competition
-    (−0.3), not predation (−0.5); the nine pure "competition and predation" cells keep −0.5 both
-    ways and are now flagged ambiguous. The long table was regenerated (227 rows, 31 ambiguous
-    cells / 62 rows) and the pre-fix file is retained as
-    `data/BIOTIC/interaction_matrix_long_prefix.csv`. The climate, obstacle and interaction
-    experiments were **not** re-run, so their numbers still reflect the pre-fix table; the re-run
-    is gated in Phase 2.
-14. **Second review 4.5 — competition structure is a documented choice, not an error.** The
-    retained `c = 1 − alpha` gives `c ∈ [1.3, 1.8]` and `c12 c21 > 1` for every observed pair;
-    the interior equilibrium is a saddle and the model produces exclusion/priority effects. The
-    missed two-species equilibrium test has been added (35-test C2 testset); the reviewer's
-    `c = −alpha` is a valid alternative and is a Phase 2 sensitivity.
-15. **Second review 4.1/4.2 — shared control and national air–water model.** There is one control
-    (`gcm = "baseline"`), not a per-GCM match; the all-Spain air–water model (`ta = 0.5097`,
-    `n = 39,944`, 980 sites) produces the forcing, so the 257 coded Waterbase values do reach the
-    projections. Both are now stated in the response, report and limitations; per-GCM controls
-    and a coded-value refit are Phase 2 decisions.
-16. **Second review 4.6/4.7 — start-state and network diagnostics.** Post-spin-up validation is
-    now reported for all 24 species (`scripts/validate_initial_state.jl`; pooled sensitivity
-    0.975, specificity 0.920; the model over-predicts occupancy and LS TSS is 0.42). The network
-    diagnostics give 508 parent edges / 266 root joins (37.7 % of length), 341 matched / 245
-    applied obstacles on root-join edges (the review's count reproduces once root pairs are
-    canonicalised by site code), one link with 33 obstacles (factor 1e-33) and 28 links with ≥5
-    (`scripts/network_root_join_diagnostics.jl`).
+13. **Second review 4.4 — parser fixed and the affected runs re-executed; the effect is
+    immaterial.** The undirected clause is now cut at the next named clause, so the 16
+    reverse-direction cells are competition (−0.3), not predation (−0.5); the nine pure
+    "competition and predation" cells keep −0.5 both ways and are now flagged ambiguous. The long
+    table was regenerated (227 rows, 31 ambiguous cells / 62 rows) and the pre-fix file is retained
+    as `data/BIOTIC/interaction_matrix_long_prefix.csv`. The climate, obstacle and interaction
+    experiments were re-run under the `*_phase2` roots. Maximum deltas: 0.0026 native species /
+    0.0013 richness loss / 0.0011 biomass (climate); 0.0013 / 0.0063 / 0.057 ST biomass (obstacle);
+    0.0013 / 0.033 / 0.51 ST biomass (interaction). No aggregate sign changes; factor and matrix
+    orderings unchanged. Evidence: `docs/GuadeX_Phase2_ParserFix_Effect.md`,
+    `docs/GuadeX_Phase2_ObstacleSweep_Update.md`,
+    `docs/GuadeX_Phase2_InteractionSweep_Update.md`.
+14. **Second review 4.5 — competition structure is a documented choice, and the sensitivity is now
+    reported.** The retained `c = 1 − alpha` gives `c ∈ [1.3, 1.8]` and `c12 c21 > 1` for every
+    observed pair; the interior equilibrium is a saddle and the model produces
+    exclusion/priority effects. The missed two-species equilibrium test has been added (35-test C2
+    testset); the reviewer's `c = −alpha` is a valid alternative and was run over all 44 scenarios
+    (`results/climate_scenarios_competition_alt`). The alternative reduces the mean
+    richness-loss delta to ≈0 (mean −0.001551 → −0.000037; 31/44 exactly zero), reverses the sign
+    of the mean native-richness response (+0.0020 → −0.0071; 30/44 flips), and amplifies total
+    biomass (~4.8×) and trout (~7.8–8.3×). The weak-warming magnitude is robust; the sign of the
+    mean richness response depends on the structure. Primary remains `c = 1 − α`.
+15. **Second review 4.1/4.2 — shared control and national air–water model are retained by
+    decision.** There is one control (`gcm = "baseline"`), not a per-GCM match; the all-Spain
+    air–water model (`ta = 0.5097`, `n = 39,944`, 980 sites) produces the forcing, so the 257 coded
+    Waterbase values do reach the projections. The Phase 2 decisions (2026-11-01) retained the
+    shared control as interim and deferred the per-GCM controls (P2.2), and retained the national
+    model while deferring the coded-value refit (P2.5). Both are stated in the response, report and
+    limitations; the residual GCM offset and E20 remain.
+16. **Second review 4.6/4.7 — validation and network diagnostics re-run against the Phase 2
+    control.** Post-spin-up validation is reported for all 24 species from
+    `results/climate_scenarios_phase2/validation/initial_state_validation.csv` (pooled sensitivity
+    0.975, specificity 0.920; LS TSS 0.417 with observed occupancy 45.3 % vs modelled 77.2 %). The
+    network diagnostics give 508 parent edges / 266 root joins (37.7 % of length), 341 matched /
+    245 applied obstacles on root-join edges (the review's count reproduces once root pairs are
+    canonicalised by site code), one **parent** edge with 33 obstacles (factor 1e-33) and 28 links
+    with ≥5 (`scripts/network_root_join_diagnostics.jl`). The Phase 2 floor and parent-only
+    sensitivities leave the factor ranking unchanged (Spearman ρ = 1.00).
+17. **Shared-control offset remains (P2.2 deferred).** The 11 per-GCM controls were not run. The
+    scenario-minus-control deltas use one shared control, so a GCM-specific offset remains; it is
+    stated, not removed (decision 2; Limitations 2).
+18. **The forcing comes from the national all-Spain air–water model (P2.5 deferred).** The
+    coded-value refit and forcing regeneration were not carried out. The 257 coded Waterbase values
+    are in the calibration that drives the forcing, so E20 remains a stated limitation (decision 3;
+    Limitations 3).
+19. **The alternative competition structure changes the interpretation.** The primary
+    `c = 1 − α` results stand, but the `c = −α` sensitivity shows that the sign of the ensemble-mean
+    native-richness response and the size of the biomass/trout responses depend on the structure.
+    The weak-warming headline is robust in magnitude only; the stronger "no native richness loss"
+    claim is not (residual 14; `docs/GuadeX_Phase2_Competition_Sensitivity.md`).
 
 ---
 
@@ -381,12 +447,16 @@ configuration that does not select it.
 
 - **Repository state:** the correction work of section 2.1 through the AAL round and the
   viewer-annex round of section 2.2 are committed on `master` (base `9702169`, correction-series
-  tip `61fcd4c`, AAL reclassification `099a87d`, HEAD `c340398`). The second-review edits are
-  unstaged, and the new artefacts are untracked: `docs/GuadeX_SecondReview_Assessment_Oct2026.md`,
-  `scripts/validate_initial_state.jl`, `scripts/network_root_join_diagnostics.jl` and
-  `data/BIOTIC/interaction_matrix_long_prefix.csv`. The reviewer's
-  `docs/GuadeX_Reply_to_Response_Oct2026.md` is also untracked because it is an input. `results/`
-  and `viz/dist/` are build outputs and remain gitignored.
+  tip `61fcd4c`, AAL reclassification `099a87d`, HEAD `c340398`). The second-review edits and the
+  Phase 2 documentation are uncommitted, and the new artefacts are untracked:
+  `docs/GuadeX_SecondReview_Assessment_Oct2026.md`, the seven Phase 2 documents
+  (`GuadeX_Phase2_Decisions.md`, `GuadeX_Phase2_Run_Record.md`,
+  `GuadeX_Phase2_ParserFix_Effect.md`, `GuadeX_Phase2_ObstacleSweep_Update.md`,
+  `GuadeX_Phase2_InteractionSweep_Update.md`, `GuadeX_Phase2_Competition_Sensitivity.md`,
+  `GuadeX_Phase2_PassabilityFloor_Sensitivity.md`), `scripts/validate_initial_state.jl`,
+  `scripts/network_root_join_diagnostics.jl` and `data/BIOTIC/interaction_matrix_long_prefix.csv`.
+  The reviewer's `docs/GuadeX_Reply_to_Response_Oct2026.md` is also untracked because it is an
+  input. `results/` and `viz/dist/` are build outputs and remain gitignored.
 - **Viewer round (2026-10-06):** the full Julia suite was re-run after the
   `src/outputs.jl` edit (exit code 0, no failures; the export testset `test/test_outputs.jl`
   passes 37/37); `viz` `npm run smoke` 22/22 and `npm run build` pass; the October report
@@ -395,16 +465,26 @@ configuration that does not select it.
   (A1/A2/A3/A6) have no headless-browser regression test (Playwright's Chrome was unavailable on
   this machine), so they are covered by the smoke/build checks and code inspection, not a
   rendered screenshot.
-- **Full Julia test suite (re-run 2026-11-01):** **3,913 / 3,913 pass, 70 testsets, 0
-  failures, 0 errors** (grand total from an outer `@testset`; the run includes 2,647 C4
-  on-path tests and the new 105-test parser testset). The run includes the C4 on-path graph
-  testset, the C2 interaction-form testset (**35** tests after the 4.5 additions), the E4
-  spin-up-rule testset, the C5/E1 reconstruction testsets, the C7 testsets, the E6
-  quasi-extinction testsets, the E13–E16/E18 option testsets, and the new C3 testsets (*C3
-  interim projection route*, *scenario_minus_control (C3 interim route)*) plus the
-  corrected-config route/biological-value assertions. On a checkout without the gitignored
-  daily forcing file, the C5/E1 daily-series testset skips (one `@test_skip`), so the
-  clean-checkout total is 3,898 (3,897 pass + 1 skipped); it no longer errors.
+- **Full Julia test suite (Phase 2 re-run 2026-11-01):** **3,941 / 3,941 pass, 72 testsets,
+  0 failures, 0 errors, 0 broken** (`results/phase2_test_suite.log`: 72 `Test Summary:` blocks).
+  This is **28** more assertions than the previous 3,913 / 3,913, 70-testset run. The run includes
+  2,647 C4 on-path tests, the 35-test C2 interaction-form testset, the 105-test parser testset,
+  the E4 spin-up-rule testset, the C5/E1 reconstruction testsets, the C7 testsets, the E6
+  quasi-extinction testsets, the E13–E16/E18 option testsets, and the C3 testsets (*C3 interim
+  projection route*, *scenario_minus_control (C3 interim route)*) plus the corrected-config
+  route/biological-value assertions. **Clean-checkout caveat:** on a checkout without the
+  gitignored daily forcing file, the C5/E1 daily-series testset still skips with one `@test_skip`
+  (shown as *Broken*) instead of erroring; the Phase 2 log was produced with the forcing file
+  present, and no exact clean-checkout denominator was recorded for this run.
+- **Phase 2 re-runs (2026-11-01):** primary post-fix outputs are
+  `results/climate_scenarios_phase2` (45), `results/sensitivity_obstacles_phase2` (32) and
+  `results/alt_interactions_phase2` (48); sensitivities are
+  `results/climate_scenarios_competition_alt` (45),
+  `results/sensitivity_obstacles_floor1e3` (32) and
+  `results/sensitivity_obstacles_parentonly` (32). All runs are digest-tagged (`run_digest.txt`
+  for climate runs; metadata `parameter_digest` plus `.sensitivity_complete.jld2` for the
+  sweeps), and the realised forcing is bit-identical to the pre-fix runs. Exact commands, row
+  counts, elapsed times and digest examples: `docs/GuadeX_Phase2_Run_Record.md`.
 - **Real smoke run:** `results/_smoke_corrected/` contains a completed run for **4 SSPs +
   control** (ACCESS-CM2) with full exports, exercising the corrected daily-forcing /
   `tw_baseline_mean` / interaction / digest pipeline. (A **218 s** wall time was quoted for
@@ -441,7 +521,14 @@ configuration that does not select it.
 
 - Consolidated limitations and scope of inference for the October 2026 report:
   `docs/GuadeX_Limitations_and_Scope_Oct2026.md` (reflects the C6, C3, E21, IF and E8 team
-  decisions).
+  decisions plus the Phase 2 competition, parser and validation items).
+- Phase 2 decisions: `docs/GuadeX_Phase2_Decisions.md`. Phase 2 run record:
+  `docs/GuadeX_Phase2_Run_Record.md`. Phase 2 evidence:
+  `docs/GuadeX_Phase2_ParserFix_Effect.md`,
+  `docs/GuadeX_Phase2_ObstacleSweep_Update.md`,
+  `docs/GuadeX_Phase2_InteractionSweep_Update.md`,
+  `docs/GuadeX_Phase2_Competition_Sensitivity.md` and
+  `docs/GuadeX_Phase2_PassabilityFloor_Sensitivity.md`.
 - Assessment (adjudication of the review, incl. §4 on the viewer annex):
   `docs/GuadeX_Review_Assessment_Sept2026.md`.
 - Plan (ordered work: Waves 0–3, decisions, gates): `docs/GuadeX_Correction_Plan_Sept2026.md`.
@@ -455,8 +542,10 @@ configuration that does not select it.
 **Commit status.** The model-correction round (section 2.1) through the AAL reclassification,
 the viewer-annex round (section 2.2) and the October-report availability sentences are committed
 on `master` (base `9702169`, correction-series tip `61fcd4c`, AAL reclassification `099a87d`,
-HEAD `c340398`). The **second-review triage is in the working tree and is not committed**: the
-parser fix, the regenerated long table, the new tests, the two diagnostic scripts and the
-documentation updates. The reviewer's own document remains untracked as an input. The corrected
-outputs and the daily forcing files were shared with the reviewers at `https://k00.fr/eqnsvc2y`
-(item 4.9); `results/` and the wide forcing remain gitignored.
+HEAD `c340398`). The **second-review triage and the Phase 2 work are in the working tree and are
+not committed**: the parser fix, the regenerated long table, the new tests, the two diagnostic
+scripts, the Phase 2 evidence/decision/run-record documents and the documentation updates. The
+Phase 2 re-run outputs are under `results/`, which is gitignored, so they are not part of the
+working-tree diff. The reviewer's own document remains untracked as an input. The corrected and
+Phase 2 outputs and the daily forcing files were shared with the reviewers at
+`https://k00.fr/eqnsvc2y` (item 4.9); `results/` and the wide forcing remain gitignored.

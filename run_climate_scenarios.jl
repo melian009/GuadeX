@@ -43,12 +43,29 @@ const OBSTACLE_MODE = Symbol(get(ENV, "GUADEX_OBSTACLE_MODE", GUADEX_PARAMS["obs
 const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOLERANCE_M", string(GUADEX_PARAMS["obstacles"]["matching_tolerance_m"])))
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
+# P2.4 passability sensitivity: an optional floor on the compounded per-link
+# passability and an optional on-path-parent-only obstacle scope.
+const OBSTACLE_PASSABILITY_FLOOR = parse(Float64, get(ENV, "GUADEX_OBSTACLE_FLOOR",
+    string(get(GUADEX_PARAMS["obstacles"], "passability_floor", 0.0))))
+const OBSTACLES_ON_PATH_ONLY = lowercase(get(ENV, "GUADEX_OBSTACLES_PARENT_ONLY",
+    string(get(GUADEX_PARAMS["obstacles"], "on_path_only", false)))) in ("1", "true", "yes")
 
 # C4: dispersal-graph construction method from the [connectivity] section.
 const CONNECTIVITY_METHOD = SimulationParameters.connectivity_method(GUADEX_PARAMS)
 
 # E13-E16/E18: opt-in biological-assumption options (all legacy by default).
 const BIOLOGICAL_OPTIONS = SimulationParameters.biological_options(GUADEX_PARAMS)
+
+# 4.5 structural sensitivity: primary `shared_k` (c = 1 - alpha) vs the
+# reviewer's `species_specific` alternative (c = -alpha).  Overridable per run.
+const COMPETITION_STRUCTURE = begin
+    override = get(ENV, "GUADEX_COMPETITION_STRUCTURE", "")
+    value = isempty(override) ? string(SimulationParameters.competition_structure(GUADEX_PARAMS)) : override
+    structure = Symbol(lowercase(strip(value)))
+    structure in (:shared_k, :species_specific) ||
+        error("GUADEX_COMPETITION_STRUCTURE must be 'shared_k' or 'species_specific' (got '$value')")
+    structure
+end
 
 const NATIVE_SPECIES = String.(GUADEX_PARAMS["species"]["native"])
 const INVASIVE_SPECIES = String.(GUADEX_PARAMS["species"]["invasive"])
@@ -199,6 +216,8 @@ if get(ENV, "GUADEX_CONFIG_ONLY", "0") == "1"
             "nonrepro=$(BIOLOGICAL_OPTIONS.nonreproducing_local_growth), " *
             "fishfarm=$(BIOLOGICAL_OPTIONS.exclude_fishfarm_eel_records), " *
             "salinity=$(BIOLOGICAL_OPTIONS.salinity_envelope)")
+    println("  competition structure: :$COMPETITION_STRUCTURE")
+    println("  passability floor: $OBSTACLE_PASSABILITY_FLOOR; on-path-only obstacles: $OBSTACLES_ON_PATH_ONLY")
     exit(0)
 end
 
@@ -219,6 +238,8 @@ println("  route:     :$PROJECTION_ROUTE" *
         (INTERIM_ROUTE ? " ($INTERIM_SPIN_UP_YEARS baseline year(s); scenario-control deltas)" : ""))
 println("  K multiplier: base $(K_BASE_SCALING)x * WP4 $(K_SCALING)x = " *
         "$(K_BASE_SCALING * K_SCALING)x observed density")
+println("  competition:   :$COMPETITION_STRUCTURE; passability floor: $OBSTACLE_PASSABILITY_FLOOR; " *
+        "on-path-only obstacles: $OBSTACLES_ON_PATH_ONLY")
 println("="^70)
 
 projections = load_temperature_projections(PROJECTION_FILE)
@@ -242,7 +263,10 @@ data_base = prepare_ode_data(
     fishless_dificil_capacity = BIOLOGICAL_OPTIONS.fishless_dificil_capacity,
     nonreproducing_local_growth = BIOLOGICAL_OPTIONS.nonreproducing_local_growth,
     exclude_fishfarm_eel_records = BIOLOGICAL_OPTIONS.exclude_fishfarm_eel_records,
-    salinity_envelope = BIOLOGICAL_OPTIONS.salinity_envelope
+    salinity_envelope = BIOLOGICAL_OPTIONS.salinity_envelope,
+    competition_structure = COMPETITION_STRUCTURE,
+    passability_floor = OBSTACLE_PASSABILITY_FLOOR,
+    obstacles_on_path_only = OBSTACLES_ON_PATH_ONLY
 )
 
 n_sites = data_base.params.n_sites
@@ -544,6 +568,9 @@ for scenario in CLIMATE_SCENARIOS
             "obstacle_matching_tolerance_m" => OBSTACLE_MATCHING_TOLERANCE,
             "obstacle_passability" => OBSTACLE_PASSABILITY,
             "obstacle_downstream_passability" => OBSTACLE_DOWNSTREAM_PASSABILITY,
+            "passability_floor" => OBSTACLE_PASSABILITY_FLOOR,
+            "obstacles_on_path_only" => OBSTACLES_ON_PATH_ONLY,
+            "competition_structure" => string(COMPETITION_STRUCTURE),
             "control_run" => CONTROL_RUN,
             "elevation_scaling" => ELEVATION_SCALING,
             "presence_threshold" => PRESENCE_THRESHOLD,

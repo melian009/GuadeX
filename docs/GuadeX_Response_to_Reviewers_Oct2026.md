@@ -10,6 +10,8 @@ against `c340398` and answered in the same document.
 superseding `legacy/FinalReportSeptember2026.tex`.
 **Adjudication of the review:** `docs/GuadeX_Review_Assessment_Sept2026.md`.
 **Implementation record:** `docs/GuadeX_Correction_Status_Sept2026.md`.
+**Phase 2 decisions / run record:** `docs/GuadeX_Phase2_Decisions.md`,
+`docs/GuadeX_Phase2_Run_Record.md`.
 **Consolidated limitations:** `docs/GuadeX_Limitations_and_Scope_Oct2026.md`.
 
 We thank the reviewers for a detailed, technically serious and largely accurate review. The
@@ -31,13 +33,17 @@ relative scenario-minus-control differences, not forecasts.
 
 ## 1. Summary of actions
 
-1. **The model was corrected and re-run, and the report reissued.** The corrections
-   (C1–C7, E1–E22, and most minor issues) were implemented and committed on `master`, exercised
-   by the test suite, and the full corrected experiment design was re-executed:
-   **45 climate runs** (11 GCMs × 4 SSPs + one shared no-warming control), **32 obstacle-design
-   runs** and **48 alternative-interaction runs**. The corrected results are reported in
+1. **The model was corrected and re-run, the report reissued, and the parser-fix-affected
+   experiments re-run again in Phase 2.** The corrections (C1–C7, E1–E22, and most minor issues)
+   were implemented and committed on `master`, exercised by the test suite, and the full corrected
+   experiment design was re-executed: **45 climate runs** (11 GCMs × 4 SSPs + one shared no-warming
+   control), **32 obstacle-design runs** and **48 alternative-interaction runs**. After the 4.4
+   parser fix, Phase 2 re-ran the same three experiments against the regenerated table (45 / 32 /
+   48 runs) and added the competition-structure (45 runs), passability-floor (32) and
+   parent-only-obstacle (32) sensitivities; see §6. The corrected results are reported in
    **`docs/FinalReportOctober2026.tex`** (compiled `FinalReportOctober2026.pdf`), which states
-   explicitly that its values supersede the September 2026 release.
+   explicitly that its values supersede the September 2026 release; the Phase 2 numbers are
+   regenerated into the report in the P2.6 step (completed 2026-11-01).
 2. **Corrected configuration and reproducibility.** A corrected configuration
    (`parameters_climate_scenarios_corrected.toml`) and a legacy-reproduction configuration
    (`legacy/parameters_climate_scenarios_k1x_burnin.toml`) now exist; the full resolved configuration
@@ -103,8 +109,8 @@ by the data.
 therefore exceeds self-limitation, the interior point is not attracting, and the model produces
 competitive exclusion or priority effects rather than stable local coexistence. This is a
 property of the retained specification, not a numerical error. The `c = −α` / species-specific
-formulation is carried as a Phase 2 structural sensitivity (§4), and the consequence is stated
-in the report and limitations.
+formulation has now been carried out as a Phase 2 structural sensitivity over all 44 scenarios
+(§6.4), and the consequence is stated in the report and limitations.
 
 **C3 — The initial state after burn-in does not match the observed community.**
 *Reviewer's point:* after a 373-year burn-in the 2026 state differs profoundly from the survey
@@ -118,8 +124,9 @@ against that one shared control (not a per-GCM control; see E2).
 Evidence: `src/spin_up.jl` (`interim_observed_spin_up`), `run_climate_scenarios.jl`,
 `src/climate_diagnostics.jl` (`scenario_minus_control`); tests *C3 interim projection route* and
 *scenario_minus_control (C3 interim route)*. Report §3.5 (interim route) and Limitations 2. The
-corrected run reproduces none of the September artefacts: invasive richness is ≈0.749 species per
-site after the AAL reclassification (0.71 before it; not the flat 0.217), and the residual
+corrected run reproduces none of the September artefacts: invasive richness is ≈0.761 species per
+site in the Phase 2 post-fix run (≈0.749 after the AAL reclassification of the corrected state;
+0.71 before it; not the flat 0.217), and the residual
 transient is explicit (control total biomass −35.5 %,
 native biomass −40.8 %, report §4.1). Full ABC-SMC calibration remains deferred (§4).
 *Minor:* the reviewer's model native richness 2.52 is 2.51 in our recomputation (assessment §1).
@@ -218,8 +225,9 @@ GCM-specific offset rather than a like-for-like match. Evidence: `run_climate_sc
 `src/climate_diagnostics.jl:235-255`, `src/temperature_forcing.jl:251-273`, and the 45-row
 `results/climate_scenarios_corrected/runs_index.csv` (44 scenarios + 1 control). The pre-2026
 offset between the projection products and the 1986–2005 baseline persists and is documented
-(report Limitations 11). Per-GCM controls driven by each GCM's own historical series are a
-Phase 2 option (§4), not a completed correction.
+(report Limitations 11). Per-GCM controls driven by each GCM's own historical series remain
+**deferred by the Phase 2 decision of 2026-11-01** (§6.1); the shared control remains an interim
+counterfactual, not a completed correction.
 
 **E3 — The obstacle sweep starts from a single equilibrium.**
 *Reviewer's point:* all 32 runs started from one burn-in at cost 0.05 / baseline passability, so
@@ -230,17 +238,21 @@ burn-in for every combination was not run.
 *Action and evidence:* Under the corrected configuration every sweep run starts from the observed
 community with a three-year baseline spin-up, and the corrected sweep is analysed in matched
 factorial blocks with balanced **within-sweep sums of squares** and blocked-minus-baseline
-contrasts (report §3.5/§4.4; `results/sensitivity_obstacles_corrected/report_plots/`). A dedicated
+contrasts (report §3.5/§4.4); the Phase 2 primary re-run is
+`results/sensitivity_obstacles_phase2` (32 runs), with the pre-fix
+`results/sensitivity_obstacles_corrected/report_plots/` retained as the audit baseline. A dedicated
 per-combination burn-in remains deferred (§4).
 
 **E4 — The burn-in convergence criterion is weak.**
 *Reviewer's point:* the criterion only bounds total biomass while composition drifts, so the
 "21-year" interaction burn-in is probably premature.
-*Assessment:* **Accepted.** The corrected runs do not exercise the convergence rule at all. Both
+*Assessment:* **Accepted.** The corrected and Phase 2 runs do not exercise the convergence rule at
+all. Both
 the climate runs and the sweeps select the interim route
 (`parameters_climate_scenarios_corrected.toml:259-260,374-378`), which bypasses the E4 stop rule
-(`sensitivity_core.jl:481-494`) and integrates exactly three baseline years. The corrected
-`results/alt_interactions_corrected/burnin_summary.csv` therefore records **3 years,
+(`sensitivity_core.jl:481-494`) and integrates exactly three baseline years. The Phase 2
+`results/alt_interactions_phase2/burnin_summary.csv` (and the pre-fix
+`results/alt_interactions_corrected/burnin_summary.csv`) records **3 years,
 `criteria = basin`, `converged = false`** for all three matrices. The 21, 494 and 532 years are
 the September full-burn-in runs and do not belong to this release.
 *Action and evidence:* A robust composition stop rule was added — the 95th percentile of
@@ -406,8 +418,9 @@ were recomputed from the saved states without re-integrating the model:
 `results/climate_scenarios_corrected/invasive_reclassified_AAL.csv` gives invasive richness
 0.7488 (range 0.7432–0.7523) and invasive biomass 4.936 model units after reclassification,
 against 0.7130 and 4.892 before it (+0.036 species per site and +0.044 units). The earlier
-"≈0.71" in this response is the pre-reclassification value; the report's 0.749 is the current
-one.
+"≈0.71" in this response is the pre-reclassification value; 0.749 is the corrected-state value after
+reclassification, and the Phase 2 post-fix re-run (AAL in the invasive group throughout the
+dynamics) gives 0.761 species per site and 4.94 model units.
 
 **E18 — Available habitat filters are not used.**
 *Reviewer's point:* salinity (brackish for AB, LR, MC) and elevation ranges are read but not
@@ -445,12 +458,13 @@ reaches the projections, as the review says. Two narrower points remain: the cit
 improvement (2.65 → 2.34 °C) is the Spain model's own diagnostic, not a Guadalquivir-only
 recalibration (see §3, item 11), and the `06a` flag is already two-sided (`resid` is an absolute
 value in `06a_qc_waterbase_direct.py:84`).
-*Action and evidence / not changed:* The coded-value filter and refit were **not** implemented in
-this version. The corrected pipeline regenerated the temperature products with the E22 bias
-correction only; the same-day calibration still uses the Waterbase input. We withdraw the earlier
-implication that "the Guadalquivir model is the one that matters". Keeping the national model is
-now an explicit, stated modelling choice, and a coded-value refit that regenerates the forcing and
-re-runs the ensemble is a Phase 2 decision (§4, §5).
+*Action and evidence / not changed:* The coded-value filter and refit were **not** implemented.
+The Phase 2 decision of 2026-11-01 retained the national model and **deferred the coded-value refit
+and forcing regeneration** (§6.2); E20 therefore remains a stated limitation. The corrected
+pipeline regenerated the temperature products with the E22 bias correction only; the same-day
+calibration still uses the Waterbase input. We withdraw the earlier implication that "the
+Guadalquivir model is the one that matters". The national model is retained as an explicit,
+stated modelling choice.
 
 **E21 — The sensitivity of water to air warming is probably underestimated.**
 *Reviewer's point:* the slope is from same-day air temperature (0.51); 7- and 30-day means give
@@ -465,8 +479,8 @@ relationship is reported as an **uncertainty band** on projected warming, not as
 same-day fit is validated for the basin. Evidence:
 `guadex_tw/outputs/tables/air_water_slope_uncertainty_band.csv` (ratios ×0.634 to ×1.276, i.e.
 ×0.63–×1.28); report §4.1 (*E21 warming uncertainty band*) and Limitations 3. A lagged refit
-cannot be a primary calibration on three sites; whether to refit the national model and regenerate
-the forcing is a Phase 2 decision (§4, §5).
+cannot be a primary calibration on three sites; the Phase 2 decision of 2026-11-01 deferred the
+national-model refit and forcing regeneration (§6.2).
 
 **E22 — Cold bias in the Guadalquivir is not corrected in the series used by the fish model.**
 *Reviewer's point:* the held-out-basin bias is −1.1 °C (−2.2 °C in February–March), and script 13
@@ -583,10 +597,10 @@ All rows of the review's statements table were reviewed and, where they were cor
 | Basin mean 16.0 °C; trout 1.5 σ warm | Accepted | Corrected basin-mean **15.82 °C**; trout **0.65 σ** warm of optimum (§3.4/§4.2). |
 | Max days > 20 °C rising 131→139–174 | Accepted | Replaced by exposure at the **72 baseline-established trout sites** (baseline max 90; 2045 80–135; mean 23→45 days) (§4.2, Fig. 12). |
 | Basin-mean warming 0.74–0.97 °C | Accepted | Replaced by **realised** warming: pathway means 0.54/0.64/0.62/0.70 °C; run span 0.21–1.09 °C (§4.1). |
-| Invasive richness 0.2168 because no invader crosses threshold | Accepted | Corrected value **≈0.749** species per site after the AAL reclassification (0.713 before it); the flat September value was a C1/C3 artefact (§4.5). |
+| Invasive richness 0.2168 because no invader crosses threshold | Accepted | Phase 2 post-fix value **≈0.761** species per site (≈0.749 after the AAL reclassification of the corrected state; 0.713 before it); the flat September value was a C1/C3 artefact (§4.5). |
 | No warming-driven invasive expansion detected | Accepted | The corrected run supports the *statement* (invasive richness essentially invariant), but the September *reason* was an artefact; now reported with its caveat (§4.5). |
 | Blocking helps by restricting competitively effective invasives | Accepted | Statement retired: blocking raised basin native biomass monotonically; the stated mechanism is unsupported (§4.3). |
-| Invasive-favouring matrix is a deliberate extreme | Accepted | Direction now correct; the matrix remains a **bounding scenario** with a small contrast (−1.6 % native, +4.0 % invasive) (§4.4). |
+| Invasive-favouring matrix is a deliberate extreme | Accepted | Direction now correct; the matrix remains a **bounding scenario** with a small contrast (−1.7 % native, +3.6 % invasive; Phase 2 post-fix values) (§4.4). |
 | 3-D dendritic network connecting adjacent sites | Accepted | Replaced by the corrected **on-path river-network tree** (§1.2). |
 | Migratory taxa have dispersal > 5× median | Accepted | Corrected: only MC and LR (the remaining migratory taxa) exceed the median; AA is about **0.5×**, and AAL — now classified as invasive — is also about **0.5×** (§2.2). |
 | Final-year (2045) metrics | Accepted | Now **end-of-year** (E5) (§3.6). |
@@ -665,8 +679,9 @@ give the correct value or reading and its evidence. The full adjudication is in
    Lotka–Volterra structures. We do not claim the review's form is mathematically incorrect. The
    identity `K(1 − c₁₂)/(1 − c₁₂c₂₁)` is the interior equilibrium of the retained form; the
    reviewer correctly notes that it is a saddle for the observed coefficients. The choice and its
-   consequence are stated, and the alternative is a Phase 2 sensitivity. Evidence:
-   `test/test_ode.jl`.
+   consequence are stated, and the alternative was run over all 44 scenarios as a Phase 2
+   sensitivity (§6.4). Evidence: `test/test_ode.jl` and
+   `docs/GuadeX_Phase2_Competition_Sensitivity.md`.
 4. **C4 — the prototyped tree "of about 8,640 km".** The parent edges sum to 8,637 km, but the
    **full tree is 13,871 km** once the 267 roots are joined. 31,215 km and the 8,783 km MST
    reproduce, but a spanning tree cannot be lighter than the MST, so "close to the MST" is
@@ -679,9 +694,10 @@ give the correct value or reading and its evidence. The full adjudication is in
    means but reverses on the 2036–2045 mean. The substance (axis ≠ forcing) stands; the coefficient
    does not.
 7. **E4 — "21-year interaction burn-in".** This figure belongs to the September full-burn-in
-   runs, where the alternative-interaction matrices used 21, 494 and 532 years. The **corrected**
-   runs do not use that rule: `results/alt_interactions_corrected/burnin_summary.csv` records
-   `years = 3`, `criteria = basin`, `converged = false` for all three matrices, because the
+   runs, where the alternative-interaction matrices used 21, 494 and 532 years. The **corrected and
+   Phase 2** runs do not use that rule:
+   `results/alt_interactions_phase2/burnin_summary.csv` (and the pre-fix `..._corrected` baseline)
+   records `years = 3`, `criteria = basin`, `converged = false` for all three matrices, because the
    interim route bypasses the E4 criterion. The earlier response attached the September figures to
    the corrected file; that attribution was wrong.
 8. **E10 — "settings existed only as undocumented environment variables".** Wrong: the overrides
@@ -774,15 +790,16 @@ and `docs/GuadeX_Limitations_and_Scope_Oct2026.md`.
   invasive-richness projections.
 - **Obstacle `IF` standardisation (E12).** The uniform structural assumption (0.1 upstream /
   0.5 downstream) is retained and documented because the `IF` index cannot yet be decoded safely.
-- **E20 coded-value filter and refit.** Not adopted in this version: it needs a
-  physical-consistency rule and affects plausible cold groundwater-fed summer readings; the
-  correction was applied only as the E22 basin bias.
+- **E20 coded-value filter and refit.** Deferred by the Phase 2 decision of 2026-11-01 (§6.2): it
+  needs a physical-consistency rule and affects plausible cold groundwater-fed summer readings;
+  the correction was applied only as the E22 basin bias.
 - **E23 high-elevation extraction.** Requires regional climate projections not present in the
   repository; the elevation ceiling remains a documented limitation.
 - **E17 single source-annotated rate table, E14 seasonal standardisation, E2 per-GCM
   historical-series present-day baseline, and a per-combination obstacle burn-in (E3).** These need
   data or decisions beyond this iteration; the corrected runs use explicit, opt-in options where
-  possible, with one shared no-warming control for every scenario.
+  possible, with one shared no-warming control for every scenario. The per-GCM controls are
+  explicitly deferred by the Phase 2 decision (§6.1).
 - **Preferred flow-directed GIS network build (C4).** The regional channel layer carries no
   flow-direction attribute or elevation, so the validated on-path fallback is used; the
   flow-directed build is future work.
@@ -793,35 +810,41 @@ and `docs/GuadeX_Limitations_and_Scope_Oct2026.md`.
 
 ## 5. Verification
 
-- **Test suite.** The full Julia suite passes: **3,913 / 3,913 tests, 70 testsets, 0 failures,
-  0 errors** (re-run 2026-11-01; sum of the 70 top-level testsets, and the same files run inside an
-  outer `@testset` report the same 3,913). It includes the C4 on-path
-  graph testset (2,647 tests), the C2 interaction-form testset (**35** tests, up from 13 with the
-  equilibrium/stability tests), the new interaction-parser testset (**105** tests), the E4
-  spin-up-rule testset (29 tests), the C5/E1 temperature-reconstruction testsets (16 + 18 tests),
-  the biological-option testset (46 tests), and the C3 interim-route testsets, together with
-  mass-conservation, topology, α-sign and temperature-level tests. The earlier **3,693** figure
-  was stale. The reviewer's **3,769** was measured on a different snapshot; the current denominator
-  is 3,913 at `c340398`, and this document, the status record and the release checklist all use
-  that number. On a checkout
-  without the gitignored daily forcing file, the affected testset skips (one `@test_skip`, shown
-  as *Broken*), giving a clean-checkout total of 3,898 (3,897 pass + 1 skipped) instead of
-  erroring.
-- **Corrected re-runs.** All three corrected experiments were executed and are present:
-  **45 climate rows** (`results/climate_scenarios_corrected/runs_index.csv`: 44 GCM×SSP scenarios
-  plus one no-warming control), **32 obstacle rows**
+- **Test suite.** The full Julia suite passes: **3,941 / 3,941 tests, 72 testsets, 0 failures,
+  0 errors, 0 broken** (`results/phase2_test_suite.log`, Phase 2 re-run 2026-11-01; 72
+  `Test Summary:` blocks). This is **28** more assertions than the previous 3,913 / 3,913,
+  70-testset run. It includes the C4 on-path graph testset (2,647 tests), the C2 interaction-form
+  testset (**35** tests, up from 13 with the equilibrium/stability tests), the interaction-parser
+  testset (**105** tests), the E4 spin-up-rule testset (29 tests), the C5/E1
+  temperature-reconstruction testsets (16 + 18 tests), the biological-option testset (46 tests),
+  and the C3 interim-route testsets, together with mass-conservation, topology, α-sign and
+  temperature-level tests. The earlier **3,693** figure was stale; the reviewer's **3,769** was
+  measured on a different snapshot; the current denominator is **3,941 at `c340398`**, and this
+  document, the status record and the release checklist all use that number. On a checkout without
+  the gitignored daily forcing file, the affected testset still skips (one `@test_skip`, shown as
+  *Broken*) instead of erroring; the exact clean-checkout denominator was not re-recorded for the
+  Phase 2 run.
+- **Corrected and Phase 2 re-runs.** The pre-fix corrected experiments are retained as the audit
+  baseline: **45 climate rows** (`results/climate_scenarios_corrected/runs_index.csv`: 44 GCM×SSP
+  scenarios plus one no-warming control), **32 obstacle rows**
   (`results/sensitivity_obstacles_corrected/runs_index.csv`), and **48 interaction rows**
-  (`results/alt_interactions_corrected/runs_index.csv`). The design is summarised in report
-  Table 1 (§3.5).
+  (`results/alt_interactions_corrected/runs_index.csv`). The **primary post-fix outputs** are the
+  Phase 2 re-runs against the regenerated table: 45 climate rows
+  (`results/climate_scenarios_phase2`), 32 obstacle rows
+  (`results/sensitivity_obstacles_phase2`) and 48 interaction rows
+  (`results/alt_interactions_phase2`); the sensitivities are the 45-run competition alternative
+  (`results/climate_scenarios_competition_alt`) and the two 32-run passability variants
+  (`results/sensitivity_obstacles_floor1e3`, `results/sensitivity_obstacles_parentonly`). Exact
+  commands and digest evidence: `docs/GuadeX_Phase2_Run_Record.md`.
+- **Limitations document.** `docs/GuadeX_Limitations_and_Scope_Oct2026.md` consolidates the
+  standing caveats into **15 numbered limitations and a scope statement**, and records the C6, C3,
+  E21, `IF` and E8 decisions plus the alien-introduction, parser-fix, validation and
+  competition-structure items. The report's Limitations section (§6) is drawn from it.
 - **E21 uncertainty band.** `guadex_tw/outputs/tables/air_water_slope_uncertainty_band.csv`
   tabulates central/low/high warming by pathway; the slope ratios are **0.6344–1.2765**
   (×0.63–×1.28). For the GuadeX 2026–2045 horizon the central/low/high ensemble-median water
   warming is 0.580/0.368/0.741 °C (SSP1-2.6) to 0.730/0.463/0.931 °C (SSP5-8.5); the report notes
   the upper end may not apply to the Guadalquivir subset (§4.1, Limitations 3).
-- **Limitations document.** `docs/GuadeX_Limitations_and_Scope_Oct2026.md` consolidates the
-  standing caveats into **12 numbered limitations and a scope statement**, and records the C6, C3,
-  E21, `IF` and E8 decisions plus the alien-introduction limitation. The report's Limitations
-  section (§6) is drawn from it.
 - **Invariants.** `level + anomaly` reconstructs the corrected daily series (tests assert to
   `atol = 1e-9`, exactly for the driver schedules); the corrected trout-site mean is 12.83 °C;
   the on-path tree is acyclic, deterministic and has 774 edges / 13,871.5 km / 4 parent
@@ -833,12 +856,81 @@ and `docs/GuadeX_Limitations_and_Scope_Oct2026.md`.
 
 ---
 
-## 6. Closing statement
+## 6. Phase 2 update (2026-11-01)
+
+Phase 2 was executed on 2026-11-01 at code version `c340398`. The **primary post-fix results** are
+`results/climate_scenarios_phase2` (45 runs), `results/sensitivity_obstacles_phase2` (32) and
+`results/alt_interactions_phase2` (48); the sensitivities are
+`results/climate_scenarios_competition_alt` (45), `results/sensitivity_obstacles_floor1e3` (32) and
+`results/sensitivity_obstacles_parentonly` (32). The pre-fix `results/*_corrected` directories are
+retained as the audit baseline. Commands, row counts, elapsed times and digest evidence are in
+`docs/GuadeX_Phase2_Run_Record.md`; the decisions are in `docs/GuadeX_Phase2_Decisions.md`. The
+full Julia suite passes **3,941 / 3,941, 72 testsets, 0 failures** (`results/phase2_test_suite.log`).
+
+**6.1 4.1 — shared control retained as interim; per-GCM controls deferred.** The Phase 2 decision
+keeps the one shared no-warming control (`control/baseline`) and defers the 11 matched per-GCM
+controls (P2.2). The scenario-minus-control deltas therefore still carry a residual GCM-specific
+offset; it is stated in the response limits and in Limitations 2, not removed.
+
+**6.2 4.2 — national model documented; coded-value refit deferred.** The projections use the
+national all-Spain air–water model (`ta = 0.5097`, `n = 39,944`, 980 sites). The decision records
+that choice explicitly and defers the coded-value refit and forcing regeneration (P2.5). The 257
+coded Waterbase values therefore remain in the calibration that reaches the forcing, and E20
+remains a stated limitation.
+
+**6.3 4.4 — parser fix executed and quantified; the effect is immaterial.** The regenerated table
+changes **16** reverse-direction cells from −0.5 predation to −0.3 competition and flags the **9**
+mixed "competition and predation" cells (**34** changed directed cells; 227 rows, 31 ambiguous
+source cells / 62 rows). All three affected experiments were re-run. Maximum changes in basin
+metrics: **0.0026 native species**, **0.0013** realised richness loss and **0.0011** biomass units
+on a ≈30-unit mean in the climate ensemble; 0.0013 species, 0.0063 biomass and 0.057 ST biomass in
+the obstacle sweep; 0.0013 species, 0.033 biomass and 0.51 ST biomass in the interaction sweep.
+There are no aggregate sign changes, and the factor/matrix orderings are unchanged (Spearman
+ρ = 1.00). Evidence: `docs/GuadeX_Phase2_ParserFix_Effect.md`,
+`docs/GuadeX_Phase2_ObstacleSweep_Update.md`,
+`docs/GuadeX_Phase2_InteractionSweep_Update.md`.
+
+**6.4 4.5 — the competition alternative was run over all 44 scenarios; the primary is unchanged.**
+With `c = −α`, the mean richness-loss delta collapses to approximately zero (mean −0.001551 →
+−0.000037; 31/44 exactly zero) and the mean native-richness response changes sign (+0.0020 →
+−0.0071; 30/44 runs flip). The total-biomass and trout responses amplify (~4.8× and ~7.8–8.3×).
+The **magnitude** of the weak-warming result is robust (basin native richness ≤ 0.0129 species,
+≤ 10 of 775 sites; warm-endpoint delta numerically identical at −0.006452), but the claim that
+warming does not reduce native richness is not. The primary specification remains `c = 1 − α`.
+Evidence: `docs/GuadeX_Phase2_Competition_Sensitivity.md`.
+
+**6.5 4.7 — passability floor and parent-only sensitivities reported.** The `1e-3` floor and the
+parent-only obstacle assignment both leave the factor ranking unchanged (Spearman ρ = 1.00 for all
+eight metrics; top two factors unchanged 8/8). The `1e-33` link is the **parent edge**
+`1.33.2`–`1.33.58` with 33 obstacles; parent-only leaves it untouched, and the floor raises it to
+`1e-3`. The 33-obstacle link contributes only 0.42–1.12 % of the dispersal rate added by the floor,
+so it does not drive the ranking. Parent-only removes 245 applied obstacles from 111 root-join
+links (197 become unmatched, 48 re-snap to parent edges). No floor is applied in the primary run.
+Evidence: `docs/GuadeX_Phase2_PassabilityFloor_Sensitivity.md`.
+
+**6.6 4.6 — validation re-run against the Phase 2 control; thresholds fixed.** Against the
+post-spin-up Phase 2 control, pooled sensitivity is **0.975**, pooled specificity **0.920**, and LS
+TSS **0.417** (observed occupancy 45.3 %, modelled 77.2 %, bias +31.9 points); the per-species table
+is `results/climate_scenarios_phase2/validation/initial_state_validation.csv`, and the values are
+identical at reported precision to the pre-fix validation. The Phase 2 decision fixes the future
+calibration acceptance criteria as **per-species TSS ≥ 0.40 where ≥ 10 sites are occupied** and
+**|modelled − observed occupancy| ≤ 0.10 for LS, SA, SP, PW, CP**. They are criteria for the future
+calibration campaign, not gates for this release; the current LS passes the TSS criterion but fails
+the occupancy criterion.
+
+The corrected and Phase 2 results and the daily forcing are shared at
+`https://k00.fr/eqnsvc2y`; the pre-fix results are retained as the audit baseline. The report
+`.tex`/`.pdf` has been regenerated from these outputs (P2.6, 2026-11-01; 39 pages).
+
+---
+
+## 7. Closing statement
 
 The reviewers identified genuine, consequential defects, and the corrected model confirms that the
 September conclusions changed materially: the passability sign reversal is not recovered, the
 invasive-favouring contrast is small rather than catastrophic, the flat "invasive richness 0.2168"
-becomes ≈0.749 after the AAL reclassification (0.713 before it), and the aggregate climate response is weak and dominated by a transient common to
+becomes ≈0.761 in the Phase 2 post-fix run (≈0.749 after the AAL reclassification of the corrected
+state; 0.713 before it), and the aggregate climate response is weak and dominated by a transient common to
 the no-warming control. We are grateful for the diagnosis and have adopted its substance.
 
 We have also been explicit, as a matter of record, about the places where the review's specific
@@ -852,6 +944,7 @@ welcome the reviewers' further comments on the corrected release and on the defe
 
 *Prepared on `master`, current HEAD `c340398` (base `9702169`, correction-series tip `61fcd4c`,
 AAL reclassification `099a87d`). The correction work through `099a87d` is committed; the
-second-review edits to this response, the parser fix, the new tests and the two diagnostic
-scripts are uncommitted working-tree changes. `results/` and the daily forcing files remain
-gitignored and were shared with the reviewers at https://k00.fr/eqnsvc2y (item 4.9).*
+second-review edits to this response, the parser fix, the new tests, the two diagnostic scripts and
+the Phase 2 decision/evidence/run-record documents are uncommitted working-tree changes. `results/`
+and the daily forcing files remain gitignored and were shared with the reviewers at
+https://k00.fr/eqnsvc2y (item 4.9).*

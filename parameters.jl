@@ -14,7 +14,7 @@ module SimulationParameters
 using TOML
 
 export load, float_vector, scenario_dict, scenario_library, require_sections
-export connectivity_method, biological_options, biological_options_dict
+export connectivity_method, competition_structure, biological_options, biological_options_dict
 
 """
     default_file()
@@ -76,6 +76,24 @@ function connectivity_method(raw::AbstractDict; default::AbstractString="legacy"
     method in (:legacy, :on_path) ||
         error("connectivity.method must be 'legacy' or 'on_path' (got '$value')")
     return method
+end
+
+"""
+    competition_structure(raw; default="shared_k") -> Symbol
+
+Return the competition structure for the model RHS.  `:shared_k` (the primary
+specification) gives `c = 1 - α`; `:species_specific` is the second-review 4.5
+alternative giving `c = -α` with species-specific self-limitation.  Read from
+`[run_climate_scenarios].competition_structure`; an absent key falls back to
+`default`.  Invalid values error rather than silently changing the model.
+"""
+function competition_structure(raw::AbstractDict; default::AbstractString="shared_k")
+    section = get(raw, "run_climate_scenarios", Dict{String,Any}())
+    value = get(section, "competition_structure", default)
+    structure = Symbol(lowercase(string(value)))
+    structure in (:shared_k, :species_specific) ||
+        error("competition_structure must be 'shared_k' or 'species_specific' (got '$value')")
+    return structure
 end
 
 # Accept a TOML boolean or a string override (`"1"`/`"true"`/`"yes"`/`"on"`).

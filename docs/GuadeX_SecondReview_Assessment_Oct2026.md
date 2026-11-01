@@ -4,8 +4,10 @@
 **Review under analysis:** `docs/GuadeX_Reply_to_Response_Oct2026.md` (Carlos, October 2026).
 **Snapshot checked:** `master` at `c34039809cf1e402d7deff78c50063cbf58513b9` (base `9702169`,
 correction-series tip `61fcd4c`, AAL reclassification `099a87d`, 29 Oct 2026).
-**Scope:** Phase 1 only — evidence, documentation, cheap code/test fixes and post-processing.
-No experiment was re-integrated; the Phase 2 re-runs stay behind the team gate (§6).
+**Scope:** Phase 1 evidence, documentation, cheap code/test fixes and post-processing, plus the
+Phase 2 status recorded on 2026-11-01. The Phase 2 re-runs were executed at `c340398` after this
+dossier was frozen; their commands, digests and outputs are in
+`docs/GuadeX_Phase2_Run_Record.md`, with the decisions in `docs/GuadeX_Phase2_Decisions.md`.
 
 This dossier records, for every objection in the second review, what the current tree shows, the
 value we recomputed, the verdict, and the action taken. Every number below has a file path or a
@@ -54,7 +56,8 @@ The control's anomalies are zero by construction (the `control` row of `runs_ind
 `-2.18e-17 °C`), so "matched" language cannot be recovered by pointing at the GCM pairing.
 
 **Action:** the response, report and limitations now say "shared control" and state the residual
-GCM-specific offset. Per-GCM controls (11 runs) are a Phase 2 option.
+GCM-specific offset. Per-GCM controls (11 runs) were deferred by the Phase 2 decision of
+2026-11-01 (P2.2).
 
 ### 4.2 The quoted slope drives the projections — **Accept (text); withdraw the rebuttal**
 
@@ -72,7 +75,8 @@ drives the projections is also the Spain model's — this part of the old rebutt
 withdrawn.
 
 **Action:** E20/E21 and §3 items 11–12 rewritten. Keeping the national model is now an explicit
-choice; a coded-value refit that regenerates the forcing is a Phase 2 decision.
+choice; the coded-value refit and forcing regeneration were deferred by the Phase 2 decision of
+2026-11-01 (P2.5).
 
 ### 4.3 The 21/494/532 burn-in years do not belong to the corrected runs — **Accept (text)**
 
@@ -115,7 +119,10 @@ Directed multi-mechanism text such as "competition and sperm parasitism" is pres
 **Action:** parser fixed; long table regenerated; pre-fix copy retained
 (`interaction_matrix_long_prefix.csv`); regression testset added (105 tests) covering the 16
 rows, the named direction, the nine cells, competition-only cells and the sperm-parasitism text.
-The affected climate/obstacle/interaction experiments were **not** re-run (Phase 2, §6).
+The affected climate/obstacle/interaction experiments were re-run in Phase 2 (45 / 32 / 48 runs
+under the `*_phase2` roots); the effect is quantified as immaterial in
+`docs/GuadeX_Phase2_ParserFix_Effect.md`, `docs/GuadeX_Phase2_ObstacleSweep_Update.md` and
+`docs/GuadeX_Phase2_InteractionSweep_Update.md`.
 
 ### 4.5 Competition coefficients have strong ecological consequences — **Accept in substance; keep the specification**
 
@@ -133,8 +140,8 @@ regime; and `c = −α` is a valid alternative LV structure, not a mathematical 
 **Action:** the false test claim is withdrawn and the missing test added. The new tests verify the
 coexistence formula for `c₁₂c₂₁ < 1`, the positive Jacobian eigenvalue for the observed regime,
 bistability under two initial conditions, and the `c = 1 − α` range. The report and limitations
-state the ecological consequence. `c = −α` / species-specific competition is a Phase 2
-structural sensitivity.
+state the ecological consequence. `c = −α` / species-specific competition was run as the Phase 2
+structural sensitivity over all 44 scenarios (`docs/GuadeX_Phase2_Competition_Sensitivity.md`).
 
 ### 4.6 The starting state is not validated against the survey — **Accept (validation added)**
 
@@ -148,7 +155,7 @@ needed, and compares it with the 2006–2009 survey over 775 sites and 24 specie
 | Modelled presence | spun-up density > 0.1 |
 | Pooled sensitivity | 0.975 |
 | Pooled specificity | 0.920 |
-| Widespread native LS | TSS 0.42, observed occupancy 45.3 %, modelled 77.2 % |
+| Widespread native LS | TSS 0.417, observed occupancy 45.3 %, modelled 77.2 % |
 | Rare species | TSS 0.49–1.00, driven by correctly empty sites (the low values are AA 0.55 and TT 0.49) |
 | Abundance rank ρ | 0.48–1.00 where ≥3 sites were occupied |
 
@@ -157,12 +164,15 @@ The validation is a finding, not a success: the model over-predicts occupancy, e
 dominant native cyprinid, and several invasive species move strongly in the control (for example
 GH +241 %, MS −87.9 %, LG −84.5 %).
 
-Full per-species table:
-`results/climate_scenarios_corrected/validation/initial_state_validation.csv` (24 rows); the
-report reproduces it as Table~\ref{tab:validation} and the response quotes the headline.
+Full per-species tables:
+`results/climate_scenarios_corrected/validation/initial_state_validation.csv` (pre-fix audit
+baseline, 24 rows) and `results/climate_scenarios_phase2/validation/initial_state_validation.csv`
+(the Phase 2 primary control, 24 rows; identical at reported precision); the report reproduces it
+as Table~\ref{tab:validation} and the response quotes the headline.
 
 **Action:** validation table added to the report and the evidence dossier; the TSS/occupancy
-criteria remain the acceptance condition for calibration (§6).
+criteria were fixed as the acceptance condition for the future calibration in the Phase 2
+decision (§6).
 
 ### 4.7 Parts of the network are reconstructed rather than observed — **Accept (reporting + sensitivity)**
 
@@ -191,8 +201,9 @@ canonicalises by site code (`scripts/network_root_join_diagnostics.jl` line 67) 
 the review. A broader definition that also counts parent edges entering a root site gives
 531 matched / 392 applied; that is a different quantity and is reported only as a cross-check.
 
-**Action:** figures added to report §2.2 and limitation 8; a passability floor and on-path-only
-obstacle assignment are Phase 2 structural sensitivities.
+**Action:** figures added to report §2.2 and limitation 8; the passability-floor (`1e-3`) and
+parent-only obstacle variants were run as the Phase 2 structural sensitivities
+(`docs/GuadeX_Phase2_PassabilityFloor_Sensitivity.md`).
 
 ### 4.8 *Alburnus alburnus* still classified as migratory — **Already fixed at `099a87d`**
 
@@ -263,44 +274,44 @@ temperature range (9.79–18.06 °C; basin mean 15.82 °C; trout sites 12.83 °C
 established-only quasi-extinction, the obstacle status counts (1,274 / 185 / 199),
 E13–E16/E22 and the viewer items A1–A8. Nothing in this dossier re-litigates those.
 
-## 5. Phase 1 validation outputs
+## 5. Phase 1 and Phase 2 validation outputs
 
 | Gate | result |
 |---|---|
 | Parser regression tests | 105 tests pass; 16 reverse rows corrected; 9 cells flagged |
 | C2 stability tests | 35-test testset passes in both regimes |
-| Full Julia suite | **3,913 / 3,913 pass, 70 testsets, 0 failures, 0 errors** (sum of the per-testset totals, 2026-11-01; an outer-`@testset` run of the same files reports the same 3,913). Clean checkout without the daily forcing file: 3,898 total, 3,897 pass + 1 skipped (`@test_skip`) |
-| Post-spin-up validation | 24 species × 775 sites; pooled sensitivity 0.975, specificity 0.920 |
-| Network diagnostics | 508 parent / 266 root joins; 37.7 % length; 341 matched / 245 applied root-join obstacles (531/392 incident-to-root); 33 obstacles / 1e-33; 28 links ≥5 |
+| Full Julia suite | **Phase 1: 3,913 / 3,913 pass, 70 testsets, 0 failures, 0 errors. Phase 2: 3,941 / 3,941 pass, 72 testsets, 0 failures/errors/broken** (`results/phase2_test_suite.log`; 28 new assertions). Clean checkout without the daily forcing file: one `@test_skip` for the C5/E1 daily-series testset; no exact clean-checkout denominator was re-recorded for the Phase 2 run |
+| Post-spin-up validation | 24 species × 775 sites; pooled sensitivity 0.975, specificity 0.920, LS TSS 0.417; Phase 2 control table at `results/climate_scenarios_phase2/validation/initial_state_validation.csv` |
+| Network diagnostics | 508 parent / 266 root joins; 37.7 % length; 341 matched / 245 applied root-join obstacles (531/392 incident-to-root); 33 obstacles / 1e-33 on the parent edge `1.33.2`–`1.33.58`; 28 links ≥5; floor and parent-only variants leave the ranking unchanged |
 | Document consistency | the 4.10 items are closed in the response, report, limitations and status record; `docs/climate_scenarios.md:566` now gives both the 1,584 legacy-default and the 528 corrected counts, and `docs/global_sensitivity_methods_note.md:65` uses 18.06 °C. The old values survive only as explanatory contrasts |
 
 ## 6. Decisions and the Phase 2 gate
 
-Still required from the team (no Phase 2 run has started):
+The team answered §5 of the plan on 2026-11-01 and Phase 2 was executed the same day:
 
-1. **Competition structure.** Keep `c = 1 − α` as primary and run `c = −α` as a sensitivity
-   (recommended), or switch the primary specification.
-2. **Per-GCM controls.** Keep the shared control for this release (recommended) or run the 11
-   matched controls now.
-3. **Coded-value refit.** Refit the all-Spain model and regenerate the forcing, or document the
-   national-model choice and defer.
-4. **Validation acceptance criteria.** Fix the TSS/occupancy thresholds that will define a
-   successful calibration. Proposed starting point: per-species TSS ≥ 0.4 for every species with
-   ≥10 occupied sites, and |modelled − observed occupancy| ≤ 0.10 for the widespread natives
-   (LS, SA, SP, PW, CP); the current LS TSS of 0.42 and occupancy bias of +31.9 points fail the
-   second condition and would therefore be a genuine calibration target.
+1. **Competition structure.** Keep `c = 1 − α` as primary and run `c = −α` as a sensitivity —
+   **done** over all 44 scenarios (`results/climate_scenarios_competition_alt`).
+2. **Per-GCM controls.** Keep the shared control as an interim and document it — **deferred by
+   decision** (P2.2).
+3. **Coded-value refit.** Document the national-model choice and defer the refit — **deferred by
+   decision** (P2.5).
+4. **Validation acceptance criteria.** Fixed as **per-species TSS ≥ 0.40 where ≥ 10 sites are
+   occupied**, and **|modelled − observed occupancy| ≤ 0.10 for LS, SA, SP, PW and CP**; these are
+   criteria for the future calibration campaign, not gates for this release. The Phase 2 control
+   gives LS TSS **0.417** and occupancy bias **+31.9 points**, so LS passes the first criterion and
+   fails the second.
 
-Phase 2 items are gated in `.kilo/plans/1793526105792-second-review-triage-plan.md` §4:
-P2.1 parser-affected re-runs, P2.2 per-GCM controls, P2.3 competition-structure sensitivity,
-P2.4 passability floor, P2.5 coded-value refit (conditional), P2.6 report regeneration.
+The decision record is `docs/GuadeX_Phase2_Decisions.md`. Phase 2 items P2.1, P2.3 and P2.4 were
+executed; P2.2 and P2.5 are deferred by decision; P2.6 report regeneration is a separate step.
 
 ## 7. Residual risks and honest limits
 
-- **The corrected run numbers still reflect the pre-fix interaction table.** The parser fix
-  changes 16 α entries; the climate, obstacle and interaction results were not re-run. Every
-  number in the report is therefore a pre-4.4 result until Phase 2. The saved runs record
-  `code_version = "9702169"`, so a current re-run will (correctly) refuse to reuse them under the
-  digest rule.
+- **The pre-fix corrected run numbers reflect the old interaction table; the Phase 2 re-runs do
+  not.** The parser fix changes 16 α entries. The Phase 2 climate, obstacle and interaction runs
+  (45 / 32 / 48) quantify the effect as immaterial (≤ 0.0026 native species, ≤ 0.0013 realised
+  richness loss, ≤ 0.0063 biomass in the worst experiment). The pre-fix `*_corrected` runs record
+  `code_version = "9702169"` and remain the audit baseline; the primary post-fix outputs are the
+  `*_phase2` roots.
 - **The shared control carries a GCM-specific offset.** It is now stated, not removed.
 - **The start-state validation shows over-prediction.** TSS is flattered by rare species; the LS
   result is the honest one.
@@ -312,8 +323,11 @@ P2.4 passability floor, P2.5 coded-value refit (conditional), P2.6 report regene
   the whole cell rather than the clause (no cell contains two directed verbs); `dispersa` is not
   in the verb list (the word does not occur in the data); and when a bare-target and a `depreda`
   clause name the same ordered pair, the first specific clause wins (no current cell has that
-  shape). They are hardening items for Phase 2, not defects in the committed 24×24 matrix.
+  shape). They remain hardening items for a future parser revision, not defects in the current
+  24×24 matrix.
 - **`results/` is not in the repository.** The shared archive is the only reproduction route until
   a persistent accession exists.
-- **The `c > 1` regime may drive part of the weak-warming conclusion.** The Phase 2 sensitivity
-  must be reported, not buried.
+- **The `c > 1` regime may drive part of the weak-warming conclusion.** The Phase 2
+  competition-structure sensitivity is now reported: the weak-warming magnitude survives, the
+  sign of the mean richness response depends on the structure, and the richness-loss signal
+  collapses under `c = −α` (`docs/GuadeX_Phase2_Competition_Sensitivity.md`).

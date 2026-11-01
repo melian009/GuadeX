@@ -2404,6 +2404,21 @@ function apply_salinity_envelope(growth_rates, species_codes, species_chars_df,
 end
 
 """
+    obstacle_scope_edges(tree_edges, parent; on_path_only=false)
+
+Restrict the C4 tree edges used for obstacle snapping.  With
+`on_path_only = true` only the parent (upstream) edges are kept, so obstacles
+are no longer assigned to the reconstructed MST root-join edges.  The parent
+array is the one returned by [`build_on_path_distance_matrix`](@ref).
+"""
+function obstacle_scope_edges(tree_edges, parent; on_path_only::Bool=false)
+    on_path_only || return tree_edges
+    parent === nothing &&
+        error("obstacles_on_path_only requires the on-path connectivity tree")
+    return Tuple{Int,Int,Float64}[(u, v, w) for (u, v, w) in tree_edges if parent[u] == v]
+end
+
+"""
     prepare_ode_data(;
         connectivity_file::String = "data/ConnectivityUTM.csv",
         density_file::String = "data/BIOTIC/FishDensity_and_Juveniles_Matrix.csv",
@@ -2541,7 +2556,10 @@ function prepare_ode_data(;
     exclude_fishfarm_eel_records::Bool = false,
     pool_capacity_mode::Symbol = :legacy,
     fishless_dificil_capacity::Symbol = :legacy,
-    salinity_envelope::Bool = false
+    salinity_envelope::Bool = false,
+    competition_structure::Symbol = :shared_k,
+    passability_floor::Float64 = 0.0,
+    obstacles_on_path_only::Bool = false
 )
     println("="^60)
     println("Preparing data for ODE metacommunity model")
@@ -2568,6 +2586,13 @@ function prepare_ode_data(;
         error("pool_capacity_mode must be :legacy, :exclude or :cap (got :$(pool_capacity_mode))")
     fishless_dificil_capacity in (:legacy, :near_zero) ||
         error("fishless_dificil_capacity must be :legacy or :near_zero (got :$(fishless_dificil_capacity))")
+    # 4.5 / P2.3 and 4.7 / P2.4 structural options.
+    competition_structure in (:shared_k, :species_specific) ||
+        error("competition_structure must be :shared_k or :species_specific (got :$(competition_structure))")
+    passability_floor >= 0 ||
+        error("passability_floor must be non-negative (got $passability_floor)")
+    obstacles_on_path_only && connectivity_method != :on_path &&
+        error("obstacles_on_path_only requires connectivity_method = :on_path")
 
     # Optional updated inputs are loaded explicitly and kept separate from the
     # legacy site/environment tables.  This avoids silently changing the model
@@ -2694,12 +2719,19 @@ function prepare_ode_data(;
         # On the corrected network, snap obstacles only to the C4 tree edges and
         # use the tree's upstream/downstream orientation (E12); the legacy path
         # keeps the straight-line matching and elevation-based direction.
+        # P2.4: optionally restrict snapping to parent (on-path) edges only, so
+        # reconstructed MST root-join edges carry no obstacles.
+        obstacle_tree_edges = obstacle_scope_edges(connectivity_tree_edges,
+            connectivity_parent; on_path_only=obstacles_on_path_only)
+        obstacles_on_path_only &&
+            println("Obstacle scope: on-path parent edges only " *
+                    "($(length(obstacle_tree_edges)) of $(length(connectivity_tree_edges)) tree edges)")
         obstacle_result = build_obstacle_passability_matrix(
             obstacles_df, site_df, sites, distance_matrix, elevations;
             matching_tolerance=obstacle_matching_tolerance,
             obstacle_passability=obstacle_passability,
             obstacle_downstream_passability=obstacle_downstream_passability,
-            tree_edges=connectivity_tree_edges,
+            tree_edges=obstacle_tree_edges,
             legacy_dams=legacy_dams,
             include_ambiguous_status=obstacle_include_ambiguous_status
         )
@@ -2773,8 +2805,11 @@ function prepare_ode_data(;
         elevations,
         upstream_cost,
         dams,
-        species_codes
+        species_codes;
+        passability_floor=passability_floor
     )
+    passability_floor > 0 &&
+        println("Passability floor: links below $(passability_floor) raised to the floor")
     println("Dispersal matrix: $(Guadex.nnz(dispersal_matrix)) non-zero entries")
 
     # Create MetacommunityParams
@@ -2796,7 +2831,9 @@ function prepare_ode_data(;
         carrying_capacity,
         thermal_lower_limits,
         thermal_upper_limits,
-        heat_stress_rate
+        heat_stress_rate,
+        true,
+        competition_structure
     )
     heat_stress_rate > 0 &&
         println("Heat-stress mortality enabled: k=$(heat_stress_rate) 1/day/degC^2")
@@ -2824,6 +2861,10 @@ function prepare_ode_data(;
         site_df = site_df,
         species_chars_df = species_chars_df,
         density_df = density_df,
+        # 4.5 / 4.7 structural options actually applied (metadata + digest).
+        competition_structure = competition_structure,
+        passability_floor = passability_floor,
+        obstacles_on_path_only = obstacles_on_path_only,
         # E13-E16/E18: the resolved option values actually applied, for metadata
         # and the parameter digest.
         biological_options = (

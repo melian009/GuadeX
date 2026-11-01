@@ -48,6 +48,10 @@ const OBSTACLE_MODE = Symbol(get(ENV, "GUADEX_OBSTACLE_MODE", GUADEX_PARAMS["obs
 const OBSTACLE_MATCHING_TOLERANCE = parse(Float64, get(ENV, "GUADEX_OBSTACLE_TOLERANCE_M", string(GUADEX_PARAMS["obstacles"]["matching_tolerance_m"])))
 const OBSTACLE_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["upstream_passability"])))
 const OBSTACLE_DOWNSTREAM_PASSABILITY = parse(Float64, get(ENV, "GUADEX_OBSTACLE_DOWNSTREAM_PASSABILITY", string(GUADEX_PARAMS["obstacles"]["downstream_passability"])))
+const OBSTACLE_PASSABILITY_FLOOR = parse(Float64, get(ENV, "GUADEX_OBSTACLE_FLOOR",
+    string(get(GUADEX_PARAMS["obstacles"], "passability_floor", 0.0))))
+const OBSTACLES_ON_PATH_ONLY = lowercase(get(ENV, "GUADEX_OBSTACLES_PARENT_ONLY",
+    string(get(GUADEX_PARAMS["obstacles"], "on_path_only", false)))) in ("1", "true", "yes")
 
 # C4: dispersal-graph construction method from the [connectivity] section.
 const CONNECTIVITY_METHOD = SimulationParameters.connectivity_method(GUADEX_PARAMS)
@@ -167,7 +171,10 @@ data_base = prepare_ode_data(
     fishless_dificil_capacity = SETTINGS.fishless_dificil_capacity,
     nonreproducing_local_growth = SETTINGS.nonreproducing_local_growth,
     exclude_fishfarm_eel_records = SETTINGS.exclude_fishfarm_eel_records,
-    salinity_envelope = SETTINGS.salinity_envelope
+    salinity_envelope = SETTINGS.salinity_envelope,
+    competition_structure = SETTINGS.competition_structure,
+    passability_floor = OBSTACLE_PASSABILITY_FLOOR,
+    obstacles_on_path_only = OBSTACLES_ON_PATH_ONLY
 )
 
 n_sites = data_base.params.n_sites
@@ -337,7 +344,10 @@ for entry in matrices
                         "obstacle_matching_tolerance_m" => OBSTACLE_MATCHING_TOLERANCE,
                         "obstacle_passability" => OBSTACLE_PASSABILITY,
                         "obstacle_downstream_passability" => OBSTACLE_DOWNSTREAM_PASSABILITY,
-                        "obstacles_file" => basename(OBSTACLES_FILE)))
+                        "obstacle_passability_floor" => OBSTACLE_PASSABILITY_FLOOR,
+                        "obstacles_on_path_only" => OBSTACLES_ON_PATH_ONLY,
+                        "obstacles_file" => basename(OBSTACLES_FILE),
+                        "competition_structure" => string(SETTINGS.competition_structure)))
 
                 if !FORCE_RERUN && sensitivity_run_status(run_dir, fingerprint)
                     println("  skipped (complete and fingerprint matches; " *

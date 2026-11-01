@@ -431,7 +431,7 @@ function scale_intrinsic_growth_rate(params::MetacommunityParams, factor::Real)
         params.habitat_suitability, params.thermal_optima, params.thermal_sigmas,
         params.carrying_capacity, params.thermal_lower_limits,
         params.thermal_upper_limits, params.heat_stress_rate,
-        params.interaction_inside_growth)
+        params.interaction_inside_growth, params.competition_structure)
 end
 
 """

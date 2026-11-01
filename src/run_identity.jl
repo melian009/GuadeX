@@ -122,6 +122,9 @@ function parameter_digest(params::MetacommunityParams;
         "thermal_upper_limits=$(_array_digest(params.thermal_upper_limits))",
         "heat_stress_rate=$(_value_digest(params.heat_stress_rate))",
         "interaction_inside_growth=$(params.interaction_inside_growth)",
+        # 4.5 structural sensitivity: the competition form changes the RHS, so a
+        # shared-K result must never be reused for the species-specific form.
+        "competition_structure=$(params.competition_structure)",
     ]
     for key in sort(collect(keys(options)), by=string)
         push!(pieces, "option.$key=$(_value_digest(options[key]))")

@@ -525,8 +525,28 @@ function plot_climate_forcing_response(runs::AbstractVector{<:ClimateBasinSeries
         report_annotation!(ax, "all SSPs overlap", position=:lb, color=(:black, 0.65))
     end
 
-    # Final-year warming response across all runs.
-    final_warming = [_final_value(run, :delta_temperature_c) for run in runs]
+    # C7 dose-response regressor: the realised site-and-window mean anomaly over
+    # 2026-2045, not the final-year snapshot.  The index lives at the results
+    # root (`<root>/<ssp>/<gcm>` is the run layout).  Fall back to the final-year
+    # series value only when the index is unavailable.
+    realised_2026_2045 = Dict{Tuple{String,String},Float64}()
+    if !isempty(runs)
+        results_root = dirname(dirname(first(runs).run_dir))
+        index_path = joinpath(results_root, "runs_index.csv")
+        if isfile(index_path)
+            index = CSV.read(index_path, DataFrame)
+            if hasproperty(index, :realised_warming_2026_2045_mean_degc)
+                for row in eachrow(index)
+                    value = row.realised_warming_2026_2045_mean_degc
+                    (value === missing || !isfinite(Float64(value))) && continue
+                    realised_2026_2045[(String(row.scenario), String(row.gcm))] =
+                        Float64(value)
+                end
+            end
+        end
+    end
+    final_warming = [get(realised_2026_2045, (run.scenario, run.gcm),
+        _final_value(run, :delta_temperature_c)) for run in runs]
     final_richness = [_final_value(run, :native_richness) for run in runs]
     final_biomass = [_final_value(run, :total_biomass) for run in runs]
     final_risk = [_final_value(run, :realised_richness_loss) for run in runs]
@@ -539,7 +559,7 @@ function plot_climate_forcing_response(runs::AbstractVector{<:ClimateBasinSeries
 
     function _response_axis(row, col, letter, ylabel, ys)
         ax = Axis(fig[row, col]; width=520, height=430,
-            xlabel = "Realised ΔT by 2045 (°C)", ylabel = ylabel)
+            xlabel = "Realised ΔT 2026-2045 mean (°C)", ylabel = ylabel)
         panel_letter!(ax, letter)
         for scenario in scenarios
             idx = findall(==(scenario), run_scenario)

@@ -222,11 +222,48 @@ Environment overrides: `GUADEX_CLIMATE_PROJECTION_ROUTE`,
 > The interim route's status as an uncalibrated, conditional projection is stated for the
 > October report in `docs/GuadeX_Limitations_and_Scope_Oct2026.md` (item 2).
 
+### Competition structure (second review 4.5)
+
+`[run_climate_scenarios].competition_structure` selects the interaction form
+(override with `GUADEX_COMPETITION_STRUCTURE`):
+
+* `"shared_k"` (default, the primary specification) — a shared per-site carrying
+  capacity, so `c_sj = 1 - α_sj` and every observed non-zero interaction gives
+  `c ∈ [1.3, 1.8]`, above self-limitation.
+* `"species_specific"` — species-specific self-limitation and no shared
+  capacity: `c_ss = 1`, `c_sj = -α_sj` for `j ≠ s`
+  (`dN_is/dt = r_eff N_is (1 - N_is/K_i + Σ_{j≠s} α_sj N_ij/K_i)`).
+  This is the reviewer's alternative, run as a Phase 2 sensitivity; it is not
+  the primary specification.
+
+The structure is part of the run digest and metadata
+(`resolved_config.competition_structure`), so shared-K results are never reused
+for the alternative.
+
 ### Obstacle passability and the `IF` index
 
 Barrier passability is currently modelled using a uniform structural assumption
 (0.1 upstream, 0.5 downstream) pending full standardisation of the regional
 obstacle inventory's qualitative passability index (IF).
+
+Phase 2 adds two opt-in passability sensitivities in `[obstacles]`, both off by
+default and both included in the run digest and metadata:
+
+* `passability_floor` (override `GUADEX_OBSTACLE_FLOOR`) raises a restricted
+  link's compounded passability to the floor (e.g. `1e-3`) so a link carrying
+  many obstacles cannot reach a numerically extreme `1e-33`. Unrestricted links
+  are untouched.
+* `on_path_only` (override `GUADEX_OBSTACLES_PARENT_ONLY=1`) snaps obstacles only
+  to on-path parent edges, so the reconstructed MST root-join edges carry no
+  obstacles.
+
+The Phase 2 primary post-fix outputs are in
+`results/climate_scenarios_phase2`, `results/sensitivity_obstacles_phase2` and
+`results/alt_interactions_phase2`; the competition and passability sensitivities
+are in `results/climate_scenarios_competition_alt`,
+`results/sensitivity_obstacles_floor1e3` and
+`results/sensitivity_obstacles_parentonly`. The pre-fix `*_corrected`
+directories remain the audit baseline.
 
 > The standing IF/passability caveat is carried into the October report in
 > `docs/GuadeX_Limitations_and_Scope_Oct2026.md` (item 4).
@@ -280,6 +317,10 @@ Environment overrides (useful for smoke tests):
 | `GUADEX_CLIMATE_FORCE` | `1`/`true` recomputes runs whose `simulation_output.jld2` already exists |
 | `GUADEX_CLIMATE_PLOT` | `0`/`false` skips the post-run figure generation (`make_figures`) |
 | `GUADEX_CLIMATE_PROJECTIONS_FILE` | alternative projection table |
+| `GUADEX_COMPETITION_STRUCTURE` | `shared_k` (default) or `species_specific` |
+| `GUADEX_OBSTACLE_FLOOR` | compounded-passability floor (e.g. `1e-3`; default `0`) |
+| `GUADEX_OBSTACLES_PARENT_ONLY` | `1`/`true` assigns obstacles only to on-path parent edges |
+| `GUADEX_CLIMATE_OUTPUT_DIR`, `GUADEX_SENSITIVITY_OUTPUT_DIR`, `GUADEX_ALT_OUTPUT_DIR` | write the climate ensemble / obstacle sweep / interaction sweep to a separate output root |
 
 A completed run is **reused only when its stored digest matches** the current
 one; otherwise it is recomputed. The digest (`parameter_digest`) covers the

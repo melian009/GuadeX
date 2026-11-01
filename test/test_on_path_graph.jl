@@ -275,3 +275,15 @@ end
         @test data.obstacle_metadata.n_excluded_out_of_basin == 5
     end
 end
+
+@testset "obstacle scope: on-path parent edges only (P2.4)" begin
+    # Synthetic tree: 1 <- 2 is a parent edge, 3 <- 4 is a root-join edge.
+    parent = [0, 1, 0, 0]
+    tree_edges = [(2, 1, 100.0), (4, 3, 200.0)]
+    all_edges = Guadex.obstacle_scope_edges(tree_edges, parent)
+    parent_edges = Guadex.obstacle_scope_edges(tree_edges, parent; on_path_only=true)
+    @test all_edges == tree_edges
+    @test parent_edges == [(2, 1, 100.0)]
+    @test_throws ErrorException Guadex.obstacle_scope_edges(tree_edges, nothing;
+        on_path_only=true)
+end

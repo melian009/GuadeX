@@ -35,6 +35,7 @@ export exposure_days, exposure_table, established_exposure_summary
 # Export equilibrium spin-up and K sensitivity (WP4)
 export spin_up, scale_carrying_capacity, set_thermal_optima, set_heat_stress_rate
 export set_dispersal_matrix, set_interaction_matrix, set_thermal_sigma_multiplier
+export set_competition_structure, COMPETITION_STRUCTURES
 export with_temperature_baseline, site_totals
 export spin_up_criteria, spin_up_converged, composition_q95_change
 export composition_q95_change_all_cells, composition_diagnostics
@@ -70,6 +71,7 @@ export build_on_path_distance_matrix, ON_PATH_DEFAULT_RTOL, ON_PATH_DEFAULT_ATOL
 export load_cedex_var, load_cedex_esc_uts, select_cedex_uts, load_obstacles
 export build_elevation_vector, build_dam_passability_matrix
 export build_site_coordinate_matrix, build_obstacle_passability_matrix
+export obstacle_scope_edges
 export extract_site_temperatures, extract_habitat_suitability
 export load_site_water_temperature_baseline
 export build_intrinsic_growth_rates, observed_density_matrix
