@@ -62,7 +62,7 @@ model equation changes, no run-offset changes):
 | `growth_multiplier` | 0.75–1.25 | 1.0 | `scale_intrinsic_growth_rate` | Literature local `r` span source populations by roughly ±25% |
 | `carrying_capacity_scaling` | 0.5–2.0 | 1.0 | `scale_carrying_capacity` | The E14 isolated-pool distortion (84 pools, ~56% of basin density, max K ≈ 95,333) makes the capacity level the least certain state variable |
 | `interaction_strength_multiplier` | 0.5–1.5 | 1.0 | `set_interaction_matrix` | The interaction matrix is qualitative (displaces −0.8, predation −0.5, competition −0.3); the factor propagates that coding uncertainty without changing signs |
-| `thermal_optimum_shift_c` | −2.0–2.0 | 0.0 | `set_thermal_optima` | Trait-table optima are range midpoints; C6 notes all baseline sites are ≤ 18.37 °C |
+| `thermal_optimum_shift_c` | −2.0–2.0 | 0.0 | `set_thermal_optima` | Trait-table optima are range midpoints; C6 notes all baseline sites are ≤ 18.06 °C |
 | `thermal_breadth_multiplier` | 0.6–1.4 | 1.0 | `set_thermal_sigma_multiplier` | `sigma ≈ range/6` is an approximation (C6) |
 | `dispersal_multiplier` | 0.5–2.0 | 1.0 | `scale_dispersal` | Species dispersal rates carry order-of-magnitude literature ranges (E17); the base matrix uses the median species rate |
 | `upstream_cost` | 0.01–0.5 | 0.05 | `precompute_dispersal_matrix` | Exactly the existing obstacle-sweep grid `{0.01, 0.05, 0.1, 0.5}`, treated continuously |
@@ -128,9 +128,9 @@ Selected pilot results (`S1` [95% CI] / `ST`):
   than the per-site daily 2026–2045 schedule, starts from the observed snapshot
   (no long burn-in) and a site subset. `heat_stress_k_multiplier` is therefore
   inert (warmed temperatures barely cross the empirical upper limits at this `k`).
-* The `realised_richness_loss` baseline is the matched **unwarmed** control under
+* The `realised_richness_loss` baseline is the shared **unwarmed** control under
   the central parameter values (not the observed snapshot), matching the
-  matched-control convention of the climate runs.
+  shared-control convention of the climate runs.
 
 ## 6. Production run and compute estimate
 

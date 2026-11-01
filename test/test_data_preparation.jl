@@ -239,6 +239,79 @@ end
 end
 
 # =============================================================================
+# 2b. Interaction parser: the undirected clause stops at the next clause (4.4)
+# =============================================================================
+@testset "interaction parser: undirected clause cut (C1/4.4)" begin
+    # A cell that mixes an undirected competition clause with a directed
+    # predation clause. The named direction keeps predation (-0.5); the reverse
+    # direction is competition (-0.3) and must not inherit "through predation".
+    cell = Guadex.parse_interaction_cell(
+        "Coexist, interfere through competition and  Gh through predation.", "AAL", "GH")
+    by_pair = Dict((e.source, e.target) => e for e in cell)
+    @test length(cell) == 2
+    @test by_pair[("AAL", "GH")].alpha ≈ -0.5
+    @test by_pair[("AAL", "GH")].mechanism == "predation"
+    @test by_pair[("GH", "AAL")].alpha ≈ -0.3
+    @test by_pair[("GH", "AAL")].mechanism == "competition"
+    @test by_pair[("GH", "AAL")].ambiguous
+    @test by_pair[("AAL", "GH")].ambiguous
+
+    # The nine pure mixed cells name competition and predation with no nominated
+    # direction. They keep -0.5 both ways as a documented judgement and are now
+    # flagged so the judgement is auditable.
+    mixed = Guadex.parse_interaction_cell(
+        "Coexist, interfere through competition and predation.", "MS", "EL")
+    @test length(mixed) == 2
+    @test all(e -> e.alpha ≈ -0.5, mixed)
+    @test all(e -> e.mechanism == "predation", mixed)
+    @test all(e -> e.ambiguous, mixed)
+
+    # Competition-only undirected cells stay symmetric and unflagged.
+    comp = Guadex.parse_interaction_cell(
+        "Coexist, interfere through competition.", "IO", "IL")
+    @test length(comp) == 2
+    @test all(e -> e.alpha ≈ -0.3 && e.mechanism == "competition" && !e.ambiguous, comp)
+
+    # A directed multi-mechanism clause is preserved: "competition and sperm
+    # parasitism" is not treated as an undirected compound.
+    sperm = Guadex.parse_interaction_cell(
+        "Coexist, affects  Sp through competition and sperm parasitism", "SP", "SA")
+    @test length(sperm) == 1
+    @test sperm[1].alpha ≈ -0.3
+    @test sperm[1].target == "SP"
+    @test !sperm[1].ambiguous
+
+    # The committed table records the corrected values.
+    long_df = CSV.read(joinpath(dirname(INTERACTION_FILE), "interaction_matrix_long.csv"),
+        DataFrame)
+    @test nrow(long_df) == 227
+    @test count(long_df.ambiguous) == 62
+    @test length(unique(sort([r.source, r.target]) for r in eachrow(long_df) if r.ambiguous)) == 31
+
+    lookup = Dict((r.source, r.target) => r for r in eachrow(long_df))
+    reverse_pairs = [("GH", "AAL"), ("GH", "CC"), ("GH", "AM"), ("GH", "LG"),
+                     ("AAL", "CC"), ("AAL", "AM"), ("AAL", "OM"),
+                     ("CG", "EL"), ("CG", "AAL"), ("CG", "CC"), ("CG", "AM"), ("CG", "LG"),
+                     ("TT", "CC"), ("TT", "AM"), ("TT", "LG"),
+                     ("LG", "OM")]
+    @test length(reverse_pairs) == 16
+    for (source, target) in reverse_pairs
+        @test lookup[(source, target)].alpha ≈ -0.3
+        @test lookup[(source, target)].mechanism == "competition"
+        @test lookup[(source, target)].ambiguous
+    end
+
+    # The nine mixed cells are flagged in both directions.
+    for (a, b) in [("MS", "EL"), ("EL", "CC"), ("EL", "AM"), ("EL", "OM"), ("EL", "LG"),
+                   ("CC", "AM"), ("CC", "LG"), ("AM", "LG"), ("LG", "AAL")]
+        @test lookup[(a, b)].ambiguous
+        @test lookup[(b, a)].ambiguous
+        @test lookup[(a, b)].alpha ≈ -0.5
+        @test lookup[(b, a)].alpha ≈ -0.5
+    end
+end
+
+# =============================================================================
 # 3. Building / extraction functions (synthetic data where possible)
 # =============================================================================
 @testset "Building and extraction functions" begin

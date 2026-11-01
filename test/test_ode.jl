@@ -450,6 +450,88 @@ end
         end
     end
 
+    # --- two-species equilibrium and stability ----------------------------
+    # With the shared carrying capacity the corrected form is the competitive
+    # Lotka-Volterra system with c_sj = 1 - alpha_sj (c_ss = 1):
+    #   dN_s/dt = r_s N_s (1 - (N_s + sum_{j != s} c_sj N_j) / K),
+    # whose interior equilibrium is N_s* = K (1 - c_sj) / (1 - c_12 c_21).
+    # Two regimes matter: c_12 c_21 < 1 (stable coexistence) and c_12 c_21 > 1
+    # (a saddle: the outcome depends on the initial state).
+    @testset "two-species interior equilibrium and stability" begin
+        two_species(alpha) = Guadex.MetacommunityParams(
+            1, 2, alpha, sparse([1], [1], [0.0], 1, 1),
+            [1.0, 1.0], [0.1 0.1], [20.0], [1.0], [20.0, 20.0],
+            [1.0, 1.0], [100.0])
+
+        function rhs(p, u)
+            du = zeros(size(u))
+            Guadex.metacommunity_ode!(du, u, p, 0.0)
+            return du
+        end
+
+        function jacobian2(p, u; h=1e-6)
+            J = zeros(2, 2)
+            for k in 1:2
+                up = copy(u); up[1, k] += h
+                um = copy(u); um[1, k] -= h
+                J[:, k] = vec((rhs(p, up) - rhs(p, um)) ./ (2h))
+            end
+            return J
+        end
+
+        # Coexistence regime: small facilitation (positive alpha) makes
+        # c_12 c_21 < 1, so a feasible interior equilibrium exists.
+        alpha_coex = [0.0 0.2; 0.1 0.0]
+        c12, c21 = 1 - alpha_coex[1, 2], 1 - alpha_coex[2, 1]
+        @test c12 * c21 < 1
+        K = 100.0
+        n1 = K * (1 - c12) / (1 - c12 * c21)
+        n2 = K * (1 - c21) / (1 - c12 * c21)
+        p_coex = two_species(alpha_coex)
+        u_eq = [n1 n2]
+        @test maximum(abs.(rhs(p_coex, u_eq))) < 1e-9
+        @test maximum(real.(eigvals(jacobian2(p_coex, u_eq)))) < -1e-9
+
+        # Matrix regime: every non-zero alpha in the data is negative, so every
+        # c > 1 and c_12 c_21 > 1. The interior point is then a saddle and the
+        # winner depends on the initial condition.
+        alpha_excl = [0.0 -0.5; -0.5 0.0]
+        c12e, c21e = 1 - alpha_excl[1, 2], 1 - alpha_excl[2, 1]
+        @test c12e * c21e > 1
+        n1e = K * (1 - c12e) / (1 - c12e * c21e)
+        n2e = K * (1 - c21e) / (1 - c12e * c21e)
+        p_excl = two_species(alpha_excl)
+        u_eq_e = [n1e n2e]
+        # It is still an equilibrium of the equation ...
+        @test maximum(abs.(rhs(p_excl, u_eq_e))) < 1e-9
+        # ... but not attracting: the Jacobian has one positive eigenvalue.
+        ev = real.(eigvals(jacobian2(p_excl, u_eq_e)))
+        @test minimum(ev) < -1e-9
+        @test maximum(ev) > 1e-6
+
+        # Bistability: the species that starts more abundant wins.
+        prob_hi2 = ODEProblem(Guadex.metacommunity_ode!, [10.0 70.0], (0.0, 3000.0), p_excl)
+        sol_hi2 = solve(prob_hi2, Tsit5())
+        @test sol_hi2.u[end][1, 2] > sol_hi2.u[end][1, 1]
+        @test sol_hi2.u[end][1, 1] < 1.0
+        prob_hi1 = ODEProblem(Guadex.metacommunity_ode!, [70.0 10.0], (0.0, 3000.0), p_excl)
+        sol_hi1 = solve(prob_hi1, Tsit5())
+        @test sol_hi1.u[end][1, 1] > sol_hi1.u[end][1, 2]
+        @test sol_hi1.u[end][1, 2] < 1.0
+    end
+
+    @testset "c = 1 - alpha documents the observed regime" begin
+        observed = [-0.3, -0.5, -0.8]
+        c = 1 .- observed
+        @test c == [1.3, 1.5, 1.8]
+        @test all(c .> 1)
+        # Any pair of observed coefficients gives c_12 c_21 > 1, i.e. the
+        # competitive-exclusion / priority-effect regime rather than coexistence.
+        for a in observed, b in observed
+            @test (1 - a) * (1 - b) > 1
+        end
+    end
+
     # --- legacy switch reproduces the old expression exactly --------------
     @testset "legacy switch reproduces interaction-outside-growth" begin
         alpha = [-0.2 -0.3; -0.1 -0.2]

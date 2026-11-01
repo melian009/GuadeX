@@ -186,7 +186,7 @@ The corrected file also makes the **team's decisions** explicit:
 
 The team chose the **interim** route over full simulation-based calibration
 (Correction Plan decision #1): start projections from the **observed** community
-with only a **short** spin-up and report every scenario relative to the matched
+with only a **short** spin-up and report every scenario relative to the shared
 no-warming control, instead of starting from a long model-generated burn-in.
 The route is an explicit, opt-in setting in `[run_climate_scenarios]`:
 
@@ -563,7 +563,7 @@ digest, so changing any option invalidates cached burn-ins and completed runs.
 | **E15** `fishless_dificil_capacity` | `"legacy"` | `"near_zero"` | `build_carrying_capacity` | At the 56 `SIN_PECES = DIFICIL` sites the field team judged unable to hold fish, set K = 1e-6 (the ODE's own floor), making them transit-only nodes. **Interacts with E13**: raising `absence_growth_fraction` while zeroing K pulls establishment in opposite directions. |
 | **E16** `nonreproducing_local_growth` | `"legacy"` | `"zero"` | `build_intrinsic_growth_rates` | `AA`, `LR`, `MC` have `REPRODU_WITHIN_THE_BASIN = no` yet receive a local r. `zero` sets local r = 0; recruitment is to be represented later as estuarine immigration. Without that term the species only decays locally. |
 | **E16** `exclude_fishfarm_eel_records` | `false` | `true` | `drop_fishfarm_eel_records` (called in `prepare_ode_data`) | Drops the four documented Guadiato fish-farm eel records (subcatchment 14.0; AA presences 9 → 5) before any builder reads the density table. Reversible: the input table is copied, not mutated. |
-| **E18** `salinity_envelope` | `false` | `true` | `apply_salinity_envelope` (called in `prepare_ode_data`) | Zeros the local growth of the strictly brackish species (`AB`, `LR`, `MC`) at sites below 1000 uS/cm `CONDUCTIVIDAD` (1,584 cells on the current data). The euryhaline `brackish/freshwater` species (`AA`, `GH`, `CC`, `CG`) are left unchanged because the observations place them across the conductivity range. The envelope is a local growth multiplier, mathematically equivalent to a per-species habitat factor, so the ODE is untouched. |
+| **E18** `salinity_envelope` | `false` | `true` | `apply_salinity_envelope` (called in `prepare_ode_data`) | Zeros the local growth of the strictly brackish species (`AB`, `LR`, `MC`) at sites below 1000 uS/cm `CONDUCTIVIDAD` (1,584 cells with the legacy E16 local growth; 528 once E16 has zeroed LR and MC). The euryhaline `brackish/freshwater` species (`AA`, `GH`, `CC`, `CG`) are left unchanged because the observations place them across the conductivity range. The envelope is a local growth multiplier, mathematically equivalent to a per-species habitat factor, so the ODE is untouched. |
 
 > **No elevation envelope.** Only a salinity/brackish envelope is offered.  A
 > static elevation envelope is deliberately **not** implemented: it would block

@@ -904,16 +904,31 @@ function parse_interaction_cell(text, row_code, col_code)
     end
 
     has_undirected = occursin(_UNDIRECTED_REGEX, lower)
+    undirected_compound = false
     if has_undirected
         m = match(_UNDIRECTED_REGEX, lower)
-        clause = lower[m.offset:end]
+        # Cut the undirected clause at the next named clause.  Without this the
+        # reverse direction inherits a directed mechanism that follows the
+        # undirected one, e.g. "interfere through competition and  Gh through
+        # predation" would give Gh→X the predation value instead of competition.
+        clause_end = length(lower)
+        for bm in eachmatch(_BARE_TARGET_REGEX, lower)
+            bm.offset > m.offset && (clause_end = min(clause_end, prevind(lower, bm.offset)))
+        end
+        for bm in eachmatch(_DEPREDA_REGEX, lower)
+            bm.offset > m.offset && (clause_end = min(clause_end, prevind(lower, bm.offset)))
+        end
+        clause = lower[m.offset:clause_end]
         value = parse_interaction_string(clause)
         mechanism = _interaction_mechanism_name(clause)
+        # An undirected clause that names several mechanisms cannot be assigned a
+        # single alpha without a judgement; flag it so the choice is auditable.
+        undirected_compound = occursin("competition", clause) && occursin("predation", clause)
         push!(clauses, (row, col, value, mechanism, false))
         push!(clauses, (col, row, value, mechanism, false))
     end
 
-    ambiguous = has_undirected && any(c -> c[5], clauses)
+    ambiguous = has_undirected && (any(c -> c[5], clauses) || undirected_compound)
 
     resolved = Dict{Tuple{String,String}, Tuple{Float64,String,Bool}}()
     for (source, target, value, mechanism, specific) in clauses

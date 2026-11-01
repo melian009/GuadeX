@@ -310,37 +310,44 @@ const WT_WIDE_FILE = joinpath(@__DIR__, "..", "guadex_tw", "outputs", "tables",
 end
 
 @testset "model temperature equals corrected daily series (C5/E1)" begin
-    lookup = Guadex.load_site_water_temperature_baseline(WT_BASELINE_FILE)
-    site_df = Guadex.load_site_data(CONNECTIVITY_FILE, ENVIRONMENTAL_FILE)
-    sites = String.(site_df.CODIGO)
-    sample = sites[[1, 100, 400]]
-    levels = [lookup[s] for s in sample]
+    if !isfile(WT_WIDE_FILE)
+        # The daily wide forcing is excluded from the repository by
+        # guadex_tw/.gitignore.  Skip rather than error on a clean checkout; the
+        # file is part of the shared corrected-results archive (4.9).
+        @test_skip "daily forcing file not present: $WT_WIDE_FILE"
+    else
+        lookup = Guadex.load_site_water_temperature_baseline(WT_BASELINE_FILE)
+        site_df = Guadex.load_site_data(CONNECTIVITY_FILE, ENVIRONMENTAL_FILE)
+        sites = String.(site_df.CODIGO)
+        sample = sites[[1, 100, 400]]
+        levels = [lookup[s] for s in sample]
 
-    cols = vcat([:date, :scenario], Symbol.(sample))
-    df = CSV.read(WT_WIDE_FILE, DataFrame; select=cols)
-    df.date = Date.(df.date)
+        cols = vcat([:date, :scenario], Symbol.(sample))
+        df = CSV.read(WT_WIDE_FILE, DataFrame; select=cols)
+        df.date = Date.(df.date)
 
-    fdates, ftemps = Guadex.wide_forcing_matrix(df, sample; scenario="ssp585")
-    bdates, btemps = Guadex.wide_forcing_matrix(df, sample; scenario="historical")
+        fdates, ftemps = Guadex.wide_forcing_matrix(df, sample; scenario="ssp585")
+        bdates, btemps = Guadex.wide_forcing_matrix(df, sample; scenario="historical")
 
-    # The corrected baseline is exactly the 1986-2005 mean of the historical
-    # daily series (no double correction, no offset).
-    bmask = [1986 <= year(d) <= 2005 for d in bdates]
-    for i in eachindex(sample)
-        @test isapprox(mean(btemps[i, bmask]), levels[i]; atol=1e-6)
-    end
+        # The corrected baseline is exactly the 1986-2005 mean of the historical
+        # daily series (no double correction, no offset).
+        bmask = [1986 <= year(d) <= 2005 for d in bdates]
+        for i in eachindex(sample)
+            @test isapprox(mean(btemps[i, bmask]), levels[i]; atol=1e-6)
+        end
 
-    # Reference the anomaly to the SAME per-site mean used as the model level.
-    sched, bmeans = Guadex.daily_temperature_schedule(ftemps;
-        dates=fdates, baseline_start=1986, baseline_end=2005,
-        baseline_means=levels)
-    @test bmeans == levels
+        # Reference the anomaly to the SAME per-site mean used as the model level.
+        sched, bmeans = Guadex.daily_temperature_schedule(ftemps;
+            dates=fdates, baseline_start=1986, baseline_end=2005,
+            baseline_means=levels)
+        @test bmeans == levels
 
-    # level + anomaly reconstructs the corrected daily series at sample days.
-    for i in eachindex(sample), day in (1, 500, 3000, length(fdates))
-        t = Float64(day - 1)   # the schedule stores one node per day here
-        model_T = levels[i] + Guadex.temperature_delta(sched, i, t)
-        @test isapprox(model_T, ftemps[i, day]; atol=1e-9)
+        # level + anomaly reconstructs the corrected daily series at sample days.
+        for i in eachindex(sample), day in (1, 500, 3000, length(fdates))
+            t = Float64(day - 1)   # the schedule stores one node per day here
+            model_T = levels[i] + Guadex.temperature_delta(sched, i, t)
+            @test isapprox(model_T, ftemps[i, day]; atol=1e-9)
+        end
     end
 end
 

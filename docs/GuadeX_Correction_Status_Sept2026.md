@@ -1,10 +1,13 @@
 # GuadeX Corrections — Status and Decision Record
 
-**Status date:** 2026-10-06. **Base:** the correction work of section 2 is committed on
-`master` (HEAD `61fcd4c`, base `9702169`). The **viewer-annex round** added in this revision
-(Part A of `report/202609_feedback/GuadeX_Viewer_Issues_Sept2026.pdf`, items A1–A8, plus the
-October-report availability sentences; see the new rows in section 2 and residuals 10–12 in
-section 5) is in the **working tree only** and is not committed.
+**Status date:** 2026-11-01. **Base:** the correction work of section 2 is committed on
+`master` (base `9702169`, correction-series tip `61fcd4c`, AAL reclassification `099a87d`,
+current HEAD `c340398`). The **viewer-annex round** (Part A of
+`report/202609_feedback/GuadeX_Viewer_Issues_Sept2026.pdf`, items A1–A8, plus the
+October-report availability sentences) is committed as well. The second-review edits (the 4.4
+parser fix, the 4.5 stability tests, the 4.6/4.7 diagnostics and the documentation updates) are
+**uncommitted working-tree changes**. The reviewer's second document,
+`docs/GuadeX_Reply_to_Response_Oct2026.md`, is an input rather than a deliverable.
 
 ## 1. Purpose and how to read
 
@@ -12,7 +15,7 @@ This is the single current status/decision document for the GuadeX review correc
 answers three questions:
 
 1. **What is actually done** — which review items (C1–C7, E1–E22, minor issues) are
-   implemented and verified in the working tree, and what evidence supports each claim.
+   implemented and verified in the repository, and what evidence supports each claim.
 2. **What to run next** — the exact runbook for the corrected climate re-run, including the
    endpoint re-selection step and the legacy-configuration trap.
 3. **What is still open** — every decision that needs the team and every known residual.
@@ -23,41 +26,44 @@ which adjudicates the reviewer's claims) and the **plan**
 status of that plan. The plan is not rewritten here.
 
 How to read the tables: **Status** is `Implemented` when the change is present and exercised
-by the test suite in the working tree. **Evidence / verification** names the code and the
-check that supports the claim. Every numeric claim was re-derived from the tree on
-2026-09-30 (see §6); where a claim could not be re-derived it is explicitly marked
+by the test suite. **Evidence / verification** names the code and the
+check that supports the claim. Every numeric claim was re-derived from the tree (the original
+pass on 2026-09-30, the second-review additions on 2026-11-01; see §6); where a claim could
+not be re-derived it is explicitly marked
 **unverified** in §5 and §6 rather than silently repeated.
 
 ---
 
 ## 2. Implemented fixes
 
-Sections 2.1 (model corrections) below are committed at `61fcd4c`; the viewer-annex rows
-(A1–A8, section 2.2) and the October-report sentences are uncommitted working-tree changes.
+Sections 2.1 (model corrections) and 2.2 (viewer annex) are committed on `master`; the latest
+model-side commit is the AAL reclassification `099a87d`. The **second-review additions** within
+2.1 — the 4.4 parser fix and regenerated long table, the 4.5 stability tests, and the 4.6/4.7
+diagnostics — are **uncommitted working-tree changes**.
 
-### 2.1 Model corrections (committed at `61fcd4c`)
+### 2.1 Model corrections (committed through `099a87d`; second-review additions uncommitted)
 
 | ID | What changed | Evidence / verification | Status |
 |----|--------------|-------------------------|--------|
-| **C2** | Interaction term moved **inside** the intrinsic-growth bracket (competitive Lotka–Volterra, `c = 1 − α`); the legacy outside-growth form is opt-in via `interaction_inside_growth = false`. | `src/ode_model.jl` (`interaction_inside_growth`, `clamp(1 − total/K + interaction, −1, 2)` at ~L144); default `true` in the constructor and docs. `test/test_ode.jl` testset *interaction form: competitive Lotka–Volterra (C2)* (13 tests) checks the two-species equilibrium `K(1−c₁₂)/(1−c₁₂c₂₁)` and per-capita growth scaling. | Implemented |
-| **C1** | Interaction direction parsed from the cell text (named target, so `α[target, source]`); undirected competition made symmetric; `No coexist` → no interaction; Spanish `depreda`/`interfiere` handled; mixed-mechanism cells flagged ambiguous; the missing *Lepomis* (`LG`) row/column is now present. New long table `data/BIOTIC/interaction_matrix_long.csv`. | `src/data_preparation.jl` (`parse_interaction_cell`, `build_interaction_long_table`, long-table loader); `scripts/build_interaction_long_table.jl`. Verified: the long table has **227 data rows** and **22 ambiguous source cells** (44 ambiguous rows); the loaded matrix is 24×24 including `LG` and `AAL`. `test/test_data_preparation.jl` (parsing helpers, data-loading testsets). | Implemented |
+| **C2** | Interaction term moved **inside** the intrinsic-growth bracket (competitive Lotka–Volterra, `c = 1 − α`); the legacy outside-growth form is opt-in via `interaction_inside_growth = false`. | `src/ode_model.jl` (`interaction_inside_growth`, `clamp(1 − total/K + interaction, −1, 2)` at ~L144); default `true` in the constructor and docs. `test/test_ode.jl` testset *interaction form: competitive Lotka–Volterra (C2)* (35 tests) checks the two-species equilibrium `K(1−c₁₂)/(1−c₁₂c₂₁)` and per-capita growth scaling. The two-species stability tests were **added after the second review** (item 4.5), which correctly noted that the first response claimed a test that was not present; they now pin both the coexistence regime and the saddle/priority-effect regime of the observed coefficients. | Implemented |
+| **C1** | Interaction direction parsed from the cell text (named target, so `α[target, source]`); undirected competition made symmetric; `No coexist` → no interaction; Spanish `depreda`/`interfiere` handled; mixed-mechanism cells flagged ambiguous; the missing *Lepomis* (`LG`) row/column is now present. New long table `data/BIOTIC/interaction_matrix_long.csv`. | `src/data_preparation.jl` (`parse_interaction_cell`, `build_interaction_long_table`, long-table loader); `scripts/build_interaction_long_table.jl`. Verified: the long table has **227 data rows** and, after the 4.4 parser fix, **31 ambiguous source cells** (62 ambiguous rows; 22/44 before the fix); the loaded matrix is 24×24 including `LG` and `AAL`. `test/test_data_preparation.jl` (parsing helpers, data-loading testsets). | Implemented |
 | **E5** | Reporting offsets are `1:20`, so label `2045` is the **end** of year 2045 (`t = 7300`), not 1 Jan 2045. | `run_climate_scenarios.jl` (`YEAR_OFFSETS = collect(1:SIMULATION_YEARS)`, `SIMULATION_YEARS = END_YEAR − START_YEAR + 1 = 20`). `test/test_outputs.jl` *annual snapshot alignment* (30 tests). | Implemented |
 | **E6** | Quasi-extinction is evaluated only over sites where the species was **baseline-established**; a species absent everywhere in the baseline yields fraction `0.0`; the established denominator is exposed. | `src/outputs.jl` (`baseline_established`, `established` argument, `n_sites_established`); tests *quasi_extinction_flags never flags non-established sites (E6)*, *quasi-extinction fraction over established sites (E6)*, *species absent everywhere in the baseline → fraction 0 (E6)*, *trout-style fraction is not 1 − occupancy (E6)*. | Implemented |
 | **E9 / E10** | Parameter **and code digest** folded into burn-in cache keys and completed-run fingerprints; an existing run is skipped **only when its stored digest matches**; corrected scenario config and legacy reproduction config written and distinguished. | `sensitivity_core.jl`, `src/run_identity.jl`, `run_climate_scenarios.jl`; `run_metadata.json`/`run_digest.txt` sidecars. Tests *parameter digest*, *burn-in cache key includes the parameter digest*, *run fingerprint includes the parameter digest*, *committed k1x burn-in configuration*, *corrected climate re-run configuration*. | Implemented |
 | **E22** | Per-month held-out-basin (LOBO) bias correction applied in the `guadex_tw` temperature pipeline; the 48 model-facing temperature products were rewritten. | `guadex_tw/scripts/13b_apply_bias_correction.py`, `guadex_tw/models/lobo_monthly_bias_correction.json`, `guadex_tw/logs/bias_correction_13b_run.log`. Verified: pooled annual **+1.1059 °C**, Feb **+2.2237**, Mar **+2.2867**; log reports **48 files processed in 699.4 s** (44 per-GCM wide files 8.63 GB + ensemble-median wide + baseline + future-stats + historical ≈ 9 GB). Anomalies unchanged, as designed. `scripts/13_project_guadex_sites.py` also fixed/plumbed (the correction itself lives in `13b`). | Implemented |
 | **C5 / E1** | Model site temperature level = corrected `tw_baseline_mean` (1986–2005) selected by **exact column name**, joined by site code, with a loud fallback; `level + anomaly` reconstructs the corrected daily series; k-calibration and exposure use the same array. | `src/data_preparation.jl` (`WATER_TEMPERATURE_COLUMN = "tw_baseline_mean"`, `extract_site_temperatures`), `src/temperature_forcing.jl`. Tests *corrected site water-temperature baseline (C5/E1)*, *model temperature equals corrected daily series (C5/E1)* (16 tests), *driver daily schedules reconstruct the corrected series (ITEM 1)* (18 tests). Corrected **trout-site mean = 12.8305 °C** (`test/test_temperature_forcing.jl`, `isapprox(..., 12.8304986; atol=0.01)`); corrected basin range 9.785–18.064 °C. | Implemented |
 | **C7** | Realised applied warming persisted per run (2026–2045 and 2036–2045 means over the sites) and used as the dose–response regressor; exposure restricted to baseline-established sites; GCM-aware dose–response (fixed-effect GCM, no new dependency); endpoint re-selection function `select_climate_endpoints`. | `src/temperature_forcing.jl` (`realised_warming_anomaly`), `src/climate_diagnostics.jl`, `run_climate_scenarios.jl`, `docs/climate_scenarios.md`. Tests *realised warming anomaly (C7)*, *established_exposure_summary (C7)*, *dose_response handles GCM structure (C7)*, *select_climate_endpoints / realised_forcing_axis (C7)*. | Implemented |
-| **E4** | Robust composition stop rule: 95th percentile of `\|Δ log N\|` over **active** site×species cells (density floor 0.1) in at least one compared year, combined with the basin-total rule (`spin_up_criterion = "both"`, `spin_up_composition_tol = 1e-2`, `spin_up_min_years = 10`); the raw all-cells statistic is recorded as a diagnostic; **actual matrix-specific burn-in years** are recorded in metadata. | `src/spin_up.jl` (`SPIN_UP_COMPOSITION_ACTIVE_FLOOR = 0.1`, `composition_q95_change`, `composition_q95_change_all_cells`, `composition_diagnostics`); tests *spin_up convergence rule (E4)* (29 tests) and *burn-in diagnostics flow into run metadata and index*. On real data the robust statistic crosses 1e-2 at ≈ year 423 (< 600 cap) per the config comment; the raw all-cells statistic plateaus near 1.4e-2. | Implemented |
+| **E4** | Robust composition stop rule: 95th percentile of `\|Δ log N\|` over **active** site×species cells (density floor 0.1) in at least one compared year, combined with the basin-total rule (`spin_up_criterion = "both"`, `spin_up_composition_tol = 1e-2`, `spin_up_min_years = 10`); the raw all-cells statistic is recorded as a diagnostic; **actual matrix-specific burn-in years** are recorded in metadata. | `src/spin_up.jl` (`SPIN_UP_COMPOSITION_ACTIVE_FLOOR = 0.1`, `composition_q95_change`, `composition_q95_change_all_cells`, `composition_diagnostics`); tests *spin_up convergence rule (E4)* (29 tests) and *burn-in diagnostics flow into run metadata and index*. On real data the robust statistic crosses 1e-2 at ≈ year 423 (< 600 cap) per the config comment; the raw all-cells statistic plateaus near 1.4e-2. **The corrected runs do not exercise this rule**: both the climate runs and the sweeps select the interim route, so the recorded burn-in is 3 years for every matrix (`results/alt_interactions_corrected/burnin_summary.csv`: `years=3`, `criteria=basin`, `converged=false`). The 21/494/532-year figures belong to the September full-burn-in runs. | Implemented |
 | **C3** | **Interim projection route**: `projection_route = "interim_observed"` starts from the observed community and integrates exactly `interim_spin_up_years = 3` baseline years (`interim_observed_spin_up`), reporting every scenario as per-metric `scenario − control` deltas (`scenario_minus_control` / `scenario_minus_control_table`, written by the figures path). The route is an explicit opt-in; `"full_burnin"` remains the default so the E4 machinery is untouched elsewhere, and the route mandates `control_run = true`. Route and years are recorded in `export/run_metadata.json`. | `src/spin_up.jl` (`projection_route`, `interim_observed_spin_up`), `run_climate_scenarios.jl`, `src/climate_diagnostics.jl`; tests *C3 interim projection route* (spin-up) and *scenario_minus_control (C3 interim route)*, plus corrected-config route assertions. | Implemented (provisional pending calibration) |
 | **Consistency** | All three drivers reconstruct the corrected daily series; the standalone exporter uses 1-based offsets; the serializer uses the shared (corrected) extractor; corrected config vs legacy reproduction config are explicitly separated. | `run_climate_scenarios.jl`, `run_climate_experiments.jl`, `run_alt_interactions.jl`, `scripts/export_run_outputs.jl`, `scripts/serialize_data.jl` (imports `Guadex` and calls the shared extractor). Tests *driver daily schedules…*, *export_run_outputs*. | Implemented |
 | **Housekeeping** | Initial state aligned by site code; seasonal rate option; vacuous tests replaced and mass-conservation/topology tests added; viewer species-level export + aggregate rendering; ML (`reml=False`) LRT refit in the air–water model. | `run_climate_scenarios.jl`, `src/spin_up.jl`, `test/test_graph_construction.jl`, `test/test_ode.jl` (*dispersal operator: mass conservation and structure*), `test/test_data_preparation.jl`, viewer export under `results/.../export/viewer/species_<sp>_*_timeseries.json`, `guadex_tw/scripts/08_models.py`. | Implemented |
-| **E11 / report text** | `IET` renamed to the **bank-stability** index; water-body metadata corrected (**289** reporting units = 288 assigned + 1 unassigned, 774 network links); report and decision brief corrected and marked as pending re-run where numbers will change. | `src/data_preparation.jl` docstring; `legacy/FinalReportSeptember2026.tex`, `legacy/GuadalquivirDecisionBrief.tex` (both also flag `\pendingrerun`). Both TeX documents compiled (29 + 7 pages) in the working tree (`legacy/*.log` present). | Implemented |
+| **E11 / report text** | `IET` renamed to the **bank-stability** index; water-body metadata corrected (**289** reporting units = 288 assigned + 1 unassigned, 774 network links); report and decision brief corrected and marked as pending re-run where numbers will change. | `src/data_preparation.jl` docstring; `legacy/FinalReportSeptember2026.tex`, `legacy/GuadalquivirDecisionBrief.tex` (both also flag `\pendingrerun`). Both TeX documents compiled (29 + 7 pages); their `legacy/*.log` files are present. | Implemented |
 | **C4** | New **on-path river-network graph** (fallback, because `SW_Line_4C_.shp` carries no flow-direction attribute or elevation): on-path parent rule plus explicit MST root-join; deterministic tie-breaking. | `src/data_preparation.jl` (`build_on_path_distance_matrix`, defaults `rtol=0.02`, `atol=200 m`); `test/test_on_path_graph.jl` (testset **2647 tests**). Verified on real data: **774 = n−1 edges**, 267 roots joined by 266 MST edges, **total 13,871.5 km** (vs legacy 31,206.3 km), **4** parent elevation inversions vs **238** in the legacy graph, acyclic and deterministic. Default stays `legacy`; the corrected config selects `connectivity.method = "on_path"`. | Implemented (fallback) |
 | **E12** | Obstacles snapped to the selected (corrected) tree; passabilities **multiply** along a link (0.1·0.1 = 0.01) instead of `min()`; non-operational/ambiguous structures classified and excluded/annotated; legacy de-duplication; deterministic. `IF` index deliberately **not** used as passability. | `src/data_preparation.jl` (`build_obstacle_passability_matrix`, status classification); tests *param digest* + `test/test_data_preparation.jl` (`n_status_active = 1274`, `n_status_nonoperational = 185`, `n_status_ambiguous = 199`) and `test/test_on_path_graph.jl` overlay counts. Verified overlay line: matched 973/1658 (legacy) or 1036/1658 (on-path), applied 727/796, excluded 387. `IF` non-numeric rows confirmed at **547/1658** in `src/data_preparation.jl` comments — this differs from the review's 445 and is stated as such. | Implemented |
 | **E13–E16 / E18** | Six explicit, opt-in biological options added with **defaults unchanged** (byte-identical default regression): `absence_growth_fraction`, `pool_capacity_mode`, `fishless_dificil_capacity`, `nonreproducing_local_growth`, `exclude_fishfarm_eel_records`, `salinity_envelope`. Metadata + digest wired; documented. | `parameters.toml [biological_options]`, `SimulationParameters.biological_options`, `prepare_ode_data`; `test/test_data_preparation.jl` *Explicit biological options (E13-E16, E18)* (46 tests); `test/test_parameters.jl` *biological-assumption option loader*. Documented in `docs/climate_scenarios.md`. | Implemented; the corrected config now selects the team's six values (E13 `1.0`, E14 `"cap"`, E15 `"near_zero"`, E16 `"zero"` + fish-farm drop, E18 `true`), while `parameters.toml` keeps the legacy defaults. |
-| **Validation** | Full Julia suite and a real corrected smoke run. | Full suite: **3,693 / 3,693 pass, 67 testsets, 0 failures** (re-run 2026-09-30; see §6). Smoke run present at `results/_smoke_corrected/` covering **4 SSPs + control** (ACCESS-CM2) and exercising the corrected pipeline. Digest-skip behaviour tested (see E9/E10). | Implemented |
+| **Validation** | Full Julia suite and a real corrected smoke run. | Full suite: **3,913 / 3,913 pass, 70 testsets, 0 failures** (re-run 2026-11-01; see §6). Smoke run present at `results/_smoke_corrected/` covering **4 SSPs + control** (ACCESS-CM2) and exercising the corrected pipeline. Digest-skip behaviour tested (see E9/E10). | Implemented |
 
-### 2.2 Viewer annex (working tree)
+### 2.2 Viewer annex (committed)
 
 Adjudication of the reviewer's annex `report/202609_feedback/GuadeX_Viewer_Issues_Sept2026.pdf`
 (Part A A1–A8; Part B B1–B7 restate the technical review and are adjudicated in the assessment
@@ -67,22 +73,22 @@ pipeline; Part B introduces no new technical issue.
 
 | ID | What changed | Evidence / verification | Status |
 |----|--------------|-------------------------|--------|
-| **A1** | Cursor-centred zoom (`zoomToCursor`), panel-aware `fitBounds`, arrow-key panning, corrected Help text; re-frame on panel toggle. | `viz/src/core/SceneManager.js`, `viz/src/main.js`, `viz/index.html`; `npm run smoke` 22/22, `npm run build` pass. No headless-browser screenshot (Playwright Chrome unavailable). | Fixed (working tree) |
-| **A2** | Layer list populated — the defect was a **never-called** `AppUI.setLayerToggles`; water bodies made neutral at 0.5 opacity; zero values grey in the diverging path. | `viz/src/main.js`, `viz/src/ui/AppUI.js`. | Fixed (working tree) |
-| **A3** | `onlyData` auto-enabled when results load; legend now reads "`<n>` of `<total>` sites with data". | `viz/src/main.js`. The README and the October report already used 775 / 289 / 774 correctly; only the viewer default was wrong. | Fixed (working tree) |
-| **A4** | Descriptive `name` field inside each viewer JSON (`"<run label> · <level/species> <human metric>"`), derived from run metadata; new numbered catalogue `docs/viewer_outputs_catalogue.md` with the reviewer's scheme as an old→proposed map. Machine filenames deliberately retained (module keys / deep links). | `src/outputs.jl` (`write_viewer_outputs`, `effective_viewer_name`); `docs/viewer_outputs_catalogue.md`; `test/test_outputs.jl` 37/37. | Fixed (working tree) |
+| **A1** | Cursor-centred zoom (`zoomToCursor`), panel-aware `fitBounds`, arrow-key panning, corrected Help text; re-frame on panel toggle. | `viz/src/core/SceneManager.js`, `viz/src/main.js`, `viz/index.html`; `npm run smoke` 22/22, `npm run build` pass. No headless-browser screenshot (Playwright Chrome unavailable). | Fixed |
+| **A2** | Layer list populated — the defect was a **never-called** `AppUI.setLayerToggles`; water bodies made neutral at 0.5 opacity; zero values grey in the diverging path. | `viz/src/main.js`, `viz/src/ui/AppUI.js`. | Fixed |
+| **A3** | `onlyData` auto-enabled when results load; legend now reads "`<n>` of `<total>` sites with data". | `viz/src/main.js`. The README and the October report already used 775 / 289 / 774 correctly; only the viewer default was wrong. | Fixed |
+| **A4** | Descriptive `name` field inside each viewer JSON (`"<run label> · <level/species> <human metric>"`), derived from run metadata; new numbered catalogue `docs/viewer_outputs_catalogue.md` with the reviewer's scheme as an old→proposed map. Machine filenames deliberately retained (module keys / deep links). | `src/outputs.jl` (`write_viewer_outputs`, `effective_viewer_name`); `docs/viewer_outputs_catalogue.md`; `test/test_outputs.jl` 37/37. | Fixed |
 | **A5** | Verified already addressed: site-keyed aggregate `level_<level>_mean_<metric>_by_site_timeseries.json`. Added a viewer-side warning when zero loaded keys match site codes. | `src/outputs.jl:901`; on-disk 775 `CODIGO` keys. `viz/src/main.js` warning. | Already addressed / polished |
-| **A6** | Diverging variables use a symmetric domain centred on zero (`M = max abs(value)`); height proportional to absolute value; zeros grey; legend states the neutral value. Non-diverging metrics unchanged. | `viz/src/main.js`, `viz/src/layers/SitesLayer.js`. | Fixed (working tree) |
+| **A6** | Diverging variables use a symmetric domain centred on zero (`M = max abs(value)`); height proportional to absolute value; zeros grey; legend states the neutral value. Non-diverging metrics unchanged. | `viz/src/main.js`, `viz/src/layers/SitesLayer.js`. | Fixed |
 | **A7** | Verified already addressed: no `native_extinction_risk` in the corrected code or corpora — metric is `realised_richness_loss` (`src/outputs.jl`), and the October report calls it realised richness loss and disclaims extinction-probability language (E8). Renamed the viewer demo fixture field `extinction_risk_2100` → `richness_loss_2100`. | Grep of `viz/` for `extinction_risk`/`native_extinction` = 0. Stale pre-correction files remain under `results/climate_experiments/` (not regenerated). | Already addressed / polished |
 | **A8** | Verified already addressed: per-species site-keyed `species_<sp>_<metric>_timeseries.json` for `density`, `relative_density`, `present`, `quasi_extinct` (24 species × 4 = 96 files/run). | `src/outputs.jl:929`; verified on disk in the corrected exports. | Already addressed |
-| **October report** | Two one-sentence additions to "Data and Code Availability" and "Data Sources" naming the corrected viewer exports (four-level tables, site-keyed aggregate and per-species time series) and the published viewer URL. | `docs/FinalReportOctober2026.tex`; recompiled to `docs/FinalReportOctober2026.pdf` (32 pages) with `latexmk`. | Implemented (working tree) |
+| **October report** | Two one-sentence additions to "Data and Code Availability" and "Data Sources" naming the corrected viewer exports (four-level tables, site-keyed aggregate and per-species time series) and the published viewer URL. The second-review round adds the validation table, the root-join diagnostics, the shared-control wording, the endpoint window, the alien-introduction limitation and the 36-page compilation. | `docs/FinalReportOctober2026.tex`; recompiled to `docs/FinalReportOctober2026.pdf` (36 pages) with `latexmk`. | Implemented |
 
 ---
 
 ## 3. Corrected re-run runbook
 
-The corrected re-run **has been executed**: **45 climate runs** (44 GCM x SSP scenarios + a
-matched no-warming control), **32 obstacle runs** and **48 interaction runs**. Everything below
+The corrected re-run **has been executed**: **45 climate runs** (44 GCM x SSP scenarios + one
+shared no-warming control), **32 obstacle runs** and **48 interaction runs**. Everything below
 is the exact procedure that was followed and is retained as the run record.
 
 ### 3.0 The one rule that matters most
@@ -98,7 +104,7 @@ is the exact procedure that was followed and is retained as the run record.
 
 ### 3.1 Configuration
 
-`parameters_climate_scenarios_corrected.toml` (working tree, uncommitted). It differs from
+`parameters_climate_scenarios_corrected.toml` (committed on `master`). It differs from
 the legacy file only in the corrected settings: E4 `spin_up_criterion = "both"` (in both
 `[run_climate_scenarios]` and `[obstacle_sensitivity]`), heat stress derived from the
 corrected baseline (`[temperature_stress].calibrate = true`), `connectivity.method =
@@ -220,8 +226,9 @@ configuration that does not select it.
    block CV and posterior predictive checks; (b) the interim route the review allows — start
    from the observed state with a short spin-up and report scenario − control.
    *Decision:* **(b)**, implemented as `projection_route = "interim_observed"` with a 3-year
-   fixed baseline spin-up from the observed community and a **mandatory** matched control
-   (`control_run = true`). Results are reported as per-metric `scenario − control` deltas. (a)
+   fixed baseline spin-up from the observed community and a **mandatory** no-warming control
+   (`control_run = true`; one shared control, not a per-GCM control). Results are reported as
+   per-metric `scenario − control` deltas. (a)
    is deferred: the **corrected run is therefore provisional, not a calibrated forecast**; the
    acceptance criteria and compute for (a) remain open.
 2. **E8 — Stochasticity / extinction probability.**
@@ -236,7 +243,7 @@ configuration that does not select it.
    from the literature, on an asymmetric (Sharp–Schoolfield-style) curve, propagating ±2 °C;
    or keep the symmetric empirical-range Gaussian.
    *Consequence:* needs **literature values per species** (not in the repo). Matters mainly
-   under stronger warming (all baseline sites ≤ 18.37 °C).
+   under stronger warming (all baseline sites ≤ 18.06 °C).
 4. **E21 — Lagged air–water refit.**
    *Options:* refit with lagged/distributed-lag air temperature and propagate the slope
    range; or treat the lagged model as an uncertainty analysis only.
@@ -268,9 +275,11 @@ configuration that does not select it.
      the species only decays locally.
    - **E16 `exclude_fishfarm_eel_records`** — `false` vs `true` (drops the four documented
      Guadiato fish-farm eel records; AA presences 9 → 5).
-   - **E18 `salinity_envelope`** — `false` vs `true` (zeros strictly brackish species at sites
-     below 1000 µS/cm `CONDUCTIVIDAD`; 1,584 cells). A static **elevation** envelope is
-     deliberately **not** offered (it would block upslope range shifts).
+    - **E18 `salinity_envelope`** — `false` vs `true` (zeros strictly brackish species at sites
+      below 1000 µS/cm `CONDUCTIVIDAD`). Measured on the corrected data the envelope zeroes
+      **528 site × species cells**, not 1,584: it is applied after E16 has already set the LR and
+      MC local growth to zero, so only the 528 AB cells change. A static **elevation** envelope is
+      deliberately **not** offered (it would block upslope range shifts).
 7. **Alien species introductions** — which species to include and **where/when** they are
    introduced. *Consequence:* the current model has no explicit introduction events; adding
    them changes invasive-richness projections.
@@ -323,9 +332,9 @@ configuration that does not select it.
    and no `"AAL"` (L31–34). The corrected species list is resolved elsewhere; this dead
    constant should be deleted or fixed.
 8. **The seasonal rate option is not exposed via `parameters.toml`** (code-only).
-9. **Ranking of what the corrected run will change is provisional.** The report and brief
-   correctly mark the affected numbers as pending; the qualitative directions (warming
-   effect, trout decline, invasive-richness value) may still move.
+9. **The ranking of what the corrected run changed remains provisional.** The report records
+   the corrected values, but the Phase 2 re-runs may still move the qualitative directions
+   (warming effect, trout decline, invasive-richness value).
 10. **A4 — viewer JSON `name` fields on disk predate the re-export.** The corrected viewer files
     already written under `results/*_corrected/` carry the earlier generic `name` text; they will
     show the new descriptive label only after a run is re-exported. Machine filenames are
@@ -340,29 +349,62 @@ configuration that does not select it.
     qualifies the basin mean as a net redistribution, but there is still no per-site Δ
     distribution/map or explicit gain/loss site counts. Related: the unused `warming_end_degc`
     proxy column should be dropped or renamed in `runs_index.csv` (B2).
+13. **Second review 4.4 — parser fixed, affected runs not re-integrated.** The undirected clause
+    is now cut at the next named clause, so the 16 reverse-direction cells are competition
+    (−0.3), not predation (−0.5); the nine pure "competition and predation" cells keep −0.5 both
+    ways and are now flagged ambiguous. The long table was regenerated (227 rows, 31 ambiguous
+    cells / 62 rows) and the pre-fix file is retained as
+    `data/BIOTIC/interaction_matrix_long_prefix.csv`. The climate, obstacle and interaction
+    experiments were **not** re-run, so their numbers still reflect the pre-fix table; the re-run
+    is gated in Phase 2.
+14. **Second review 4.5 — competition structure is a documented choice, not an error.** The
+    retained `c = 1 − alpha` gives `c ∈ [1.3, 1.8]` and `c12 c21 > 1` for every observed pair;
+    the interior equilibrium is a saddle and the model produces exclusion/priority effects. The
+    missed two-species equilibrium test has been added (35-test C2 testset); the reviewer's
+    `c = −alpha` is a valid alternative and is a Phase 2 sensitivity.
+15. **Second review 4.1/4.2 — shared control and national air–water model.** There is one control
+    (`gcm = "baseline"`), not a per-GCM match; the all-Spain air–water model (`ta = 0.5097`,
+    `n = 39,944`, 980 sites) produces the forcing, so the 257 coded Waterbase values do reach the
+    projections. Both are now stated in the response, report and limitations; per-GCM controls
+    and a coded-value refit are Phase 2 decisions.
+16. **Second review 4.6/4.7 — start-state and network diagnostics.** Post-spin-up validation is
+    now reported for all 24 species (`scripts/validate_initial_state.jl`; pooled sensitivity
+    0.975, specificity 0.920; the model over-predicts occupancy and LS TSS is 0.42). The network
+    diagnostics give 508 parent edges / 266 root joins (37.7 % of length), 341 matched / 245
+    applied obstacles on root-join edges (the review's count reproduces once root pairs are
+    canonicalised by site code), one link with 33 obstacles (factor 1e-33) and 28 links with ≥5
+    (`scripts/network_root_join_diagnostics.jl`).
 
 ---
 
 ## 6. Verification summary
 
-- **Repository state:** the correction work of section 2.1 is committed on `master`
-  (HEAD `61fcd4c`, base `9702169`). The viewer-annex round of section 2.2 is uncommitted:
-  modified `src/outputs.jl`, `docs/FinalReportOctober2026.tex`/`.pdf`, `viz/index.html` and
-  `viz/src/{main.js,core/SceneManager.js,layers/SitesLayer.js,ui/AppUI.js}`, plus the new
-  `docs/viewer_outputs_catalogue.md`. (`results/` and `viz/dist/` are build outputs.)
-- **Viewer round (2026-10-06, working tree):** the full Julia suite was re-run after the
+- **Repository state:** the correction work of section 2.1 through the AAL round and the
+  viewer-annex round of section 2.2 are committed on `master` (base `9702169`, correction-series
+  tip `61fcd4c`, AAL reclassification `099a87d`, HEAD `c340398`). The second-review edits are
+  unstaged, and the new artefacts are untracked: `docs/GuadeX_SecondReview_Assessment_Oct2026.md`,
+  `scripts/validate_initial_state.jl`, `scripts/network_root_join_diagnostics.jl` and
+  `data/BIOTIC/interaction_matrix_long_prefix.csv`. The reviewer's
+  `docs/GuadeX_Reply_to_Response_Oct2026.md` is also untracked because it is an input. `results/`
+  and `viz/dist/` are build outputs and remain gitignored.
+- **Viewer round (2026-10-06):** the full Julia suite was re-run after the
   `src/outputs.jl` edit (exit code 0, no failures; the export testset `test/test_outputs.jl`
   passes 37/37); `viz` `npm run smoke` 22/22 and `npm run build` pass; the October report
-  recompiled to 32 pages after the availability sentences. The viewer presentation fixes
+  recompiled after the availability sentences (the current second-review PDF is 36 pages;
+  see §2.2). The viewer presentation fixes
   (A1/A2/A3/A6) have no headless-browser regression test (Playwright's Chrome was unavailable on
   this machine), so they are covered by the smoke/build checks and code inspection, not a
   rendered screenshot.
-- **Full Julia test suite (re-run 2026-09-30):** **3,693 / 3,693 pass, 67 testsets, 0
-  failures.** The run includes the C4 on-path graph testset (2,647 tests), the C2
-  interaction-form testset, the E4 spin-up-rule testset, the C5/E1 reconstruction testsets,
-  the C7 testsets, the E6 quasi-extinction testsets, the E13–E16/E18 option testsets, and the
-  new C3 testsets (*C3 interim projection route*, *scenario_minus_control (C3 interim
-  route)*) plus the corrected-config route/biological-value assertions.
+- **Full Julia test suite (re-run 2026-11-01):** **3,913 / 3,913 pass, 70 testsets, 0
+  failures, 0 errors** (grand total from an outer `@testset`; the run includes 2,647 C4
+  on-path tests and the new 105-test parser testset). The run includes the C4 on-path graph
+  testset, the C2 interaction-form testset (**35** tests after the 4.5 additions), the E4
+  spin-up-rule testset, the C5/E1 reconstruction testsets, the C7 testsets, the E6
+  quasi-extinction testsets, the E13–E16/E18 option testsets, and the new C3 testsets (*C3
+  interim projection route*, *scenario_minus_control (C3 interim route)*) plus the
+  corrected-config route/biological-value assertions. On a checkout without the gitignored
+  daily forcing file, the C5/E1 daily-series testset skips (one `@test_skip`), so the
+  clean-checkout total is 3,898 (3,897 pass + 1 skipped); it no longer errors.
 - **Real smoke run:** `results/_smoke_corrected/` contains a completed run for **4 SSPs +
   control** (ACCESS-CM2) with full exports, exercising the corrected daily-forcing /
   `tw_baseline_mean` / interaction / digest pipeline. (A **218 s** wall time was quoted for
@@ -410,6 +452,11 @@ configuration that does not select it.
   `legacy/parameters_climate_scenarios_k1x_burnin.toml`.
 - Runbook detail and environment overrides: `docs/climate_scenarios.md`.
 
-**Commit status.** The model-correction round (section 2.1) is committed on `master` at
-`61fcd4c` (base `9702169`). The viewer-annex round (section 2.2) and the October-report
-availability sentences are in the working tree only and are not committed.
+**Commit status.** The model-correction round (section 2.1) through the AAL reclassification,
+the viewer-annex round (section 2.2) and the October-report availability sentences are committed
+on `master` (base `9702169`, correction-series tip `61fcd4c`, AAL reclassification `099a87d`,
+HEAD `c340398`). The **second-review triage is in the working tree and is not committed**: the
+parser fix, the regenerated long table, the new tests, the two diagnostic scripts and the
+documentation updates. The reviewer's own document remains untracked as an input. The corrected
+outputs and the daily forcing files were shared with the reviewers at `https://k00.fr/eqnsvc2y`
+(item 4.9); `results/` and the wide forcing remain gitignored.

@@ -17,8 +17,8 @@ by this document.
    thermal range and whose breadth (σ) is fixed at one sixth of that range. This construction
    is a first-order sensitivity baseline, as the review explicitly accepts, and it is retained
    here rather than treated as a calibrated physiological niche. Because every baseline site in
-   the basin lies at or below 18.37 °C, and because the warming delivered over the simulation
-   horizon is mild (approximately 1 °C in the central projections), the bluntness of the
+   the basin lies at or below 18.06 °C, and because the warming delivered over the simulation
+   horizon is mild (approximately 0.6 °C in the central projections), the bluntness of the
    symmetric curves has little leverage on the present thermal results. That insensitivity is
    not a general property of the model: it is a consequence of the mild forcing and the cool
    baseline. Under stronger warming, and for warm-adapted species whose true growth optima lie
@@ -32,13 +32,15 @@ by this document.
 2. **The projections are interim and uncalibrated (C3).** The projections follow the review's
    interim route: they are initialised from the observed 2006–2009 community and advanced
    through a short three-year baseline spin-up, rather than from a long model-generated burn-in.
-   Every scenario is reported as a scenario-minus-control difference matched to the no-warming
-   control for the same general-circulation model (GCM), so that any residual transient common
-   to the scenario and its control cancels. The intrinsic growth rates (r), carrying capacities
+   Every scenario is reported as a scenario-minus-control difference against **one shared
+   no-warming control**, not a per-GCM control: the control is driven by the day-of-year
+   climatology of the ensemble-median historical series, whereas each scenario uses its own
+   GCM's daily series. The transient common to all runs cancels, but a GCM-specific offset
+   remains; per-GCM controls are deferred. The intrinsic growth rates (r), carrying capacities
    (K), interaction coefficients and dispersal parameters are **not** calibrated, and the model
    does **not** reproduce the observed community to a pre-registered standard. The results are
    consequently conditional and relative, not absolute forecasts: they should be read as
-   internally consistent differences between a warming pathway and its matched control, and not
+   internally consistent differences between a warming pathway and the shared control, and not
    as predictions of the absolute state of the community. Full simulation-based calibration
    (approximate Bayesian computation with sequential Monte Carlo, ABC-SMC) against
    pre-registered true-skill-statistic (TSS) and occupancy criteria, with spatial block
@@ -99,8 +101,15 @@ by this document.
    attribute or elevation. It is a topology defined by on-path proximity rather than a
    flow-directed channel network derived from the hydrography. The reconstruction is acyclic,
    deterministic and validated by topology, but its edges do not encode true flow direction, and
-   the root-joining step produces a small number of flow-undirected connections. Connectivity
-   results should be interpreted relative to this reconstructed topology.
+   the root-joining step produces flow-undirected connections. The root joins are 37.7 % of the
+   total tree length (5,234.5 km of 13,871.5 km; median 15.8 km, maximum 206.6 km), cover 267 of
+   the 775 sites, and add 41 elevation inversions to the 4 on parent edges. Of the 1,036 matched
+   obstacles, 341 (245 applied) lie on a root-join edge; a broader count of edges incident to a
+   root site gives 531 (392), but that also includes parent edges entering a root. Because
+   obstacle passability multiplies along a link, one reconstructed link carries 33 obstacles and an
+   upstream factor of 1e-33; 28 links carry five or more obstacles and 16 fall below 1e-6. No
+   passability floor is applied in this release. Connectivity results should be interpreted
+   relative to this reconstructed topology and to the unattested extreme passabilities.
 
 9. **Biomass is reported in model units without an absolute scale.** Abundance and biomass are
    expressed in model units. They are internally consistent across sites, species and scenarios
@@ -117,9 +126,16 @@ by this document.
 11. **Climate-model spread overlaps pathway differences.** The scenario differences are small
     relative to the spread among the individual GCMs within any single pathway, and the two
     sources of variation overlap. The central warming delivered by the lower pathways cannot be
-    separated from pathway differences on the strength of a single GCM, which is why the results
-    are reported as ensemble statistics and as scenario-minus-control differences matched by
-    GCM, and why no ordering of pathways should be inferred where the GCM spread overlaps it.
+   separated from pathway differences on the strength of a single GCM, which is why the results
+   are reported as ensemble statistics and as scenario-minus-control differences against the
+   shared control, and why no ordering of pathways should be inferred where the GCM spread
+   overlaps it.
+
+12. **Alien-species introductions are not represented.** The model contains no explicit
+    introduction events. Which alien species to add, and where and when they arrive, remain team
+    decisions. Invasive richness and biomass are therefore counted from the current species pool;
+    the reported invasive metrics are conditional on that pool and do not project colonisation by
+    new arrivals, so they are lower bounds on any future that includes introductions.
 
 ---
 
@@ -128,7 +144,7 @@ by this document.
 Taken together, these limitations define a narrow and explicit scope. The present results are a
 conditional, internally consistent, deterministic sensitivity assessment of the effect of a
 mild, prescribed thermal forcing on a lightly structured and uncalibrated metacommunity model,
-reported against matched no-warming controls. They are informative about the sign, relative
+reported against a shared no-warming control. They are informative about the sign, relative
 magnitude and spatial pattern of the modelled thermal response, and about how that response
 behaves within the modelled assumptions. They are not absolute forecasts, not extinction
 probabilities, and not integrated assessments of climate together with hydrology, management or
