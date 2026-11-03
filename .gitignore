@@ -31,6 +31,10 @@ Thumbs.db
 # Results and figures
 results/
 
+# Generated Overleaf bundles (scripts/bundle_for_overleaf.ps1)
+overleaf_bundle*/
+overleaf_*/
+
 # Core TeX engine auxiliary files
 *.aux
 *.bbl
