@@ -428,8 +428,8 @@ function plot_timeseries_comparison(metrics, base_dir, output_dir; path_prefix="
     ref_pass = "baseline" in active_pass ? "baseline" : active_pass[1]
     uc = ref_uc
     ax_bio = Axis(fig[1, 1];
-        title = "Total Biomass — Temperature Effect ($ref_pass, uc=$uc)",
-        xlabel = "Time (years)", ylabel = "Total Biomass")
+        title = "Total Density — Temperature Effect ($ref_pass, uc=$uc)",
+        xlabel = "Time (years)", ylabel = "Total Density")
     ax_rich = Axis(fig[2, 1];
         title = "Species Richness — Temperature Effect ($ref_pass, uc=$uc)",
         xlabel = "Time (years)", ylabel = "Mean Richness")
@@ -468,8 +468,8 @@ function plot_timeseries_comparison(metrics, base_dir, output_dir; path_prefix="
         dt = temperature_increases[1]
     end
     ax_bio2 = Axis(fig[1, 2];
-        title = "Total Biomass — Passability Effect (ΔT=$(dt)°C, uc=$uc)",
-        xlabel = "Time (years)", ylabel = "Total Biomass")
+        title = "Total Density — Passability Effect (ΔT=$(dt)°C, uc=$uc)",
+        xlabel = "Time (years)", ylabel = "Total Density")
     ax_rich2 = Axis(fig[2, 2];
         title = "Species Richness — Passability Effect (ΔT=$(dt)°C, uc=$uc)",
         xlabel = "Time (years)", ylabel = "Mean Richness")
@@ -515,7 +515,7 @@ end
 # =============================================================================
 
 function plot_biomass_change_bars(metrics, output_dir; title_suffix="")
-    println("Generating biomass change bar chart...")
+    println("Generating density change bar chart...")
 
     active_pass = active_passability_scenarios(metrics)
     n_pass = length(active_pass)
@@ -527,9 +527,9 @@ function plot_biomass_change_bars(metrics, output_dir; title_suffix="")
     fig = Figure(size = (220 * n_pass + 220, 680))
 
     ax = Axis(fig[1, 1];
-        title = "Total Biomass Change (Year 0 → Year $SIMULATION_YEARS) by Passability Scenario",
-        xlabel = "Passability Scenario",
-        ylabel = "Δ Total Biomass",
+        title = "Total Density Change (Year 0 → Year $SIMULATION_YEARS) by Passability Scenario",
+        xlabel = "Passability scenario",
+        ylabel = "Δ Total Density",
         xticklabelrotation = 0.3)
 
     bar_width = 0.18
@@ -564,7 +564,7 @@ function plot_biomass_change_bars(metrics, output_dir; title_suffix="")
 
     Legend(fig[2, 1], ax; orientation = :horizontal, fontsize = 9)
 
-    title_text = "Biomass Change Across All Parameter Combinations"
+    title_text = "Density Change Across All Parameter Combinations"
     if !isempty(title_suffix)
         title_text *= "  [$title_suffix]"
     end

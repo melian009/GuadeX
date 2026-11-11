@@ -61,12 +61,12 @@ const WARM_MODEL = "ssp245/UKESM1-0-LL"
 
 # Display names.  Units are part of the label so no axis is unitless.
 const METRIC_LABELS = Dict(
-    "basin_total_biomass" => "Total biomass (units)",
-    "basin_native_biomass" => "Native biomass (units)",
-    "basin_invasive_biomass" => "Invasive biomass (units)",
+    "basin_total_biomass" => "Total density (units)",
+    "basin_native_biomass" => "Native density (units)",
+    "basin_invasive_biomass" => "Invasive density (units)",
     "basin_native_richness" => "Native richness (sp.)",
     "basin_realised_richness_loss" => "Richness loss (fraction)",
-    "st_final_biomass" => "Brown trout biomass (units)",
+    "st_final_biomass" => "Brown trout density (units)",
     "st_relative_biomass_change" => "Brown trout change (fraction)")
 
 const COST_COLORS = Dict(0.01 => RGBAf(0.27, 0.45, 0.77, 0.95),
@@ -362,7 +362,7 @@ function subcatchment_waterbody_figure!(path; model=WARM_MODEL, uc=0.5, year=204
     # The full sub-catchment / water-body distributions are summarised in the
     # report text.
     fig = Figure(size=(1400, 1900))
-    ax1 = Axis(fig[1, 1]; width=900, height=780, ylabel="Δ native biomass (units)")
+    ax1 = Axis(fig[1, 1]; width=900, height=780, ylabel="Δ native density (units)")
     panel_letter!(ax1, "(a)")
     s = vcat(first(sort(sc, :dnative), 10), last(sort(sc, :dnative), 10)) |> unique
     yy = collect(1:nrow(s))
@@ -374,7 +374,7 @@ function subcatchment_waterbody_figure!(path; model=WARM_MODEL, uc=0.5, year=204
     ax1.yticks = (yy, string.(s.subcatchment))
 
     ax2 = Axis(fig[2, 1]; width=900, height=780,
-        xlabel="Δ native biomass (units)", ylabel="Water body")
+        xlabel="Δ native density (units)", ylabel="Water body")
     panel_letter!(ax2, "(b)")
     w = vcat(first(sort(wb, :dnative), 10), last(sort(wb, :dnative), 10)) |> unique
     yy2 = collect(1:nrow(w))

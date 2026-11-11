@@ -14,7 +14,7 @@ Structure to hold parameters for the fish metacommunity ODE model.
 - `habitat_suitability::AbstractVector`: Habitat suitability index h_i at each site.
 - `thermal_optima::AbstractVector`: Optimal temperature for each species.
 - `thermal_sigmas::AbstractVector`: Thermal tolerance (sigma) for each species.
-- `carrying_capacity::AbstractVector`: Site-specific carrying capacity K_i for total biomass at each site.
+- `carrying_capacity::AbstractVector`: Site-specific carrying capacity K_i for total density at each site.
 - `thermal_lower_limits::AbstractVector`: Empirical lower thermal limit per species
   (WP3); informational, no cold-stress term is applied.
 - `thermal_upper_limits::AbstractVector`: Empirical upper thermal limit per species
@@ -163,7 +163,7 @@ end
 Shared RHS for the metacommunity model.  `delta_at(i, t)` returns the
 temperature anomaly (°C) applied to site `i` at time `t`; the static model
 passes a constant-zero function and the climate model passes the interpolated
-schedule.  Site temperatures and per-site total biomass are computed once per
+schedule.  Site temperatures and per-site total density are computed once per
 site per RHS call rather than once per species.
 
 The interaction term is placed inside the intrinsic-growth bracket by default

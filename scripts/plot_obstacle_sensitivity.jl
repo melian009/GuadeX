@@ -30,10 +30,10 @@ const PASSABILITY_LABELS = Dict(
 
 # (column, display label, palette)
 const EFFECT_METRICS = [
-    ("basin_total_biomass", "Δ total biomass", :balance),
-    ("basin_native_biomass", "Δ native biomass", :balance),
+    ("basin_total_biomass", "Δ total density", :balance),
+    ("basin_native_biomass", "Δ native density", :balance),
     ("basin_native_richness", "Δ native richness", :balance),
-    ("st_relative_biomass_change", "ST relative biomass change", :balance),
+    ("st_relative_biomass_change", "ST relative density change", :balance),
 ]
 
 isfile(INDEX_PATH) || error("runs index not found: $INDEX_PATH (run the sweep first)")

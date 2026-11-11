@@ -76,7 +76,7 @@ const CLIMATE_REPORT_LABELS = Dict(
     :native_richness => "Native richness (sp./site)",
     :invasive_richness => "Invasive richness (sp./site)",
     :realised_richness_loss => "Richness loss (fraction)",
-    :total_biomass => "Total biomass (units/site)",
+    :total_biomass => "Total density (units/site)",
     :temperature_c => "Water temp. (°C)",
 )
 

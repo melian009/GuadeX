@@ -583,7 +583,7 @@ end
     quasi_extinction_summary(species_metrics; threshold=0.1)
 
 One row per species: final-year occupancy and quasi-extinct site fraction,
-biomass change against the baseline, and the median time to quasi-extinction
+density change against the baseline, and the median time to quasi-extinction
 (over sites that reached it).
 
 `quasi_extinct_fraction` is computed over the **baseline-established** sites
@@ -718,11 +718,11 @@ const VIEWER_METRICS = [
     (:invasive_richness, "Invasive richness", "species"),
     (:total_richness, "Total richness", "species"),
     (:realised_richness_loss, "Realised richness loss (relative)", "fraction"),
-    (:native_biomass, "Native biomass", "density"),
-    (:invasive_biomass, "Invasive biomass", "density"),
-    (:total_biomass, "Total biomass", "density"),
-    (:native_biomass_relative, "Native biomass (relative to baseline)", "fraction"),
-    (:total_biomass_relative, "Total biomass (relative to baseline)", "fraction"),
+    (:native_biomass, "Native density", "density"),
+    (:invasive_biomass, "Invasive density", "density"),
+    (:total_biomass, "Total density", "density"),
+    (:native_biomass_relative, "Native density (relative to baseline)", "fraction"),
+    (:total_biomass_relative, "Total density (relative to baseline)", "fraction"),
     (:native_occupancy, "Native occupancy", "fraction"),
     (:invasive_occupancy, "Invasive occupancy", "fraction"),
     (:total_occupancy, "Total occupancy", "fraction"),

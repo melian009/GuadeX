@@ -456,7 +456,7 @@ end
 Basin-level response summarised directly from two flattened states (no file
 round-trip), for use inside a Sobol driver.  Returns a NamedTuple with:
 
-- `native_biomass`: site-mean native biomass in the final state,
+- `native_biomass`: site-mean native density in the final state,
 - `native_richness`: site-mean number of native species above `threshold` in the
   final state,
 - `realised_richness_loss`: `max(0, 1 - final_richness / baseline_richness)`,

@@ -155,7 +155,7 @@ end
 """
     plot_total_biomass(sol, sites, species; kwargs)
 
-Plot total biomass across all species over time.
+Plot total density across all species over time.
 
 # Arguments
 - `sol`: DifferentialEquations solution object
@@ -163,7 +163,7 @@ Plot total biomass across all species over time.
 - `species`: Vector of species codes
 
 # Returns
-- A Figure object showing total biomass trajectories
+- A Figure object showing total density trajectories
 """
 function plot_total_biomass(sol, sites, species;
     figure_size::Tuple = (900, 600))
@@ -184,9 +184,9 @@ function plot_total_biomass(sol, sites, species;
 
     fig = Figure(figure_size = figure_size)
     ax = Axis(fig[1, 1],
-        title = "Total Biomass Over Time by Site",
+        title = "Total Density Over Time by Site",
         xlabel = "Time",
-        ylabel = "Total Biomass")
+        ylabel = "Total Density")
 
     # Color gradient for sites
     colors = [:blue, :red, :green, :orange, :purple, :cyan, :magenta, :brown, :pink, :gray]
@@ -524,7 +524,7 @@ function plot_combined_analysis(sol, site_df, sites, species, distance_matrix; f
 
     fig = Figure(figure_size = figure_size)
 
-    ax1 = Axis(fig[1, 1], title = "Total Biomass Over Time", xlabel = "Time", ylabel = "Total Biomass")
+    ax1 = Axis(fig[1, 1], title = "Total Density Over Time", xlabel = "Time", ylabel = "Total Density")
     time = sol.t
     total_biomass = [sum(reshape(sol.u[t], n_sites, n_species)) for t in 1:length(sol.t)]
     lines!(ax1, time, total_biomass, linewidth = 2, color = :blue)
@@ -606,7 +606,7 @@ end
 """
     plot_avg_total_biomass(sol, sites, species; kwargs)
 
-Plot average total biomass across all sites over time with ±1 std band.
+Plot average total density across all sites over time with ±1 std band.
 
 # Arguments
 - `sol`: DifferentialEquations solution object
@@ -614,7 +614,7 @@ Plot average total biomass across all sites over time with ±1 std band.
 - `species`: Vector of species codes
 
 # Returns
-- A Figure object showing average total biomass trajectory with uncertainty band
+- A Figure object showing average total density trajectory with uncertainty band
 """
 function plot_avg_total_biomass(sol, sites, species;
     figure_size::Tuple = (900, 600))
@@ -640,9 +640,9 @@ function plot_avg_total_biomass(sol, sites, species;
 
     fig = Figure(figure_size = figure_size)
     ax = Axis(fig[1, 1],
-        title = "Average Total Biomass Over Time (± 1 SD)",
+        title = "Average Total Density Over Time (± 1 SD)",
         xlabel = "Time",
-        ylabel = "Average Total Biomass")
+        ylabel = "Average Total Density")
 
     band!(ax, time, lower, upper, color = (:blue, 0.2))
     lines!(ax, time, avg_biomass, color = :blue, linewidth = 2)

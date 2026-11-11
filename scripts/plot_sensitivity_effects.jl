@@ -76,13 +76,13 @@ const METRICS = [
 ]
 
 const METRIC_LABELS = Dict(
-    "basin_total_biomass" => "Basin total biomass",
-    "basin_native_biomass" => "Basin native biomass",
-    "basin_invasive_biomass" => "Basin invasive biomass",
+    "basin_total_biomass" => "Basin total density",
+    "basin_native_biomass" => "Basin native density",
+    "basin_invasive_biomass" => "Basin invasive density",
     "basin_native_richness" => "Basin native richness",
     "basin_realised_richness_loss" => "Realised richness loss",
-    "st_relative_biomass_change" => "ST relative biomass change",
-    "st_final_biomass" => "ST final biomass",
+    "st_relative_biomass_change" => "ST relative density change",
+    "st_final_biomass" => "ST final density",
     "st_quasi_extinct_fraction" => "ST quasi-extinct fraction",
 )
 

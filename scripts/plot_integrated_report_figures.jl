@@ -260,7 +260,7 @@ function fig12_st_climate_response()
 
     ax2 = Axis(fig[1, 2]; width=420, height=540,
         xlabel = axis.label,
-        ylabel = "Brown trout biomass (units)")
+        ylabel = "Brown trout density (units)")
     panel_letter!(ax2, "(b)")
     for sc in unique(scenario_rows.scenario)
         s = scenario_rows[scenario_rows.scenario .== sc, :]
@@ -318,8 +318,8 @@ function fig13_matrix_effects()
         "random" => RGBAf(0.55, 0.55, 0.55, 0.9),
         "invasive_favoring" => RGBAf(0.75, 0.30, 0.10, 0.9))
     metrics = ["basin_native_biomass", "basin_invasive_biomass", "st_final_biomass", "basin_native_richness"]
-    ylabels = ["Native biomass (units)", "Invasive biomass (units)",
-        "Brown trout biomass (units)", "Native richness (sp.)"]
+    ylabels = ["Native density (units)", "Invasive density (units)",
+        "Brown trout density (units)", "Native richness (sp.)"]
 
     fig = Figure(size=(1600, 1500))
     for (i, (metric, ylab)) in enumerate(zip(metrics, ylabels))

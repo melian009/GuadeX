@@ -6,7 +6,7 @@ complement to the descriptive per-run / ensemble / across-scenario inventory in
 `src/climate_figures.jl`.  Three diagnostics are produced from the exported
 tables only (no model re-run):
 
-* `forcing_and_response.png` - the warming forcing against the richness/biomass
+* `forcing_and_response.png` - the warming forcing against the richness/density
   response, and the final-year warming-response relationship across all
   GCM x SSP runs.
 * `thermal_niches.png` - species thermal response curves against the site
@@ -26,7 +26,7 @@ tables only (no model re-run):
 
 Per-run basin-level series read directly from `export/levels/level_basin.csv`.
 Unlike [`ClimateRun`](@ref) this keeps the climate-forcing column
-(`mean_delta_temperature_c`) and the biomass columns, which the descriptive
+(`mean_delta_temperature_c`) and the density columns, which the descriptive
 figure metrics do not all need.
 """
 struct ClimateBasinSeries
@@ -168,7 +168,7 @@ end
     SCENARIO_CONTROL_METRICS
 
 The response metrics differenced by [`scenario_minus_control`](@ref): native and
-total richness, invasive richness, native and total biomass and the realised
+total richness, invasive richness, native and total density and the realised
 native-richness-loss metric.
 """
 const SCENARIO_CONTROL_METRICS = (
@@ -518,7 +518,7 @@ function plot_climate_forcing_response(runs::AbstractVector{<:ClimateBasinSeries
 
     ax1 = _trajectory_axis(1, 1, "(a)", "Warming anomaly ΔT (°C)", warming)
     ax2 = _trajectory_axis(1, 2, "(b)", "Native richness (sp./site)", richness)
-    ax3 = _trajectory_axis(2, 1, "(c)", "Total biomass (units/site)", biomass)
+    ax3 = _trajectory_axis(2, 1, "(c)", "Total density (units/site)", biomass)
     # The four SSP trajectories are almost identical in the response panels; say
     # so explicitly, otherwise it looks like only one scenario was plotted.
     for ax in (ax2, ax3)
@@ -584,7 +584,7 @@ function plot_climate_forcing_response(runs::AbstractVector{<:ClimateBasinSeries
     end
 
     _response_axis(2, 2, "(d)", "Native richness (sp./site)", final_richness)
-    _response_axis(3, 1, "(e)", "Total biomass (units/site)", final_biomass)
+    _response_axis(3, 1, "(e)", "Total density (units/site)", final_biomass)
     _response_axis(3, 2, "(f)", "Richness loss (fraction)", final_risk)
     equal_panel_columns!(fig, 1, 1)
 

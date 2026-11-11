@@ -6,7 +6,7 @@ using Guadex
 #
 # Explains the shape of the climate ensemble rather than describing every run:
 #
-#   diagnostics/forcing_and_response.png  warming forcing vs richness/biomass
+#   diagnostics/forcing_and_response.png  warming forcing vs richness/density
 #   diagnostics/thermal_niches.png        species optima vs site temperatures
 #   diagnostics/community_filling.png     initial vs final per-site richness
 #
