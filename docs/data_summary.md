@@ -87,7 +87,7 @@ CODIGO,LS_DEN,SA_DEN,SP_DEN,PW_DEN,CP_DEN,IL_DEN,IO_DEN,AA_DEN,AH_DEN,GL_DEN,GH_
   - `[Species]_DEN`: Standardized density for each species (abundance per unit area). Sites with only juveniles show 0 because juveniles weren't counted for density calculations
   - `[Species] Juveniles`: Juvenile presence codes (0 = no juveniles, 1 = only juveniles present, 2 = both juveniles and adults present)
   - **Species abbreviations include:**
-    - **Native species:** Ls (*Luciobarbus sclateri*), Sa (*Squalius alburnoides*), Sp (*Squalius pyrenaicus*), Pw (*Pseudochondrostoma willkommii*), Cp (*Cobitis paludica*), Il (*Iberochondrostoma lemmingii*), Io (*Iberochondrostoma oretanum*), Ah (*Anaecypris hispanica*), St (*Salmo trutta*), Lr (*Liza ramada*), Mc (*Mugil cephalus*), Ab (*Aphanius baeticus*)
+    - **Native species:** Ls (*Luciobarbus sclateri*), Sa (*Squalius alburnoides*), Sp (*Squalius pyrenaicus*), Pw (*Pseudochondrostoma willkommii*), Cp (*Cobitis paludica*), Il (*Iberochondrostoma lemmingii*), Io (*Iberochondrostoma oretanum*), Ah (*Anaecypris hispanica*), St (*Salmo trutta*), Lr (*Chelon ramada*), Mc (*Mugil cephalus*), Ab (*Aphanius baeticus*)
     - **Exotic species:** Gl (*Gobio lozanoi*), Gh (*Gambusia holbrooki*), Lg (*Lepomis gibbosus*), Aal (*Alburnus alburnus*), Cg (*Carassius gibelio*), Cc (*Cyprinus carpio*), Ms (*Micropterus salmoides*), Om (*Oncorhynchus mykiss*), El (*Esox lucius*), Am (*Ameiurus melas*), Tt (*Tinca tinca*)
     - **Uncertain status:** Aa (*Anguilla anguilla*)
 * See also: `FishDensity_and_Juveniles_Matrix_README.csv` for species codes, juvenile coding, and sampling notes.
@@ -202,7 +202,7 @@ ID;ID_ORIGIN;ID_DESTINATION;X_ORIGIN;Y_ORIGIN;X_DESTINATION;Y_DESTINATION;EUCLID
 ### Species Composition
 
 Based on the density matrix and species characteristics data, the dataset includes:
-- **Native species (Autóctono):** 12 species including *Squalius alburnoides*, *Luciobarbus sclateri*, *Salmo trutta*, *Pseudochondrostoma willkommii*, *Cobitis paludica*, *Iberochondrostoma lemmingii*, *I. oretanum*, *Anaecypris hispanica*, *Liza ramada*, *Mugil cephalus*, *Aphanius baeticus*
+- **Native species (Autóctono):** 12 species including *Squalius alburnoides*, *Luciobarbus sclateri*, *Salmo trutta*, *Pseudochondrostoma willkommii*, *Cobitis paludica*, *Iberochondrostoma lemmingii*, *I. oretanum*, *Anaecypris hispanica*, *Chelon ramada*, *Mugil cephalus*, *Aphanius baeticus*
 
 - **Exotic species (Exótico):** 11 species including *Oncorhynchus mykiss*, *Gobio lozanoi*, *Gambusia holbrooki*, *Lepomis gibbosus*, *Alburnus alburnus*, *Carassius gibelio*, *Cyprinus carpio*, *Micropterus salmoides*, *Esox lucius*, *Ameiurus melas*, *Tinca tinca*
 

@@ -540,12 +540,49 @@ configuration that does not select it.
 - Runbook detail and environment overrides: `docs/climate_scenarios.md`.
 
 **Commit status.** The model-correction round (section 2.1) through the AAL reclassification,
-the viewer-annex round (section 2.2) and the October-report availability sentences are committed
-on `master` (base `9702169`, correction-series tip `61fcd4c`, AAL reclassification `099a87d`,
-HEAD `c340398`). The **second-review triage and the Phase 2 work are in the working tree and are
-not committed**: the parser fix, the regenerated long table, the new tests, the two diagnostic
-scripts, the Phase 2 evidence/decision/run-record documents and the documentation updates. The
-Phase 2 re-run outputs are under `results/`, which is gitignored, so they are not part of the
+the viewer-annex round (section 2.2), the October-report availability sentences and the Phase 2
+work are committed on `master` (HEAD `5a8077c`, "Refactor terminology from biomass to density").
+The **third-review triage (2026-11-23) is in the working tree and is not committed**: the
+manuscript and bibliography edits, the two figure-script fixes, the new per-species script and
+CSV, the limitations/response/terminology edits, `docs/GuadeX_ThirdReview_Assessment_2026-11.md`,
+`docs/figure_manifest.json` and `docs/GuadeX_Release_Checklist.md`. The Phase 2 outputs and the
+regenerated figures are under `results/`, which is gitignored, so they are not part of the
 working-tree diff. The reviewer's own document remains untracked as an input. The corrected and
 Phase 2 outputs and the daily forcing files were shared with the reviewers at
 `https://k00.fr/eqnsvc2y` (item 4.9); `results/` and the wide forcing remain gitignored.
+
+---
+
+## 8. Third-review triage (2026-11-23)
+
+The third review (`docs/comentarios_technical_report_CarlosF.md`) was adjudicated in
+`docs/GuadeX_ThirdReview_Assessment_2026-11.md`. The substantive resolved items:
+
+- **Eq. (1) sign/term** corrected (`+ΣαN/K`, with the `c = 1 − α` substitution written out);
+  Eq. 7 and `src/ode_model.jl` already agreed.
+- **GCM-aware inference** added: Table 5 reports pooled and GCM fixed-effect slopes, GCM-clustered
+  SE/`p`, per-GCM slope SD and between-GCM SD. None of the three pooled slopes is significant under
+  clustering (`p = 0.110`, `0.323`, `0.700`); in the fixed-effect fit only total density reaches
+  significance (`+0.0827` per °C, `p = 0.042`) on 11 between-GCM units, while native richness and
+  richness loss do not. The abstract, §4.1 and §7 no longer read the signs as a robust directional
+  climate effect.
+- **Exposure decomposition** replaces the single 42.7-d value: 37.30 d in 2026, 45.35 d in 2045,
+  13.87 d pre-2026 offset, 8.05 d within horizon.
+- **Figure windows** fixed in both plotting scripts (`window=:early`; 2045 exposure maximum for
+  Figure 12(c)); the pooled/GCM-fixed mislabel is corrected. Figures 1 and 2 now share the
+  +0.74 °C end-of-2045 statistic.
+- **References** corrected; `Herrera2022` removed; `Elliott2010` added.
+- **Per-species scenario-minus-control** table (Table 6) added with its reproducible CSV and
+  `scripts/per_species_scenario_minus_control.jl`.
+- **Passability factors** 1e-33 (obstacle-only) and 1e-34 (combined legacy dam) both stated; the
+  number is unchanged because the reviewer's R11a was an error.
+- **Terminology and scope**: *Chelon ramada*, "dominant native species", "consistency check",
+  scoped "minor factor" claim, E23 high-elevation limitation (item 16) and E7 pilot (item 17).
+
+**Verification.** `docs/FinalReportOctober2026.pdf` recompiled to 42 pages. Figure hashes and
+regeneration commands are in `docs/figure_manifest.json`. The test suite result is:
+
+`julia --project=. test/runtests.jl` — **3,941/3,941 tests pass** (the same suite recorded in
+`docs/GuadeX_Phase2_Run_Record.md`; the run log contains no failures and the final
+`Global sensitivity toolkit (E7)` testset reports 70/70). The clean-checkout testset may skip
+when the wide forcing file is absent, as expected.

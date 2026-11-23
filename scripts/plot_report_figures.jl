@@ -215,10 +215,10 @@ function temperature_figure!(path)
         "ssp245" => RGBAf(0.20, 0.60, 0.35, 0.9),
         "ssp370" => RGBAf(0.90, 0.55, 0.10, 0.9),
         "ssp585" => RGBAf(0.70, 0.15, 0.15, 0.9))
-    # C7: prefer the realised mean applied anomaly persisted by the runner; fall
-    # back to the warming_end_degc proxy (and label it) for runs written before
-    # the realised columns existed.
-    axis = Guadex.realised_forcing_axis(d)
+    # C7: the report caption and Table 3 use the full-horizon 2026-2045 mean
+    # realised anomaly, so request the early window explicitly.  The default is
+    # the 2036-2045 late window, which was the source of the caption/panel clash.
+    axis = Guadex.realised_forcing_axis(d; window=:early)
     d[!, :forcing_axis] = axis.values
     println("temperature_figure forcing axis: $(axis.column) [$(axis.source)]")
     endpoints = Guadex.select_climate_endpoints(clim)
@@ -245,10 +245,10 @@ function temperature_figure!(path)
             lines!(ax, xx, dose.intercept .+ dose.slope .* xx;
                 color=:black, linewidth=2.0, linestyle=:dash)
         if isfinite(dose.slope)
-            text = @sprintf("GCM-fixed slope = %.3g per °C", dose.slope)
+            text = @sprintf("Pooled OLS slope = %.3g per °C", dose.slope)
             isfinite(dose.slope_spread) &&
-                (text *= @sprintf("\nGCM spread (SD) = %.3g", dose.slope_spread))
-            text *= @sprintf("\nR² = %.2f (n=%d, GCMs=%d)", dose.r2, dose.n, dose.n_groups)
+                (text *= @sprintf("\nGCM slope spread (SD) = %.3g", dose.slope_spread))
+            text *= @sprintf("\nR² = %.3f (n=%d, GCMs=%d)", dose.r2, dose.n, dose.n_groups)
             report_annotation!(ax, text, position=:lt)
         end
         # Mark the cool/warm endpoints re-selected on the realised forcing.

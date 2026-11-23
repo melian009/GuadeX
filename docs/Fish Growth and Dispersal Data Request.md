@@ -83,7 +83,7 @@ The European eel is a catadromous species, meaning it matures in the Guadalquivi
 * **Intrinsic Growth Rate (![][image1]):** The eel has an exceptionally long generation time, often spending 10–20 years in freshwater before maturing. Its intrinsic growth rate is low, estimated at ![][image27] ![][image10].9  
 * **Dispersal Rate:** The eel is the most migratory species in the basin. While its potential dispersal covers thousands of kilometers, its movement within the Guadalquivir is now severely restricted by dams, particularly the Alcalá del Río dam, which prevents upstream migration beyond the lower reaches.1 In unobstructed systems, eels can migrate ![][image28] km/year, but contemporary rates in the Guadalquivir are limited to the estuary and lower main stem.9
 
-#### **MC: Mugil cephalus (Flathead Grey Mullet) and LR: Liza ramada (Thinlip Grey Mullet)**
+#### **MC: Mugil cephalus (Flathead Grey Mullet) and LR: Chelon ramada (Thinlip Grey Mullet)**
 
 These mugilid species are primarily estuarine but frequently migrate into the lower and middle reaches of the Guadalquivir.18
 

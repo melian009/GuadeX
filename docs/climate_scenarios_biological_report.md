@@ -16,7 +16,7 @@ assumed. Companion documents: `docs/climate_scenarios.md` (run setup) and
   (GCMs) under four emission scenarios (SSP1-2.6 to SSP5-8.5), how does the
   basin-wide fish community change between 2026 and 2045?
 - **The starting point that governs everything.** Most native species are not in
-  their thermal optimum today: the dominant cyprinids have optima ≈19–20 °C while
+  their thermal optimum today: the dominant native species have optima ≈19–20 °C while
   the basin averages ≈16 °C, so warming *helps* them. Only brown trout has its
   optimum below current temperature, so warming *hurts* it (§2).
 - **The basin-wide indicators barely move.** Mean native richness stays at ≈2.50
@@ -66,7 +66,7 @@ Using the trait table and a 16.0 °C basin mean (T̄), the mismatch is systemati
 
 Only brown trout sits on the **warm** side of its optimum (−1.5σ); every other native
 is 0.2–1.2σ on the **cold** side. This is why ~1 °C of warming improves growth for the
-dominant cyprinids and degrades it only for the cold-water specialist — and why the
+dominant native species and degrades it only for the cold-water specialist — and why the
 basin averages, which they dominate, are insensitive.
 
 ![Native thermal niches against the site-temperature distribution.](../results/climate_scenarios_k1x_burnin/figures/diagnostics/thermal_niches.png)
@@ -320,7 +320,7 @@ site-to-site variability.
    baseline and flags naturally rare species. Ignore it until the definition is revised.
 5. **Only brown trout responds measurably.** Warm-adapted natives and invasive species
    are unchanged; no invasive-expansion signal was detected. Other species (e.g.
-   *Squalius pyrenaicus*, *Gobio lozanoi*, *Oncorhynchus mykiss*, *Liza ramada*,
+   *Squalius pyrenaicus*, *Gobio lozanoi*, *Oncorhynchus mykiss*, *Chelon ramada*,
    *Mugil cephalus*) have upper limits of 25–30 °C and essentially never exceed them,
    so the heat-stress mechanism is inert for them.
 6. **The thermal selection mode is assumed, not tested, and no other mode is

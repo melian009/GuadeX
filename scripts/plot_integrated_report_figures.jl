@@ -63,30 +63,37 @@ function read_st_exposure(run_dir)
     # C7: prefer the established-site summary (mean/median/max over the sites
     # where brown trout was baseline established), fall back to the all-sites
     # table for runs written before the summary existed, and label which was used.
+    # The report's Fig. 12 panel (c) shows the *2045* exposure maximum, so the
+    # latest available year is selected here; taking the maximum over all years
+    # would mix the 1986-2005 baseline and the projection years.
     summary_path = joinpath(run_dir, "export", "levels", "exposure_summary.csv")
     if isfile(summary_path)
         df = CSV.read(summary_path, DataFrame)
-        sub = df[df.species .== "ST", :]
-        isempty(sub) && return nothing
+        st = df[df.species .== "ST", :]
+        isempty(st) && return nothing
+        last_year = maximum(Int.(st.year))
+        sub = st[st.year .== last_year, :]
         days = Float64.(sub.mean_exposure_days)
         return (max_days = maximum(Float64.(sub.max_exposure_days)),
-            mean_days = isempty(filter(isfinite, days)) ? NaN : maximum(days),
+            mean_days = isempty(filter(isfinite, days)) ? NaN : mean(days),
             n_sites = maximum(Int.(sub.n_sites_selected)),
             site_set = string(sub.site_set[1]),
             max_energy = maximum(Float64.(sub.max_exceedance_energy)),
-            source = "established")
+            source = "established", year = last_year)
     end
     path = joinpath(run_dir, "export", "levels", "exposure_sites.csv")
     isfile(path) || return nothing
     df = CSV.read(path, DataFrame)
-    sub = df[df.species .== "ST", :]
-    isempty(sub) && return nothing
+    st = df[df.species .== "ST", :]
+    isempty(st) && return nothing
+    last_year = maximum(Int.(st.year))
+    sub = st[st.year .== last_year, :]
     return (max_days = maximum(Int.(sub.exposure_days)),
         mean_days = mean(Float64.(sub.exposure_days)),
         n_sites = length(unique(String.(sub.CODIGO))),
         site_set = "all_sites_fallback",
         max_energy = maximum(Float64.(sub.exceedance_energy)),
-        source = "all_sites_fallback")
+        source = "all_sites_fallback", year = last_year)
 end
 
 # Axes here use explicit width/height, so the requested Figure size can be
@@ -116,6 +123,25 @@ function thermal_curve(opt, sigma, t)
     return exp.(-(t .- opt) .^ 2 ./ (2 * sigma^2))
 end
 
+function end_of_horizon_warming(idx)
+    # Ensemble-median realised anomaly in the final simulated year (2045).  This
+    # is the statistic used by the climate-diagnostics thermal-niche figure and
+    # by the report caption (+0.74 °C); it differs from the 2026-2045 mean
+    # (+0.58 °C) and from the 2036-2045 mean used by the obstacle sweep.
+    vals = Float64[]
+    for r in eachrow(idx)
+        p = joinpath(run_path(r), "export", "levels", "level_basin.csv")
+        isfile(p) || continue
+        df = CSV.read(p, DataFrame)
+        last_year = maximum(Int.(df.year))
+        sub = df[df.year .== last_year, :]
+        isempty(sub) && continue
+        v = Float64(sub.mean_delta_temperature_c[1])
+        isfinite(v) && push!(vals, v)
+    end
+    return isempty(vals) ? 0.0 : median(vals)
+end
+
 function fig01_thermal_niches()
     report_theme!()
     chars = CSV.read(SPECIES_CHARS, DataFrame; delim=';')
@@ -132,11 +158,9 @@ function fig01_thermal_niches()
     baseline = mean(temps)
 
     idx = CSV.read(joinpath(CLIMATE_ROOT, "runs_index.csv"), DataFrame)
-    # C7: draw the end-of-horizon shift from the realised applied warming when
-    # available, falling back to the labelled warming_end_degc proxy otherwise.
-    forcing_axis = Guadex.realised_forcing_axis(idx; window=:late)
-    finite_forcing = filter(isfinite, forcing_axis.values)
-    warming_delta = isempty(finite_forcing) ? 0.0 : median(finite_forcing)
+    # Same end-of-2045 statistic as Fig. 2 and the report caption: median of the
+    # final-year realised anomaly across the ensemble (including the 0 °C control).
+    warming_delta = end_of_horizon_warming(idx)
 
     fig = Figure(size=(1700, 1050))
     ax = Axis(fig[1, 1]; width=760, height=650,
@@ -197,9 +221,10 @@ end
 function fig12_st_climate_response()
     report_theme!()
     idx = CSV.read(joinpath(CLIMATE_ROOT, "runs_index.csv"), DataFrame)
-    # C7: realised mean applied anomaly is the regressor; the warming_end_degc
+    # C7: realised mean applied anomaly over the full 2026-2045 horizon is the
+    # regressor used in the report text (1.76 pp/°C, R²=0.63); the warming_end_degc
     # proxy is used only if the realised columns are absent, and is labelled.
-    axis = Guadex.realised_forcing_axis(idx)
+    axis = Guadex.realised_forcing_axis(idx; window=:early)
     idx[!, :forcing_axis] = axis.values
     println("fig12 forcing axis: $(axis.column) [$(axis.source)]")
 
@@ -234,7 +259,7 @@ function fig12_st_climate_response()
 
     fig = Figure(size=(1700, 1000))
     ax1 = Axis(fig[1, 1]; width=420, height=540,
-        xlabel = axis.label,
+        xlabel = "Realised mean ΔT\n2026-2045 (°C)",
         ylabel = "Brown trout change (%)")
     panel_letter!(ax1, "(a)")
     hlines!(ax1, [0.0]; color = (:black, 0.4), linewidth = 1)
@@ -255,11 +280,11 @@ function fig12_st_climate_response()
     isfinite(dose.slope_spread) &&
         (slope_text *= "\nGCM spread (SD) = $(round(dose.slope_spread, digits = 2))")
     slope_text *= "\nR² = $(round(dose.r2, digits = 2)) (n=$n, GCMs=$(dose.n_groups))"
-    text!(ax1, 0.03, 0.06; space = :relative, text = slope_text,
-        align = (:left, :bottom), fontsize = REPORT_ANNOTATION_FONTSIZE)
+    text!(ax1, 0.03, 0.97; space = :relative, text = slope_text,
+        align = (:left, :top), fontsize = REPORT_ANNOTATION_FONTSIZE)
 
     ax2 = Axis(fig[1, 2]; width=420, height=540,
-        xlabel = axis.label,
+        xlabel = "Realised mean ΔT\n2026-2045 (°C)",
         ylabel = "Brown trout density (units)")
     panel_letter!(ax2, "(b)")
     for sc in unique(scenario_rows.scenario)
@@ -270,7 +295,7 @@ function fig12_st_climate_response()
         marker = :diamond, markersize = 18)
 
     ax3 = Axis(fig[1, 3]; width=420, height=540,
-        xlabel = axis.label,
+        xlabel = "Realised mean ΔT\n2026-2045 (°C)",
         ylabel = "Days per year above 20 °C")
     panel_letter!(ax3, "(c)")
     for sc in unique(scenario_rows.scenario)
@@ -281,11 +306,11 @@ function fig12_st_climate_response()
         scatter!(ax3, [0.0], [control.max_days]; color = :black, marker = :diamond, markersize = 18)
         hlines!(ax3, [control.max_days]; color = (:black, 0.5), linewidth = 1.4, linestyle = :dot)
         text!(ax3, 0.03, 0.06; space = :relative,
-            text = "No-warming control = $(control.max_days) days per year",
+            text = "Control = $(control.max_days) days/year",
             align = (:left, :bottom), fontsize = REPORT_ANNOTATION_FONTSIZE)
     end
     text!(ax3, 0.03, 0.16; space = :relative,
-        text = "max over '$site_set' trout sites",
+        text = "2045 max, established sites",
         align = (:left, :bottom), fontsize = REPORT_ANNOTATION_FONTSIZE)
 
     handles = Any[]

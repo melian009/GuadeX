@@ -1,0 +1,183 @@
+{
+  "generated_for": "docs/FinalReportOctober2026.tex",
+  "release": "corrected October 2026, Phase 2 outputs recomputed 2026-11-01",
+  "checked": "2026-11-23",
+  "figure_order_rule": "numbering is the order of \\begin{figure} in the .tex; the ST dose-response at file fig12_* is PDF Figure 13",
+  "figures": [
+    {
+      "figure": 1,
+      "path": "results/climate_scenarios_phase2/figures/report_plots/fig01_thermal_niches.png",
+      "title": "thermal niches vs site temperature (end-of-2045 +0.74 C)",
+      "bytes": 384668,
+      "sha256": "1ab27e560aa9a43fe6e7cd86d0631f888c9e1bdf18ed784cc4846d0dda033989",
+      "regenerate": "julia --project=. scripts/plot_integrated_report_figures.jl (GUADEX_CLIMATE_OUTPUT_DIR=results/climate_scenarios_phase2)",
+      "inputs": [
+        "data/ABIOTIC/caracteristicas_peces_Guadalquivir_03-04-2018.csv",
+        "results/climate_scenarios_phase2/control/baseline/export/levels/level_sampling_point.csv",
+        "results/climate_scenarios_phase2/runs_index.csv",
+        "results/climate_scenarios_phase2/*/*/export/levels/level_basin.csv"
+      ]
+    },
+    {
+      "figure": 2,
+      "path": "results/climate_scenarios_phase2/figures/diagnostics/thermal_niches.png",
+      "title": "climate-diagnostics rendering of the thermal niches (+0.74 C)",
+      "bytes": 384668,
+      "sha256": "7d48234235f4411e92dc9bfe3454440c86ddc0a65bc0d4514c61b58a036c63a6",
+      "regenerate": "julia --project=. scripts/plot_climate_diagnostics.jl results/climate_scenarios_phase2 results/climate_scenarios_phase2/figures",
+      "inputs": [
+        "results/climate_scenarios_phase2/control/baseline/export/levels/level_sampling_point.csv",
+        "results/climate_scenarios_phase2/runs_index.csv"
+      ]
+    },
+    {
+      "figure": 3,
+      "path": "results/climate_scenarios_phase2/figures/summary_2045.png",
+      "title": "2045 basin summary across the climate ensemble",
+      "bytes": 369860,
+      "sha256": "d642a8833d22674c5e9d62a192d39ad5ccce1ea1d88501e92772b890d9f81624",
+      "regenerate": "julia --project=. scripts/plot_climate_scenarios.jl (GUADEX_CLIMATE_OUTPUT_DIR=results/climate_scenarios_phase2)",
+      "inputs": [
+        "results/climate_scenarios_phase2/figures/ensemble/*.png inputs",
+        "results/climate_scenarios_phase2/runs_index.csv"
+      ]
+    },
+    {
+      "figure": 4,
+      "path": "results/climate_scenarios_phase2/figures/comparison/across_scenarios_basin.png",
+      "title": "basin trajectories by pathway",
+      "bytes": 742568,
+      "sha256": "41dfd28d47370d284413e368aba69eaf5c81ed52eaa4df0b682df177a07981da",
+      "regenerate": "julia --project=. scripts/plot_climate_scenarios.jl (GUADEX_CLIMATE_OUTPUT_DIR=results/climate_scenarios_phase2)",
+      "inputs": [
+        "results/climate_scenarios_phase2/*/*/export/levels/level_basin.csv"
+      ]
+    },
+    {
+      "figure": 5,
+      "path": "results/climate_scenarios_phase2/figures/diagnostics/forcing_and_response.png",
+      "title": "forcing and response panels, 2026-2045 realised regressor",
+      "bytes": 831700,
+      "sha256": "c70c64187358be8f44e8ba5d5532b80d90c8e704f3c11af04ce139646257b274",
+      "regenerate": "julia --project=. scripts/plot_climate_diagnostics.jl results/climate_scenarios_phase2 results/climate_scenarios_phase2/figures",
+      "inputs": [
+        "results/climate_scenarios_phase2/runs_index.csv",
+        "results/climate_scenarios_phase2/*/*/export/levels/level_basin.csv"
+      ]
+    },
+    {
+      "figure": 6,
+      "path": "results/sensitivity_obstacles_phase2/report_plots/fig_temperature_response.png",
+      "title": "basin response vs realised warming, 2026-2045 pooled OLS",
+      "bytes": 494876,
+      "sha256": "807ce1fe77cce7fbb27f04d691a2f674ce119ef636fe0bcf58e3e8ac828d5d61",
+      "regenerate": "julia --project=. scripts/plot_report_figures.jl (GUADEX_CLIMATE_OUTPUT_DIR=results/climate_scenarios_phase2; GUADEX_SENSITIVITY_OUTPUT_DIR=results/sensitivity_obstacles_phase2)",
+      "inputs": [
+        "results/climate_scenarios_phase2/runs_index.csv",
+        "results/climate_scenarios_phase2/*/*/export/levels/level_basin.csv"
+      ]
+    },
+    {
+      "figure": 7,
+      "path": "results/sensitivity_obstacles_phase2/report_plots/fig_parameter_importance_ranked.png",
+      "title": "obstacle-sweep factor ranking (within-design SS)",
+      "bytes": 615130,
+      "sha256": "0f98092ce65c5d99a7501ec672589d0055b9267c0ff05b8d54719220d3255db5",
+      "regenerate": "julia --project=. scripts/plot_sensitivity_summary.jl / plot_report_figures.jl (GUADEX_SENSITIVITY_OUTPUT_DIR=results/sensitivity_obstacles_phase2)",
+      "inputs": [
+        "results/sensitivity_obstacles_phase2/report_plots/parameter_effect_rank.csv"
+      ]
+    },
+    {
+      "figure": 8,
+      "path": "results/sensitivity_obstacles_phase2/report_plots/fig_tornado.png",
+      "title": "obstacle-sweep tornado",
+      "bytes": 920482,
+      "sha256": "475830e51178316c9ad8ca4583dae490b1df83e2dd0841256697c95b9b27542f",
+      "regenerate": "julia --project=. scripts/plot_sensitivity_summary.jl (GUADEX_SENSITIVITY_OUTPUT_DIR=results/sensitivity_obstacles_phase2)",
+      "inputs": [
+        "results/sensitivity_obstacles_phase2/runs_index.csv"
+      ]
+    },
+    {
+      "figure": 9,
+      "path": "results/sensitivity_obstacles_phase2/report_plots/fig_passability_uc_heatmaps.png",
+      "title": "passability x upstream-cost heatmaps",
+      "bytes": 871392,
+      "sha256": "9e7bbad2bfbbb787de97afa6ecdcadab5ba995c28f5620e804277af85baadcbd",
+      "regenerate": "julia --project=. scripts/plot_report_figures.jl (GUADEX_SENSITIVITY_OUTPUT_DIR=results/sensitivity_obstacles_phase2)",
+      "inputs": [
+        "results/sensitivity_obstacles_phase2/runs_index.csv"
+      ]
+    },
+    {
+      "figure": 10,
+      "path": "results/sensitivity_obstacles_phase2/report_plots/fig_st_vs_upstream_cost.png",
+      "title": "trout density vs upstream cost",
+      "bytes": 337217,
+      "sha256": "f750cf605dd2b0e938c3c744a43660dc98012386fda31633351c3f3bfb873309",
+      "regenerate": "julia --project=. scripts/plot_report_figures.jl (GUADEX_SENSITIVITY_OUTPUT_DIR=results/sensitivity_obstacles_phase2)",
+      "inputs": [
+        "results/sensitivity_obstacles_phase2/runs_index.csv"
+      ]
+    },
+    {
+      "figure": 11,
+      "path": "results/sensitivity_obstacles_phase2/report_plots/fig_interaction_matrix_robustness.png",
+      "title": "interaction-matrix robustness",
+      "bytes": 269190,
+      "sha256": "c313ac417736e4d490c839ccf4b5a17ecb90ff85591c6d74737e8c64ecc4c142",
+      "regenerate": "julia --project=. scripts/plot_report_figures.jl (GUADEX_ALT_OUTPUT_DIR=results/alt_interactions_phase2)",
+      "inputs": [
+        "results/alt_interactions_phase2/runs_index.csv"
+      ]
+    },
+    {
+      "figure": 12,
+      "path": "results/sensitivity_obstacles_phase2/report_plots/fig_subcatchment_waterbody_effects.png",
+      "title": "subcatchment / water-body effects",
+      "bytes": 419715,
+      "sha256": "de0d3a72b00cb1bc41f6de61dd8915827e8eaa395b1029ae7ef4390883eecf95",
+      "regenerate": "julia --project=. scripts/plot_report_figures.jl (GUADEX_SENSITIVITY_OUTPUT_DIR=results/sensitivity_obstacles_phase2)",
+      "inputs": [
+        "results/sensitivity_obstacles_phase2/*/*/export/levels/level_subcatchment.csv",
+        "results/sensitivity_obstacles_phase2/*/*/export/levels/level_water_body.csv"
+      ]
+    },
+    {
+      "figure": 13,
+      "path": "results/climate_scenarios_phase2/figures/report_plots/fig12_st_climate_response.png",
+      "title": "brown trout dose-response, 2026-2045 regressor, 2045 exposure maximum",
+      "bytes": 329034,
+      "sha256": "0a0c9d3d5174ab1313155ccf7cb57e607df26d90532547e4daf85ca13f7bbdb6",
+      "regenerate": "julia --project=. scripts/plot_integrated_report_figures.jl (GUADEX_CLIMATE_OUTPUT_DIR=results/climate_scenarios_phase2)",
+      "inputs": [
+        "results/climate_scenarios_phase2/runs_index.csv",
+        "results/climate_scenarios_phase2/*/*/export/levels/quasi_extinction_summary.csv",
+        "results/climate_scenarios_phase2/*/*/export/levels/exposure_summary.csv"
+      ]
+    },
+    {
+      "figure": 14,
+      "path": "results/alt_interactions_phase2/report_plots/fig13_interaction_matrix_effects.png",
+      "title": "interaction-matrix main effects",
+      "bytes": 396024,
+      "sha256": "8ee0d3c40cda2e1f5aeaed8c27569fd7861ae74bb2033611ba4b284b75ee6d77",
+      "regenerate": "julia --project=. scripts/plot_integrated_report_figures.jl (GUADEX_ALT_OUTPUT_DIR=results/alt_interactions_phase2)",
+      "inputs": [
+        "results/alt_interactions_phase2/runs_index.csv"
+      ]
+    },
+    {
+      "figure": 15,
+      "path": "results/report_plots/fig_obstacle_matching_radius.png",
+      "title": "obstacle matching-radius sensitivity",
+      "bytes": 214100,
+      "sha256": "4a23e1e671b44d3d8b033a848a02dcd505bdffcff159d23bdd3729f4778155b5",
+      "regenerate": "existing report plot; not regenerated in the third-review triage",
+      "inputs": [
+        "results/sensitivity_obstacles_phase2"
+      ]
+    }
+  ]
+}

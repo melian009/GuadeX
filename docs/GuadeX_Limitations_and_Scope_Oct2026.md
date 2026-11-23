@@ -12,7 +12,10 @@ by this document.
 has been repeated against the Phase 2 control, and the competition-structure and
 passability-floor/on-path-only sensitivities are now reported. Items 13–15 are new; items 2, 3
 and 8 have been updated. The primary post-fix outputs are the `results/*_phase2` directories;
-the `results/*_corrected` directories remain the pre-fix audit baseline.
+the `results/*_corrected` directories remain the pre-fix audit baseline. **Third-review update
+(2026-11-23):** item 13 is relabelled a consistency check (not a validation success), the
+"dominant cyprinid" wording is corrected, and items 16 (E23 high-elevation extrapolation) and
+17 (E7 global-sensitivity pilot) are added.
 
 ---
 
@@ -158,13 +161,13 @@ the `results/*_corrected` directories remain the pre-fix audit baseline.
     the reported invasive metrics are conditional on that pool and do not project colonisation by
     new arrivals, so they are lower bounds on any future that includes introductions.
 
-13. **The start-state validation is measured and marginal (4.6).** Against the post-spin-up state
+13. **The start-state consistency check is measured and marginal (4.6).** Against the post-spin-up state
     of the Phase 2 shared control, pooled sensitivity is **0.975** and pooled specificity **0.920**
     over 24 species × 775 sites; the widespread native LS has TSS **0.417** with observed occupancy
     45.3 % against modelled 77.2 % (a **+31.9-point over-prediction**). The per-species table is
     `results/climate_scenarios_phase2/validation/initial_state_validation.csv`; the values are
-    identical at reported precision to the pre-fix validation. The model over-predicts occupancy,
-    especially for the dominant native cyprinid. The Phase 2 acceptance criteria for the future
+    identical at reported precision to the pre-fix check. The model over-predicts occupancy,
+    especially for the dominant native species. The Phase 2 acceptance criteria for the future
     calibration campaign — **per-species TSS ≥ 0.40 where ≥ 10 sites are occupied**, and
     **|modelled − observed occupancy| ≤ 0.10 for LS, SA, SP, PW and CP** — are calibration targets,
     not gates for this release. The current LS passes the TSS criterion but fails the occupancy
@@ -200,6 +203,18 @@ the `results/*_corrected` directories remain the pre-fix audit baseline.
     native richness" is therefore not robust to the competition structure; the weak-warming
     headline and every primary number are unchanged. Evidence:
     `docs/GuadeX_Phase2_Competition_Sensitivity.md`.
+
+16. **High-elevation sites are extrapolations (E23).** Seventeen model sites lie above the highest
+    calibration site of the water-temperature model (1,127 m), so their temperature series are
+    extrapolated beyond the calibration range. The corrected baseline range is 9.79–18.06 °C
+    (§3.4); the extrapolation is not corrected in this release and bounds the interpretation of
+    headwater and high-elevation refugia.
+
+17. **Global sensitivity remains a pilot (E7).** The Latin-hypercube/Saltelli–Sobol toolkit and a
+    pilot run exist (`src/global_sensitivity.jl`, `results/global_sensitivity_pilot`), but a
+    production global sensitivity analysis over agreed parameter ranges and dependencies is future
+    work. The reported factor rankings and sums of squares are within-design quantities, not
+    variance shares over a parameter distribution.
 
 ---
 

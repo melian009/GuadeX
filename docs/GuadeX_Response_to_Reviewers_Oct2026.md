@@ -293,10 +293,11 @@ are confounded.
 *Action and evidence:* The ranking is replaced by balanced **within-design sums of squares**
 (`variance_decomposition.csv`, `parameter_effect_rank.csv`), and a global sensitivity toolkit plus
 a calibration pilot (Latin-hypercube sampling with Sobol indices) was implemented. Evidence:
-report §3.5/§4.4, `test/test_global_sensitivity.jl`, `results/global_sensitivity_pilot`. The
-interaction matrix remains confounded with a thermal-breadth multiplier of 0.3 and the
-three-year interim spin-up; this is now documented (report §6, Limitations 11). A **full** global Sobol production
-run is deferred pending agreed parameter ranges (§4).
+`test/test_global_sensitivity.jl`, `results/global_sensitivity_pilot`, and report §4.7, which
+records the pilot and states that a **full** global Sobol production run is deferred pending agreed
+parameter ranges (§6, Limitations 17). The interaction matrix remains confounded with a
+thermal-breadth multiplier of 0.3 and the three-year interim spin-up; this is documented in the
+report's Limitations (items 2 and 8).
 
 **E8 — The model does not estimate extinction probability.**
 *Reviewer's point:* the model is deterministic with no replicates; the exported
@@ -500,8 +501,8 @@ observation, and 17 model sites lie above the highest calibration site (1,127 m)
 *Assessment:* **Accepted.**
 *Action and evidence / not changed:* The high-elevation extraction requires regional climate
 projections not present in the repository, so the elevation ceiling was **not** completed; the
-corrected baseline is documented (range 9.79–18.06 °C, report §3.4) and the extrapolation
-remains a stated limitation. Deferred (§4).
+corrected baseline is documented (range 9.79–18.06 °C, report §3.4) and the extrapolation is now
+stated explicitly as report §6, Limitations 16. Deferred (§4).
 
 **E24 — The report misdescribes the forcing.**
 *Reviewer's point:* §3.4 stated all sites received the same anomaly, but it varies by site
@@ -559,7 +560,8 @@ persistent accession remains the condition for the submitted version.
    The REML LRT across fixed effects, the ICC at 0 °C and the in-sample models in the CV table are
    confirmed; the quoted ML statistics are not persisted (status §6) and "strengthens with ML"
    remains unverified in the tree.
-10. **Numerical details.** *Accepted.* The clipping is now documented and exercised (report
+10. **Numerical details.** *Accepted.* The clipping is now documented in report §3.2 (Eq. 1 and the
+    following sentence) and exercised (report
     Eq. (1)); mass-conservation, topology and sign tests were added (see C1/C4/E1 tests). The
     unclipped-immigration/clipped-emigration asymmetry and the positivity-callback mass are
     documented residuals.
